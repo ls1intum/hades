@@ -14,67 +14,71 @@ type Message struct {
 }
 
 type Queue struct {
-	QueueName string
-	URL       string // amqp://guest:guest@localhost:5672/
-	channel   *amqp.Channel
-	queue     amqp.Queue
-	conn      *amqp.Connection
+	channel *amqp.Channel
+	queue   amqp.Queue
+	conn    *amqp.Connection
 }
 
 func (q *Queue) Close() {
-	log.Debugf("Closing queue %s", q.QueueName)
+	log.Debugf("Closing queue %s", q.queue.Name)
 	q.channel.Close()
 	q.conn.Close()
 }
 
-func (q *Queue) Init() {
-	log.Debugf("Queue '%s' Init function called", q.QueueName)
+func Init(queueName, url string) (*Queue, error) {
+	var q Queue
+	log.Debugf("Queue '%s' Init function called", queueName)
 
 	var err error
-
-	q.conn, err = amqp.Dial(q.URL)
+	q.conn, err = amqp.Dial(url)
 	if err != nil {
 		log.WithError(err).Error("error connecting to RabbitMQ")
+		return nil, err
 	}
 
 	q.channel, err = q.conn.Channel()
 	if err != nil {
 		log.WithError(err).Error("error opening RabbitMQ channel")
+		return nil, err
 	}
 
 	q.queue, err = q.channel.QueueDeclare(
-		q.QueueName, // name
-		false,       // durable
-		false,       // delete when unused
-		false,       // exclusive
-		false,       // no-wait
-		nil,         // arguments
+		queueName, // name
+		false,     // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
 	)
 	if err != nil {
 		log.WithError(err).Error("error declaring RabbitMQ queue")
+		return nil, err
 	}
 	log.Info("Queue initialized", q)
+	return &q, nil
 }
 
-func (q *Queue) Enqueue(ctx context.Context, msg Message) {
+func (q *Queue) Enqueue(ctx context.Context, msg Message) error {
 	log.Debugf("Enqueue function called with ctx %+v message: %v", ctx, msg)
 
 	body, err := json.Marshal(msg)
 	if err != nil {
 		log.WithError(err).Error("error marshalling message")
+		return err
 	}
 
 	err = q.channel.PublishWithContext(ctx,
-		"",          // exchange
-		q.QueueName, // routing key
-		false,       // mandatory
-		false,       // immediate
+		"",           // exchange
+		q.queue.Name, // routing key
+		false,        // mandatory
+		false,        // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        []byte(body),
 		})
 	if err != nil {
 		log.WithError(err).Error("error publishing message")
+		return err
 	}
-
+	return nil
 }

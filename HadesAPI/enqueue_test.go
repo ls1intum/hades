@@ -8,8 +8,7 @@ import (
 
 func test_enqueue(t *assert.TestingT) {
 	// This needs to be extended - Currently only as a reference how to use the wrapper
-	q := Queue{QueueName: "builds", URL: "amqp://guest:guest@localhost:5672/"}
-	q.Init()
+	q, _ := Init("builds", "amqp://guest:guest@localhost:5672/")
 	defer q.Close()
 
 	ctx := context.TODO()
