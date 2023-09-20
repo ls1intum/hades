@@ -3,15 +3,25 @@ package main
 import (
 	"os"
 
+	"github.com/Mtze/HadesCI/shared/payload"
+	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
+
+var BuildQueue *queue.Queue[payload.BuildJob]
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
 		log.SetLevel(log.DebugLevel)
 		log.Warn("DEBUG MODE ENABLED")
 	}
+
+	// var err error
+	// BuildQueue, err = queue.Init[payload.BuildJob]("builds", "amqp://admin:admin@localhost:5672/")
+	// if err != nil {
+	// 	log.Panic(err)
+	// }
 
 	log.Info("Starting HadesAPI")
 	gin.SetMode(gin.ReleaseMode)
