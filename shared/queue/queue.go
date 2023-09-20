@@ -4,17 +4,12 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/Mtze/HadesCI/shared/payload"
 	amqp "github.com/rabbitmq/amqp091-go"
 	log "github.com/sirupsen/logrus"
 )
 
-type Message interface {
-	// Make sure that the struct can be marshalled and unmarshalled to JSON
-	json.Marshaler
-	json.Unmarshaler
-}
-
-type Queue[T Message] struct {
+type Queue[T payload.BuildJob] struct {
 	channel *amqp.Channel
 	queue   amqp.Queue
 	conn    *amqp.Connection
@@ -26,7 +21,7 @@ func (q *Queue[T]) Close() {
 	q.conn.Close()
 }
 
-func Init[T Message](queueName, url string) (*Queue[T], error) {
+func Init[T payload.BuildJob](queueName, url string) (*Queue[T], error) {
 	var q Queue[T]
 	log.Debugf("Queue '%s' Init function called", queueName)
 
