@@ -1,4 +1,4 @@
-package main
+package queue
 
 import (
 	"context"
@@ -8,25 +8,26 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Message struct {
-	Body string `json:"body"`
-	Type int    `json:"type"`
+type Message interface {
+	// Make sure that the struct can be marshalled and unmarshalled to JSON
+	json.Marshaler
+	json.Unmarshaler
 }
 
-type Queue struct {
+type Queue[T Message] struct {
 	channel *amqp.Channel
 	queue   amqp.Queue
 	conn    *amqp.Connection
 }
 
-func (q *Queue) Close() {
+func (q *Queue[T]) Close() {
 	log.Debugf("Closing queue %s", q.queue.Name)
 	q.channel.Close()
 	q.conn.Close()
 }
 
-func Init(queueName, url string) (*Queue, error) {
-	var q Queue
+func Init[T Message](queueName, url string) (*Queue[T], error) {
+	var q Queue[T]
 	log.Debugf("Queue '%s' Init function called", queueName)
 
 	var err error
@@ -58,7 +59,7 @@ func Init(queueName, url string) (*Queue, error) {
 	return &q, nil
 }
 
-func (q *Queue) Enqueue(ctx context.Context, msg Message) error {
+func (q *Queue[T]) Enqueue(ctx context.Context, msg T) error {
 	log.Debugf("Enqueue function called with ctx %+v message: %v", ctx, msg)
 
 	body, err := json.Marshal(msg)
@@ -80,5 +81,24 @@ func (q *Queue) Enqueue(ctx context.Context, msg Message) error {
 		log.WithError(err).Error("error publishing message")
 		return err
 	}
+	return nil
+}
+
+func (q *Queue[T]) Dequeue(callback func(<-chan amqp.Delivery)) error {
+	msgs, err := q.channel.Consume(
+		q.queue.Name, // queue
+		"",           // consumer
+		true,         // auto-ack
+		false,        // exclusive
+		false,        // no-local
+		false,        // no-wait
+		nil,          // args
+	)
+	if err != nil {
+		log.WithError(err).Error("error consuming message")
+		return err
+	}
+
+	go callback(msgs)
 	return nil
 }

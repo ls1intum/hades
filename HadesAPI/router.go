@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 
+	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
@@ -16,6 +18,14 @@ type Payload struct {
 		Repositories       []Repository `json:"repositories" binding:"required,dive"`
 		ExecutionContainer string       `json:"executionContainer" binding:"required"`
 	} `json:"buildConfig" binding:"required"`
+}
+
+func (p Payload) MarshalJSON() ([]byte, error) {
+	return json.Marshal(p)
+}
+
+func (p Payload) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &p)
 }
 
 type Repository struct {
@@ -38,4 +48,5 @@ func AddBuildToQueue(c *gin.Context) {
 	}
 
 	log.Debug("Received build request ", payload)
+	queue.Init[queue.TypedMessage]("build", "localhost:50051")
 }
