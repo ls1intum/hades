@@ -9,20 +9,20 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Queue[T payload.BuildJob] struct {
+type Queue struct {
 	channel *amqp.Channel
 	queue   amqp.Queue
 	conn    *amqp.Connection
 }
 
-func (q *Queue[T]) Close() {
+func (q *Queue) Close() {
 	log.Debugf("Closing queue %s", q.queue.Name)
 	q.channel.Close()
 	q.conn.Close()
 }
 
-func Init[T payload.BuildJob](queueName, url string) (*Queue[T], error) {
-	var q Queue[T]
+func Init(queueName, url string) (*Queue, error) {
+	var q Queue
 	log.Debugf("Queue '%s' Init function called", queueName)
 
 	var err error
@@ -54,7 +54,7 @@ func Init[T payload.BuildJob](queueName, url string) (*Queue[T], error) {
 	return &q, nil
 }
 
-func (q *Queue[T]) Enqueue(ctx context.Context, msg T) error {
+func (q *Queue) Enqueue(ctx context.Context, msg payload.BuildJob) error {
 	log.Debugf("Enqueue function called with ctx %+v message: %v", ctx, msg)
 
 	body, err := json.Marshal(msg)
@@ -79,7 +79,7 @@ func (q *Queue[T]) Enqueue(ctx context.Context, msg T) error {
 	return nil
 }
 
-func (q *Queue[T]) Dequeue(callback func(<-chan amqp.Delivery)) error {
+func (q *Queue) Dequeue(callback func(<-chan amqp.Delivery)) error {
 	msgs, err := q.channel.Consume(
 		q.queue.Name, // queue
 		"",           // consumer

@@ -8,14 +8,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/queue"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	log "github.com/sirupsen/logrus"
 )
 
-var BuildQueue *queue.Queue[payload.BuildJob]
+var BuildQueue *queue.Queue
 
 // This function inizializes the kubeconfig clientset using the kubeconfig file in the useres home directory
 func initializeKubeconfig() *kubernetes.Clientset {
@@ -56,7 +55,7 @@ func main() {
 	}
 
 	var err error
-	BuildQueue, err = queue.Init[payload.BuildJob]("builds", "amqp://admin:admin@localhost:5672/")
+	BuildQueue, err = queue.Init("builds", "amqp://admin:admin@localhost:5672/")
 	if err != nil {
 		log.Panic(err)
 	}

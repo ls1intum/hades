@@ -3,13 +3,12 @@ package main
 import (
 	"os"
 
-	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
 
-var BuildQueue *queue.Queue[payload.BuildJob]
+var BuildQueue *queue.Queue
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
@@ -18,7 +17,7 @@ func main() {
 	}
 
 	// var err error
-	// BuildQueue, err = queue.Init[payload.BuildJob]("builds", "amqp://admin:admin@localhost:5672/")
+	// BuildQueue, err = queue.Init("builds", "amqp://admin:admin@localhost:5672/")
 	// if err != nil {
 	// 	log.Panic(err)
 	// }
