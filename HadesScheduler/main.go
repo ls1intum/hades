@@ -49,11 +49,11 @@ func initializeKubeconfig() *kubernetes.Clientset {
 }
 
 func main() {
-	var cfg utils.Config
+	var cfg utils.RabbitMQConfig
 	utils.LoadConfig(&cfg)
 
 	var err error
-	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s/", cfg.RabbitMQUser, cfg.RabbitMQPassword, cfg.RabbitMQUrl)
+	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s/", cfg.User, cfg.Password, cfg.Url)
 	log.Debug("Connecting to RabbitMQ: ", rabbitmqURL)
 	BuildQueue, err = queue.Init("builds", rabbitmqURL)
 

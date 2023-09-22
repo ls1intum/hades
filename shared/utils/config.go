@@ -8,13 +8,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Config struct {
-	RabbitMQUrl      string `env:"RABBITMQ_URL,notEmpty"`
-	RabbitMQUser     string `env:"RABBITMQ_DEFAULT_USER,notEmpty"`
-	RabbitMQPassword string `env:"RABBITMQ_DEFAULT_PASS,notEmpty"`
+type RabbitMQConfig struct {
+	Url      string `env:"RABBITMQ_URL,notEmpty"`
+	User     string `env:"RABBITMQ_DEFAULT_USER,notEmpty"`
+	Password string `env:"RABBITMQ_DEFAULT_PASS,notEmpty"`
 }
-
-var Cfg Config
 
 func LoadConfig(cfg interface{}) {
 
