@@ -1,9 +1,8 @@
 package main
 
 import (
-	"os"
-
 	"github.com/Mtze/HadesCI/shared/queue"
+	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
@@ -12,12 +11,8 @@ var BuildQueue *queue.Queue
 
 func main() {
 
-	LoadConfig()
-
-	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
-		log.SetLevel(log.DebugLevel)
-		log.Warn("DEBUG MODE ENABLED")
-	}
+	var cfg utils.Config
+	utils.LoadConfig(&cfg)
 
 	// var err error
 	// BuildQueue, err = queue.Init("builds", "amqp://admin:admin@localhost:5672/")
