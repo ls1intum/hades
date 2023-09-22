@@ -11,7 +11,7 @@ import (
 type Config struct {
 	RabbitMQUrl      string `env:"RABBITMQ_URL,notEmpty"`
 	RabbitMQUser     string `env:"RABBITMQ_DEFAULT_USER,notEmpty"`
-	RabbitMQPassword string `env:"RABBITMQ_DEFAULT_PASSWORD,notEmpty"`
+	RabbitMQPassword string `env:"RABBITMQ_DEFAULT_PASS,notEmpty"`
 }
 
 var Cfg Config
@@ -33,5 +33,5 @@ func LoadConfig(cfg interface{}) {
 		log.WithError(err).Fatal("Error parsing environment variables")
 	}
 
-	log.Debug("Config loaded: ", Cfg)
+	log.Debug("Config loaded: ", cfg)
 }

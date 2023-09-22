@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/Mtze/HadesCI/shared/queue"
+	"github.com/Mtze/HadesCI/shared/utils"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	log "github.com/sirupsen/logrus"
@@ -48,14 +49,14 @@ func initializeKubeconfig() *kubernetes.Clientset {
 }
 
 func main() {
-
-	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
-		log.SetLevel(log.DebugLevel)
-		log.Warn("DEBUG MODE ENABLED")
-	}
+	var cfg utils.Config
+	utils.LoadConfig(&cfg)
 
 	var err error
-	BuildQueue, err = queue.Init("builds", "amqp://admin:admin@localhost:5672/")
+	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s/", cfg.RabbitMQUser, cfg.RabbitMQPassword, cfg.RabbitMQUrl)
+	log.Debug("Connecting to RabbitMQ: ", rabbitmqURL)
+	BuildQueue, err = queue.Init("builds", rabbitmqURL)
+
 	if err != nil {
 		log.Panic(err)
 	}
