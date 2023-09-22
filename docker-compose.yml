@@ -9,8 +9,39 @@ services:
       dockerfile: ./HadesAPI/Dockerfile
     ports:
       - "8080:8080"
+<<<<<<< HEAD
+=======
+    networks:
+      - hades
+    depends_on:
+      - rabbitmq
+
+>>>>>>> 4ed8f68 (Add basic docker compose config)
   hadesScheduler:
     image: hades-scheduler
     build:
       context: .
+<<<<<<< HEAD
       dockerfile: ./HadesScheduler/Dockerfile
+=======
+      dockerfile: ./HadesScheduler/Dockerfile
+    networks:
+      - hades
+    depends_on:
+      - rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    networks:
+      - hades
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+networks:
+  hades:
+>>>>>>> 4ed8f68 (Add basic docker compose config)
