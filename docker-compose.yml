@@ -13,6 +13,8 @@ services:
       - hades
     depends_on:
       - rabbitmq
+    environment:
+      - RABBITMQ_URL=rabbitmq:5672
 
   hadesScheduler:
     image: hades-scheduler
@@ -23,8 +25,11 @@ services:
       - hades
     depends_on:
       - rabbitmq
+    environment:
+      - RABBITMQ_URL=rabbitmq:5672
 
   rabbitmq:
+    container_name: rabbitmq
     image: rabbitmq:3-management
     ports:
       - "15672:15672"
