@@ -11,7 +11,6 @@ import (
 	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/Mtze/HadesCI/shared/utils"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -63,12 +62,8 @@ func main() {
 
 	var forever chan struct{}
 
-	f := func(ch <-chan amqp.Delivery) {
-		for d := range ch {
-			log.Printf("Received a message: %s", d.Body)
-		}
-	}
-	BuildQueue.Dequeue(f)
+	scheduler := K8sScheduler{}
+	BuildQueue.Dequeue(scheduler.ScheduleJob)
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	<-forever

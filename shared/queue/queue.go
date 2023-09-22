@@ -79,7 +79,7 @@ func (q *Queue) Enqueue(ctx context.Context, msg payload.BuildJob) error {
 	return nil
 }
 
-func (q *Queue) Dequeue(callback func(<-chan amqp.Delivery)) error {
+func (q *Queue) Dequeue(callback func(job payload.BuildJob) error) error {
 	msgs, err := q.channel.Consume(
 		q.queue.Name, // queue
 		"",           // consumer
@@ -94,6 +94,14 @@ func (q *Queue) Dequeue(callback func(<-chan amqp.Delivery)) error {
 		return err
 	}
 
-	go callback(msgs)
+	for d := range msgs {
+		var buildJob payload.BuildJob
+		err := json.Unmarshal(d.Body, &buildJob)
+		if err != nil {
+			log.WithError(err).Warn("error unmarshalling message %s", d.Body)
+		}
+
+		go callback(buildJob)
+	}
 	return nil
 }
