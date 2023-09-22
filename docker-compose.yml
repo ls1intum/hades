@@ -9,8 +9,37 @@ services:
       dockerfile: ./HadesAPI/Dockerfile
     ports:
       - "8080:8080"
+    networks:
+      - hades
+    depends_on:
+      - rabbitmq
+    environment:
+      - RABBITMQ_URL=rabbitmq:5672
+
   hadesScheduler:
     image: hades-scheduler
     build:
       context: .
       dockerfile: ./HadesScheduler/Dockerfile
+    networks:
+      - hades
+    depends_on:
+      - rabbitmq
+    environment:
+      - RABBITMQ_URL=rabbitmq:5672
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    networks:
+      - hades
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+networks:
+  hades:
