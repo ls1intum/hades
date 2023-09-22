@@ -1,0 +1,16 @@
+# docker compose file for the project with three services
+
+version: '3.7'
+services:
+  hadesAPI:
+    image: hades-api
+    build:
+      context: .
+      dockerfile: ./HadesAPI/Dockerfile
+    ports:
+      - "8080:8080"
+  hadesScheduler:
+    image: hades-scheduler
+    build:
+      context: .
+      dockerfile: ./HadesScheduler/Dockerfile
