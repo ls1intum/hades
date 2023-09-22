@@ -24,7 +24,7 @@ func main() {
 	var err error
 	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s/", cfg.RabbitMQConfig.User, cfg.RabbitMQConfig.Password, cfg.RabbitMQConfig.Url)
 	log.Debug("Connecting to RabbitMQ: ", rabbitmqURL)
-	BuildQueue, err = queue.Init("builds", "amqp://admin:admin@localhost:5672/")
+	BuildQueue, err = queue.Init("builds", rabbitmqURL)
 	if err != nil {
 		log.Panic(err)
 	}
