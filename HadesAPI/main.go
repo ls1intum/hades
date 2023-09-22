@@ -11,6 +11,9 @@ import (
 var BuildQueue *queue.Queue
 
 func main() {
+
+	LoadConfig()
+
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
 		log.SetLevel(log.DebugLevel)
 		log.Warn("DEBUG MODE ENABLED")
