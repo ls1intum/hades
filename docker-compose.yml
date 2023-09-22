@@ -9,21 +9,15 @@ services:
       dockerfile: ./HadesAPI/Dockerfile
     ports:
       - "8080:8080"
-<<<<<<< HEAD
-=======
     networks:
       - hades
     depends_on:
       - rabbitmq
 
->>>>>>> 4ed8f68 (Add basic docker compose config)
   hadesScheduler:
     image: hades-scheduler
     build:
       context: .
-<<<<<<< HEAD
-      dockerfile: ./HadesScheduler/Dockerfile
-=======
       dockerfile: ./HadesScheduler/Dockerfile
     networks:
       - hades
@@ -44,4 +38,3 @@ services:
       retries: 5
 networks:
   hades:
->>>>>>> 4ed8f68 (Add basic docker compose config)
