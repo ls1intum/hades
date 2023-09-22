@@ -1,17 +1,20 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/Mtze/HadesCI/shared/queue"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 	log "github.com/sirupsen/logrus"
 )
+
+var BuildQueue *queue.Queue
 
 // This function inizializes the kubeconfig clientset using the kubeconfig file in the useres home directory
 func initializeKubeconfig() *kubernetes.Clientset {
@@ -46,14 +49,37 @@ func initializeKubeconfig() *kubernetes.Clientset {
 
 func main() {
 
-	clientset := initializeKubeconfig()
+	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
+		log.SetLevel(log.DebugLevel)
+		log.Warn("DEBUG MODE ENABLED")
+	}
 
-	pods, err := clientset.CoreV1().Pods("kube-system").List(context.Background(), v1.ListOptions{})
+	var err error
+	BuildQueue, err = queue.Init("builds", "amqp://admin:admin@localhost:5672/")
 	if err != nil {
-		log.Infof("error getting pods: %v\n", err)
-		os.Exit(1)
+		log.Panic(err)
 	}
-	for _, pod := range pods.Items {
-		log.Infof("Pod name: %s\n", pod.Name)
+
+	var forever chan struct{}
+
+	f := func(ch <-chan amqp.Delivery) {
+		for d := range ch {
+			log.Printf("Received a message: %s", d.Body)
+		}
 	}
+	BuildQueue.Dequeue(f)
+
+	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
+	<-forever
+
+	//clientset := initializeKubeconfig()
+
+	//pods, err := clientset.CoreV1().Pods("kube-system").List(context.Background(), v1.ListOptions{})
+	//if err != nil {
+	//	log.Infof("error getting pods: %v\n", err)
+	//	os.Exit(1)
+	//}
+	//for _, pod := range pods.Items {
+	//	log.Infof("Pod name: %s\n", pod.Name)
+	//}
 }

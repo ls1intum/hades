@@ -1,12 +1,14 @@
-module hadesAPI
+module github.com/Mtze/HadesCI/hadesAPI
 
 go 1.21.0
 
 require (
+	github.com/Mtze/HadesCI/shared v0.0.0
 	github.com/gin-gonic/gin v1.9.1
-	github.com/rabbitmq/amqp091-go v1.8.1
 	github.com/sirupsen/logrus v1.9.3
 )
+
+replace github.com/Mtze/HadesCI/shared => ../shared
 
 require (
 	github.com/bytedance/sonic v1.9.1 // indirect
@@ -24,6 +26,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
+	github.com/rabbitmq/amqp091-go v1.8.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	golang.org/x/arch v0.3.0 // indirect

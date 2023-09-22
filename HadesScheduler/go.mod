@@ -1,4 +1,4 @@
-module hadesScheduler
+module github.com/Mtze/HadesCI/hadesScheduler
 
 go 1.21.0
 
