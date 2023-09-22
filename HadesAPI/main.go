@@ -29,10 +29,12 @@ func main() {
 		log.Panic(err)
 	}
 
-	log.Info("Starting HadesAPI")
+	log.Infof("Starting HadesAPI on port %d", cfg.APIPort)
 	gin.SetMode(gin.ReleaseMode)
+
 	r := gin.Default()
 	r.GET("/ping", ping)
 	r.POST("/build", AddBuildToQueue)
-	log.Panic(r.Run(fmt.Sprintf(":%d", cfg.APIPort))) // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
+
+	log.Panic(r.Run(fmt.Sprintf(":%d", cfg.APIPort)))
 }
