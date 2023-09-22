@@ -11,9 +11,9 @@ jobs:
       matrix:
         include:
           - dockerfile: ./HadesAPI/Dockerfile
-            image: ghcr.io/mtze/hades/hades-api
+            image: ghcr.io/mtze/hades-api
           - dockerfile: ./HadesScheduler/Dockerfile
-            image: ghcr.io/mtze/hades/hades-schduler-k8s
+            image: ghcr.io/mtze/hades-schduler-k8s
     steps:
       - name: Compute Tag
         uses: actions/github-script@v6
