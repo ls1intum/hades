@@ -62,7 +62,7 @@ func main() {
 
 	var forever chan struct{}
 
-	scheduler := K8sScheduler{}
+	scheduler := DockerScheduler{}
 	BuildQueue.Dequeue(scheduler.ScheduleJob)
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
