@@ -3,8 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/Mtze/HadesCI/hadesScheduler/docker"
-
+	"github.com/Mtze/HadesCI/hadesScheduler/kube"
 	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/Mtze/HadesCI/shared/utils"
 
@@ -28,7 +27,7 @@ func main() {
 
 	var forever chan struct{}
 
-	scheduler := docker.Scheduler{}
+	scheduler := kube.Scheduler{}
 	BuildQueue.Dequeue(scheduler.ScheduleJob)
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")

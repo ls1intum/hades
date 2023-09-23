@@ -1,4 +1,4 @@
-package main
+package kube
 
 import (
 	"context"
@@ -23,7 +23,7 @@ type JobScheduler interface {
 	ScheduleJob(job payload.BuildJob) error
 }
 
-type K8sScheduler struct{}
+type Scheduler struct{}
 
 var clientset *kubernetes.Clientset
 var namespace *corev1.Namespace
@@ -51,7 +51,7 @@ func init() {
 	}
 }
 
-func (k *K8sScheduler) ScheduleJob(buildJob payload.BuildJob) error {
+func (k *Scheduler) ScheduleJob(buildJob payload.BuildJob) error {
 
 	log.Infof("Scheduling job %s", buildJob.BuildConfig.ExecutionContainer)
 
