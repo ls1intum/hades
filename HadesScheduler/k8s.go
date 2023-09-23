@@ -89,7 +89,6 @@ func initializeKubeconfig() *kubernetes.Clientset {
 	clientset, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
 		log.WithError(err).Panic("error getting Kubernetes clientset")
-		os.Exit(1)
 	}
 
 	return clientset
@@ -177,7 +176,7 @@ func createJob(clientset *kubernetes.Clientset, namespace string, buildJob paylo
 	buildCommand := "sleep 10"
 
 	jobs := clientset.BatchV1().Jobs(namespace)
-	backOffLimit := 0
+	var backOffLimit int32 = 0
 
 	jobSpec := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
