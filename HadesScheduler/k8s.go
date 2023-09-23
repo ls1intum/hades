@@ -35,11 +35,7 @@ func init() {
 	namespace, err = createNamespace(clientset, "hadestesting")
 
 	if err != nil {
-
-		// TODO: Check if the error is that the namespace already exists - if yes just use it
-
-		log.WithError(err).Error("Failed to create hades namespace - Terminating")
-		os.Exit(1)
+		log.Warn("Failed to create hades namespace - Using the existing one")
 	}
 }
 
@@ -52,13 +48,20 @@ func (k *K8sScheduler) ScheduleJob(buildJob payload.BuildJob) error {
 	jobImage := buildJob.BuildConfig.ExecutionContainer
 	cmd := "sleep 100"
 
-	job := createJob(clientset,
+	job, err := createJob(clientset,
 		nsName,
 		&jobName,
 		&jobImage,
 		&cmd)
 
-	log.Infof("Job %s created", job.Name)
+	if err != nil {
+		log.WithError(err).Error("error creating job")
+		return err
+	}
+
+	_ = job
+
+	log.Infof("Job %v scheduled to the Cluster", buildJob)
 
 	return nil
 }
@@ -156,7 +159,9 @@ func deleteNamespace(clientset *kubernetes.Clientset, namespace string) {
 	}
 }
 
-func createJob(clientset *kubernetes.Clientset, namespace string, jobName *string, image *string, cmd *string) *batchv1.Job {
+func createJob(clientset *kubernetes.Clientset, namespace string, jobName *string, image *string, cmd *string) (*batchv1.Job, error) {
+	log.Infof("Creating job %s in namespace %s", *jobName, namespace)
+
 	jobs := clientset.BatchV1().Jobs(namespace)
 	var backOffLimit int32 = 0
 
@@ -185,9 +190,11 @@ func createJob(clientset *kubernetes.Clientset, namespace string, jobName *strin
 	job, err := jobs.Create(context.TODO(), jobSpec, metav1.CreateOptions{})
 	if err != nil {
 		log.WithError(err).Error("error creating job")
+		return nil, err
 	}
 
 	//print job details
-	log.Infof("Created K8s job  %+v successfully", jobSpec)
-	return job
+	log.Infof("Created K8s job  %s successfully", jobName)
+	log.Debugf("Job details: %v", job)
+	return job, nil
 }
