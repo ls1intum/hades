@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/Mtze/HadesCI/hadesScheduler/docker"
 	"os"
 	"path/filepath"
 
@@ -62,7 +63,7 @@ func main() {
 
 	var forever chan struct{}
 
-	scheduler := K8sScheduler{}
+	scheduler := docker.Scheduler{}
 	BuildQueue.Dequeue(scheduler.ScheduleJob)
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
