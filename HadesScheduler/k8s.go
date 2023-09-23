@@ -43,7 +43,7 @@ func init() {
 	namespace, err = createNamespace(clientset, hadesCInamespace)
 
 	if err != nil {
-		log.Warn("Failed to create hades namespace)")
+		log.Warn("Failed to create hades namespace")
 		log.Info("Trying to get existing namespace")
 		namespace, err = getNamespace(clientset, hadesCInamespace)
 		if err != nil {
@@ -183,7 +183,7 @@ func createJob(clientset *kubernetes.Clientset, namespace string, buildJob paylo
 	buildCommand := "sleep 10"
 
 	jobs := clientset.BatchV1().Jobs(namespace)
-	var backOffLimit int32 = 0
+	backOffLimit := 0
 
 	jobSpec := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
