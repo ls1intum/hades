@@ -19,6 +19,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+const (
+	waitForNamespace = 5 * time.Second
+)
+
 type JobScheduler interface {
 	ScheduleJob(job payload.BuildJob) error
 }
@@ -127,7 +131,7 @@ func createNamespace(clientset *kubernetes.Clientset, namespace string) (*corev1
 	}
 
 	// sleep for 5 seconds to give the namespace time to be created
-	time.Sleep(5 * time.Second)
+	time.Sleep(waitForNamespace)
 
 	return ns, nil
 }
