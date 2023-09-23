@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Mtze/HadesCI/shared/payload"
+	"github.com/Mtze/HadesCI/shared/utils"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,13 +30,26 @@ var clientset *kubernetes.Clientset
 var namespace *corev1.Namespace
 
 func init() {
+
+	var k8sCfg utils.K8sConfig
+	utils.LoadConfig(&k8sCfg)
+
 	var err error
 
+	hadesCInamespace := k8sCfg.HadesCInamespace
+	log.Debugf("Using namespace '%s'", hadesCInamespace)
+
 	clientset = initializeKubeconfig()
-	namespace, err = createNamespace(clientset, "hadestesting")
+	namespace, err = createNamespace(clientset, hadesCInamespace)
 
 	if err != nil {
-		log.Warn("Failed to create hades namespace - Using the existing one")
+		log.Warn("Failed to create hades namespace)")
+		log.Info("Trying to get existing namespace")
+		namespace, err = getNamespace(clientset, hadesCInamespace)
+		if err != nil {
+			log.WithError(err).Error("error getting existing namespace - no more options to try - exiting")
+			os.Exit(1)
+		}
 	}
 }
 
@@ -147,6 +161,19 @@ func getNamespaces(clientset *kubernetes.Clientset) *corev1.NamespaceList {
 		log.Debugf("Namespace name: %s\n", namespace.Name)
 	}
 	return namespaces
+}
+
+func getNamespace(clientset *kubernetes.Clientset, namespace string) (*corev1.Namespace, error) {
+	log.Infof("Getting namespace %s", namespace)
+
+	ns, err := clientset.CoreV1().Namespaces().Get(context.Background(), namespace, v1.GetOptions{})
+
+	if err != nil {
+		log.WithError(err).Error("error getting namespace")
+		return nil, err
+	}
+
+	return ns, nil
 }
 
 func deleteNamespace(clientset *kubernetes.Clientset, namespace string) {
