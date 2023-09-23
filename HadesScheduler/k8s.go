@@ -25,12 +25,27 @@ type JobScheduler interface {
 
 type K8sScheduler struct{}
 
+var clientset *kubernetes.Clientset
+var namespace *corev1.Namespace
+
+func init() {
+	var err error
+
+	clientset = initializeKubeconfig()
+	namespace, err = createNamespace(clientset, "hadestesting")
+
+	if err != nil {
+
+		// TODO: Check if the error is that the namespace already exists - if yes just use it
+
+		log.WithError(err).Error("Failed to create hades namespace - Terminating")
+		os.Exit(1)
+	}
+}
+
 func (k *K8sScheduler) ScheduleJob(buildJob payload.BuildJob) error {
 
 	log.Infof("Scheduling job %s", buildJob.BuildConfig.ExecutionContainer)
-
-	clientset := initializeKubeconfig()
-	namespace := createNamespace(clientset, "hadestesting")
 
 	nsName := namespace.Name
 	jobName := "testjob"
@@ -94,23 +109,26 @@ func getPods(clientset *kubernetes.Clientset, namespace string) *corev1.PodList 
 	return pods
 }
 
-func createNamespace(clientset *kubernetes.Clientset, namespace string) *corev1.Namespace {
+func createNamespace(clientset *kubernetes.Clientset, namespace string) (*corev1.Namespace, error) {
 	log.Infof("Creating namespace %s", namespace)
 
-	ns, err := clientset.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{
-		ObjectMeta: v1.ObjectMeta{
-			Name: namespace,
-		},
-	}, v1.CreateOptions{})
+	ns, err := clientset.CoreV1().Namespaces().Create(
+		context.Background(),
+		&corev1.Namespace{
+			ObjectMeta: v1.ObjectMeta{
+				Name: namespace,
+			},
+		}, v1.CreateOptions{})
 
 	if err != nil {
 		log.WithError(err).Error("error creating namespace")
+		return nil, err
 	}
 
 	// sleep for 5 seconds to give the namespace time to be created
 	time.Sleep(5 * time.Second)
 
-	return ns
+	return ns, nil
 }
 
 func getNamespaces(clientset *kubernetes.Clientset) *corev1.NamespaceList {
