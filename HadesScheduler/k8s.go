@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Mtze/HadesCI/shared/payload"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -20,7 +25,26 @@ type JobScheduler interface {
 
 type K8sScheduler struct{}
 
-func (k *K8sScheduler) ScheduleJob(job payload.BuildJob) error {
+func (k *K8sScheduler) ScheduleJob(buildJob payload.BuildJob) error {
+
+	log.Infof("Scheduling job %s", buildJob.BuildConfig.ExecutionContainer)
+
+	clientset := initializeKubeconfig()
+	namespace := createNamespace(clientset, "hadestesting")
+
+	nsName := namespace.Name
+	jobName := "testjob"
+	jobImage := buildJob.BuildConfig.ExecutionContainer
+	cmd := "sleep 100"
+
+	job := createJob(clientset,
+		nsName,
+		&jobName,
+		&jobImage,
+		&cmd)
+
+	log.Infof("Job %s created", job.Name)
+
 	return nil
 }
 
@@ -55,15 +79,97 @@ func initializeKubeconfig() *kubernetes.Clientset {
 
 }
 
-func getPods(clientset *kubernetes.Clientset) {
+func getPods(clientset *kubernetes.Clientset, namespace string) *corev1.PodList {
 
 	pods, err := clientset.CoreV1().Pods("kube-system").List(context.Background(), v1.ListOptions{})
+
 	if err != nil {
-		log.Infof("error getting pods: %v\n", err)
-		os.Exit(1)
+		log.WithError(err).Error("error getting pods")
 	}
 	for _, pod := range pods.Items {
 		log.Infof("Pod name: %s\n", pod.Name)
+
 	}
 
+	return pods
+}
+
+func createNamespace(clientset *kubernetes.Clientset, namespace string) *corev1.Namespace {
+	log.Infof("Creating namespace %s", namespace)
+
+	ns, err := clientset.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{
+		ObjectMeta: v1.ObjectMeta{
+			Name: namespace,
+		},
+	}, v1.CreateOptions{})
+
+	if err != nil {
+		log.WithError(err).Error("error creating namespace")
+	}
+
+	// sleep for 5 seconds to give the namespace time to be created
+	time.Sleep(5 * time.Second)
+
+	return ns
+}
+
+func getNamespaces(clientset *kubernetes.Clientset) *corev1.NamespaceList {
+	log.Infof("Getting namespaces")
+
+	namespaces, err := clientset.CoreV1().Namespaces().List(context.Background(), v1.ListOptions{})
+
+	if err != nil {
+		log.WithError(err).Error("error getting namespaces")
+	}
+
+	for _, namespace := range namespaces.Items {
+		log.Debugf("Namespace name: %s\n", namespace.Name)
+	}
+	return namespaces
+}
+
+func deleteNamespace(clientset *kubernetes.Clientset, namespace string) {
+	log.Infof("Deleting namespace %s\n", namespace)
+
+	err := clientset.CoreV1().Namespaces().Delete(context.Background(), namespace, v1.DeleteOptions{})
+
+	if err != nil {
+		log.WithError(err).Error("error deleting namespace")
+	}
+}
+
+func createJob(clientset *kubernetes.Clientset, namespace string, jobName *string, image *string, cmd *string) *batchv1.Job {
+	jobs := clientset.BatchV1().Jobs(namespace)
+	var backOffLimit int32 = 0
+
+	jobSpec := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      *jobName,
+			Namespace: namespace,
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    *jobName,
+							Image:   *image,
+							Command: strings.Split(*cmd, " "),
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+			BackoffLimit: &backOffLimit,
+		},
+	}
+
+	job, err := jobs.Create(context.TODO(), jobSpec, metav1.CreateOptions{})
+	if err != nil {
+		log.WithError(err).Error("error creating job")
+	}
+
+	//print job details
+	log.Infof("Created K8s job  %+v successfully", jobSpec)
+	return job
 }
