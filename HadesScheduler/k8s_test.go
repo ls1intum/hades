@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/Mtze/HadesCI/shared/payload"
 )
 
 func TestKubeconfigInitialization(t *testing.T) {
@@ -31,10 +33,34 @@ func TestDeleteNamespace(t *testing.T) {
 func TestCreateJob(t *testing.T) {
 	client := initializeKubeconfig()
 
-	namespace := "default"
-	jobName := "testJob"
-	jobImage := "ubuntu"
-	cmd := "sleep 100"
+	testBuildJob := payload.BuildJob{
+		Name: "Test Build",
+		Credentials: struct {
+			Username string `json:"username" binding:"required"`
+			Password string `json:"password" binding:"required"`
+		}{
+			Username: "testuser",
+			Password: "testpassword",
+		},
+		BuildConfig: struct {
+			Repositories       []payload.Repository `json:"repositories" binding:"required,dive"`
+			ExecutionContainer string               `json:"executionContainer" binding:"required"`
+		}{
+			Repositories: []payload.Repository{
+				{
+					Path: "/tmp/testrepo1",
+					URL:  "https://github.com/testuser/testrepo1.git",
+				},
+				{
+					Path: "/tmp/testrepo2",
+					URL:  "https://github.com/testuser/testrepo2.git",
+				},
+			},
+			ExecutionContainer: "docker",
+		},
+	}
 
-	createJob(client, namespace, &jobName, &jobImage, &cmd)
+	namespace := "default"
+
+	createJob(client, namespace, testBuildJob)
 }

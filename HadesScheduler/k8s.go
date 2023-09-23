@@ -57,16 +57,7 @@ func (k *K8sScheduler) ScheduleJob(buildJob payload.BuildJob) error {
 
 	log.Infof("Scheduling job %s", buildJob.BuildConfig.ExecutionContainer)
 
-	nsName := namespace.Name
-	jobName := "testjob"
-	jobImage := buildJob.BuildConfig.ExecutionContainer
-	cmd := "sleep 100"
-
-	job, err := createJob(clientset,
-		nsName,
-		&jobName,
-		&jobImage,
-		&cmd)
+	job, err := createJob(clientset, namespace.Name, buildJob)
 
 	if err != nil {
 		log.WithError(err).Error("error creating job")
@@ -186,15 +177,17 @@ func deleteNamespace(clientset *kubernetes.Clientset, namespace string) {
 	}
 }
 
-func createJob(clientset *kubernetes.Clientset, namespace string, jobName *string, image *string, cmd *string) (*batchv1.Job, error) {
-	log.Infof("Creating job %s in namespace %s", *jobName, namespace)
+func createJob(clientset *kubernetes.Clientset, namespace string, buildJob payload.BuildJob) (*batchv1.Job, error) {
+	log.Infof("Creating job %v in namespace %s", buildJob, namespace)
+
+	buildCommand := "sleep 10"
 
 	jobs := clientset.BatchV1().Jobs(namespace)
 	var backOffLimit int32 = 0
 
 	jobSpec := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      *jobName,
+			Name:      buildJob.Name,
 			Namespace: namespace,
 		},
 		Spec: batchv1.JobSpec{
@@ -202,9 +195,9 @@ func createJob(clientset *kubernetes.Clientset, namespace string, jobName *strin
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:    *jobName,
-							Image:   *image,
-							Command: strings.Split(*cmd, " "),
+							Name:    buildJob.Name,
+							Image:   buildJob.BuildConfig.ExecutionContainer,
+							Command: strings.Split(buildCommand, " "),
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
@@ -221,7 +214,7 @@ func createJob(clientset *kubernetes.Clientset, namespace string, jobName *strin
 	}
 
 	//print job details
-	log.Infof("Created K8s job  %s successfully", jobName)
+	log.Infof("Created K8s job  %s successfully", buildJob.Name)
 	log.Debugf("Job details: %v", job)
 	return job, nil
 }
