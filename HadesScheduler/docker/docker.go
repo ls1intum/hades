@@ -16,19 +16,24 @@ const (
 	sharedVolumeName    = "shared"
 )
 
-type DockerScheduler struct{}
+var cli *client.Client
 
-func (d *DockerScheduler) ScheduleJob(job payload.BuildJob) error {
-	ctx := context.Background()
+type Scheduler struct{}
+
+func init() {
+	var err error
 	// Create a new Docker client
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+	cli, err = client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
-		return err
+		log.WithError(err).Fatal("Failed to create Docker client")
 	}
-	defer cli.Close()
+}
+
+func (d *Scheduler) ScheduleJob(job payload.BuildJob) error {
+	ctx := context.Background()
 
 	// Create the shared volume
-	err = createSharedVolume(ctx, cli, sharedVolumeName)
+	err := createSharedVolume(ctx, cli, sharedVolumeName)
 	if err != nil {
 		log.WithError(err).Error("Failed to create shared volume")
 		return err

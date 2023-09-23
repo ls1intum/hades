@@ -17,7 +17,7 @@ func createSharedVolume(ctx context.Context, client *client.Client, name string)
 		return err
 	}
 
-	log.Debugf("Volume %s created\n", name)
+	log.Debugf("Volume %s created", name)
 	return nil
 }
 
@@ -29,6 +29,6 @@ func deleteSharedVolume(ctx context.Context, client *client.Client, name string)
 		return err
 	}
 
-	log.Debugf("Volume %s deleted\n", name)
+	log.Debugf("Volume %s deleted", name)
 	return nil
 }
