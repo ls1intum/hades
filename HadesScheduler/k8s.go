@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,8 +46,7 @@ func init() {
 		log.Info("Trying to get existing namespace")
 		namespace, err = getNamespace(clientset, hadesCInamespace)
 		if err != nil {
-			log.WithError(err).Error("error getting existing namespace - no more options to try - exiting")
-			os.Exit(1)
+			log.WithError(err).Panic("error getting existing namespace - no more options to try - exiting")
 		}
 	}
 }
@@ -74,27 +72,23 @@ func (k *K8sScheduler) ScheduleJob(buildJob payload.BuildJob) error {
 // This function inizializes the kubeconfig clientset using the kubeconfig file in the useres home directory
 func initializeKubeconfig() *kubernetes.Clientset {
 
-	fmt.Println("Get Kubernetes pods")
-
 	// Load kubeconfig from default location
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.WithError(err).Error("error getting user home dir")
-		os.Exit(1)
+		log.WithError(err).Panic("error getting user home dir")
 	}
 	kubeConfigPath := filepath.Join(userHomeDir, ".kube", "config")
-	log.Infof("Using kubeconfig: %s\n", kubeConfigPath)
+	log.Infof("Using kubeconfig: %s", kubeConfigPath)
 
 	// Create kubeconfig object
 	kubeConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
 	if err != nil {
-		log.WithError(err).Error("error getting Kubernetes clientset")
-		os.Exit(1)
+		log.WithError(err).Panic("error getting Kubernetes clientset")
 	}
 
 	clientset, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
-		log.WithError(err).Error("error getting Kubernetes clientset")
+		log.WithError(err).Panic("error getting Kubernetes clientset")
 		os.Exit(1)
 	}
 
@@ -110,7 +104,7 @@ func getPods(clientset *kubernetes.Clientset, namespace string) *corev1.PodList 
 		log.WithError(err).Error("error getting pods")
 	}
 	for _, pod := range pods.Items {
-		log.Infof("Pod name: %s\n", pod.Name)
+		log.Infof("Pod name: %s", pod.Name)
 
 	}
 
@@ -149,7 +143,7 @@ func getNamespaces(clientset *kubernetes.Clientset) *corev1.NamespaceList {
 	}
 
 	for _, namespace := range namespaces.Items {
-		log.Debugf("Namespace name: %s\n", namespace.Name)
+		log.Debugf("Namespace name: %s", namespace.Name)
 	}
 	return namespaces
 }
@@ -168,7 +162,7 @@ func getNamespace(clientset *kubernetes.Clientset, namespace string) (*corev1.Na
 }
 
 func deleteNamespace(clientset *kubernetes.Clientset, namespace string) {
-	log.Infof("Deleting namespace %s\n", namespace)
+	log.Infof("Deleting namespace %s", namespace)
 
 	err := clientset.CoreV1().Namespaces().Delete(context.Background(), namespace, v1.DeleteOptions{})
 

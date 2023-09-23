@@ -1,7 +1,6 @@
 package payload
 
 type BuildJob struct {
-	// TODO: We need a build ID or something to identify the build
 	Name string `json:"name" binding:"required"`
 
 	Credentials struct {
