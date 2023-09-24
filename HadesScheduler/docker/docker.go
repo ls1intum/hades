@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"github.com/Mtze/HadesCI/hadesScheduler/config"
 	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/docker/docker/api/types"
@@ -11,12 +12,6 @@ import (
 	_ "github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
 	"os"
-)
-
-const (
-	cloneContainerImage  = "alpine/git:latest"
-	resultContainerImage = "alpine:latest"
-	sharedVolumeName     = "shared"
 )
 
 var cli *client.Client
@@ -36,14 +31,14 @@ func (d *Scheduler) ScheduleJob(job payload.BuildJob) error {
 	ctx := context.Background()
 
 	// Pull the images
-	err := pullImages(ctx, cli, job.BuildConfig.ExecutionContainer, cloneContainerImage, resultContainerImage)
+	err := pullImages(ctx, cli, job.BuildConfig.ExecutionContainer, config.CloneContainerImage, config.ResultContainerImage)
 	if err != nil {
 		log.WithError(err).Error("Failed to pull images")
 		return err
 	}
 
 	// Create the shared volume
-	err = createSharedVolume(ctx, cli, sharedVolumeName)
+	err = createSharedVolume(ctx, cli, config.SharedVolumeName)
 	if err != nil {
 		log.WithError(err).Error("Failed to create shared volume")
 		return err
@@ -93,7 +88,7 @@ func cloneRepository(ctx context.Context, client *client.Client, credentials pay
 
 	// Create the container
 	resp, err := client.ContainerCreate(ctx, &container.Config{
-		Image:      cloneContainerImage,
+		Image:      config.CloneContainerImage,
 		Entrypoint: []string{"/bin/sh", "-c"},
 		Cmd:        []string{commandStr},
 		Volumes: map[string]struct{}{
@@ -110,7 +105,7 @@ func cloneRepository(ctx context.Context, client *client.Client, credentials pay
 		return err
 	}
 
-	log.Infof("Container %s started with ID: %s\n", cloneContainerImage, resp.ID)
+	log.Infof("Container %s started with ID: %s\n", config.CloneContainerImage, resp.ID)
 	return nil
 }
 
