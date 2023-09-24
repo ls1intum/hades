@@ -50,13 +50,13 @@ func (d *Scheduler) ScheduleJob(job payload.BuildJob) error {
 	}
 
 	// Clone the repository
-	err = cloneRepository(ctx, cli, job.BuildConfig.Repositories...)
+	err = cloneRepository(ctx, cli, job.Credentials, job.BuildConfig.Repositories...)
 	if err != nil {
 		log.WithError(err).Error("Failed to clone repository")
 		return err
 	}
 
-	err = executeRepository(ctx, cli, job)
+	err = executeRepository(ctx, cli, job.BuildConfig)
 	if err != nil {
 		log.WithError(err).Error("Failed to execute repository")
 		return err
@@ -83,12 +83,12 @@ func pullImages(ctx context.Context, client *client.Client, images ...string) er
 	return nil
 }
 
-func cloneRepository(ctx context.Context, client *client.Client, repositories ...payload.Repository) error {
+func cloneRepository(ctx context.Context, client *client.Client, credentials payload.Credentials, repositories ...payload.Repository) error {
 	// Use the index to modify the slice in place
 	for i := range repositories {
 		repositories[i].Path = "/shared" + repositories[i].Path
 	}
-	commandStr := utils.BuildCloneCommands(repositories...)
+	commandStr := utils.BuildCloneCommands(credentials, repositories...)
 	log.Debug(commandStr)
 
 	// Create the container
@@ -114,9 +114,9 @@ func cloneRepository(ctx context.Context, client *client.Client, repositories ..
 	return nil
 }
 
-func executeRepository(ctx context.Context, client *client.Client, buildConfig payload.BuildJob) error {
+func executeRepository(ctx context.Context, client *client.Client, buildConfig payload.BuildConfig) error {
 	// First, write the Bash script to a temporary file
-	scriptPath, err := writeBashScriptToFile(buildConfig.BuildConfig.BuildScript)
+	scriptPath, err := writeBashScriptToFile(buildConfig.BuildScript)
 	if err != nil {
 		log.WithError(err).Error("Failed to write bash script to a temporary file")
 		return err
@@ -129,10 +129,9 @@ func executeRepository(ctx context.Context, client *client.Client, buildConfig p
 		Source: scriptPath,
 		Target: "/tmp/script.sh",
 	})
-	hostConfigWithScript.AutoRemove = false // TODO change to remove the container after execution
 	// Create the container
 	resp, err := client.ContainerCreate(ctx, &container.Config{
-		Image:      buildConfig.BuildConfig.ExecutionContainer,
+		Image:      buildConfig.ExecutionContainer,
 		Entrypoint: []string{"/bin/sh", "/tmp/script.sh"},
 		Volumes: map[string]struct{}{
 			"/shared":        {},
@@ -149,6 +148,6 @@ func executeRepository(ctx context.Context, client *client.Client, buildConfig p
 		return err
 	}
 
-	log.Infof("Container %s started with ID: %s\n", buildConfig.BuildConfig.ExecutionContainer, resp.ID)
+	log.Infof("Container %s started with ID: %s\n", buildConfig.ExecutionContainer, resp.ID)
 	return nil
 }
