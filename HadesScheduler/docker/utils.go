@@ -2,9 +2,11 @@ package docker
 
 import (
 	"os"
+	"strings"
 )
 
-func writeBashScriptToFile(bashScriptContent string) (string, error) {
+func writeBashScriptToFile(bashScriptLines ...string) (string, error) {
+	bashScriptContent := strings.Join(bashScriptLines, "\n")
 	tmpFile, err := os.CreateTemp("", "bash-script-*.sh")
 	if err != nil {
 		return "", err
