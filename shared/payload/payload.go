@@ -10,6 +10,7 @@ type BuildJob struct {
 	BuildConfig struct {
 		Repositories       []Repository `json:"repositories" binding:"required,dive"`
 		ExecutionContainer string       `json:"executionContainer" binding:"required"`
+		BuildScript        string       `json:"buildScript" binding:"required"`
 	} `json:"buildConfig" binding:"required"`
 }
 

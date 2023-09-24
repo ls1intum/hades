@@ -6,14 +6,17 @@ import (
 	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	_ "github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
+	"os"
 )
 
 const (
-	cloneContainerImage = "alpine/git:latest"
-	sharedVolumeName    = "shared"
+	cloneContainerImage  = "alpine/git:latest"
+	resultContainerImage = "alpine:latest"
+	sharedVolumeName     = "shared"
 )
 
 var cli *client.Client
@@ -32,8 +35,15 @@ func init() {
 func (d *Scheduler) ScheduleJob(job payload.BuildJob) error {
 	ctx := context.Background()
 
+	// Pull the images
+	err := pullImages(ctx, cli, job.BuildConfig.ExecutionContainer, cloneContainerImage, resultContainerImage)
+	if err != nil {
+		log.WithError(err).Error("Failed to pull images")
+		return err
+	}
+
 	// Create the shared volume
-	err := createSharedVolume(ctx, cli, sharedVolumeName)
+	err = createSharedVolume(ctx, cli, sharedVolumeName)
 	if err != nil {
 		log.WithError(err).Error("Failed to create shared volume")
 		return err
@@ -43,6 +53,12 @@ func (d *Scheduler) ScheduleJob(job payload.BuildJob) error {
 	err = cloneRepository(ctx, cli, job.BuildConfig.Repositories...)
 	if err != nil {
 		log.WithError(err).Error("Failed to clone repository")
+		return err
+	}
+
+	err = executeRepository(ctx, cli, job)
+	if err != nil {
+		log.WithError(err).Error("Failed to execute repository")
 		return err
 	}
 
@@ -57,13 +73,17 @@ func (d *Scheduler) ScheduleJob(job payload.BuildJob) error {
 	return nil
 }
 
-func cloneRepository(ctx context.Context, client *client.Client, repositories ...payload.Repository) error {
-	// Pull the image
-	_, err := client.ImagePull(ctx, cloneContainerImage, types.ImagePullOptions{})
-	if err != nil {
-		return err
+func pullImages(ctx context.Context, client *client.Client, images ...string) error {
+	for _, image := range images {
+		_, err := client.ImagePull(ctx, image, types.ImagePullOptions{})
+		if err != nil {
+			return err
+		}
 	}
+	return nil
+}
 
+func cloneRepository(ctx context.Context, client *client.Client, repositories ...payload.Repository) error {
 	// Use the index to modify the slice in place
 	for i := range repositories {
 		repositories[i].Path = "/shared" + repositories[i].Path
@@ -91,5 +111,44 @@ func cloneRepository(ctx context.Context, client *client.Client, repositories ..
 	}
 
 	log.Infof("Container %s started with ID: %s\n", cloneContainerImage, resp.ID)
+	return nil
+}
+
+func executeRepository(ctx context.Context, client *client.Client, buildConfig payload.BuildJob) error {
+	// First, write the Bash script to a temporary file
+	scriptPath, err := writeBashScriptToFile(buildConfig.BuildConfig.BuildScript)
+	if err != nil {
+		log.WithError(err).Error("Failed to write bash script to a temporary file")
+		return err
+	}
+	defer os.Remove(scriptPath)
+
+	hostConfigWithScript := defaultHostConfig
+	hostConfigWithScript.Mounts = append(defaultHostConfig.Mounts, mount.Mount{
+		Type:   mount.TypeBind,
+		Source: scriptPath,
+		Target: "/tmp/script.sh",
+	})
+	hostConfigWithScript.AutoRemove = false // TODO change to remove the container after execution
+	// Create the container
+	resp, err := client.ContainerCreate(ctx, &container.Config{
+		Image:      buildConfig.BuildConfig.ExecutionContainer,
+		Entrypoint: []string{"/bin/sh", "/tmp/script.sh"},
+		Volumes: map[string]struct{}{
+			"/shared":        {},
+			"/tmp/script.sh": {}, // this volume will hold our script
+		},
+	}, &hostConfigWithScript, nil, nil, "")
+	if err != nil {
+		return err
+	}
+
+	// Start the container
+	err = client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Container %s started with ID: %s\n", buildConfig.BuildConfig.ExecutionContainer, resp.ID)
 	return nil
 }
