@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -32,10 +33,10 @@ type Scheduler struct{}
 
 var clientset *kubernetes.Clientset
 var namespace *corev1.Namespace
+var k8sCfg K8sConfig
 
-func init() {
-	log.Debug("Kube init function called")
-	var k8sCfg K8sConfig
+func Init() {
+	log.Debug("Kube Init called")
 	utils.LoadConfig(&k8sCfg)
 
 	var err error
@@ -88,18 +89,31 @@ func (k Scheduler) ScheduleJob(buildJob payload.BuildJob) error {
 // This function inizializes the kubeconfig clientset using the kubeconfig file in the useres home directory
 func initializeKubeconfig() *kubernetes.Clientset {
 
-	// Load kubeconfig from default location
-	userHomeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.WithError(err).Panic("error getting user home dir")
-	}
-	kubeConfigPath := filepath.Join(userHomeDir, ".kube", "config")
-	log.Infof("Using kubeconfig: %s", kubeConfigPath)
+	var kubeConfig *rest.Config
 
-	// Create kubeconfig object
-	kubeConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
-	if err != nil {
-		log.WithError(err).Panic("error getting Kubernetes clientset")
+	// Check if kubeconfig is explicitly set
+	if k8sCfg.Kubeconfig != "" {
+		log.Infof("Using kubeconfig: %s", k8sCfg.Kubeconfig)
+		var err error
+		kubeConfig, err = clientcmd.BuildConfigFromFlags("", k8sCfg.Kubeconfig)
+		if err != nil {
+			log.WithError(err).Panic("error getting Kubernetes clientset")
+		}
+	} else {
+		log.Info("Kubeconfig not set - using default location")
+		// Load kubeconfig from default location
+		userHomeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.WithError(err).Panic("error getting user home dir")
+		}
+		kubeConfigPath := filepath.Join(userHomeDir, ".kube", "config")
+		log.Infof("Using kubeconfig: %s", kubeConfigPath)
+
+		// Create kubeconfig object
+		kubeConfig, err = clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+		if err != nil {
+			log.WithError(err).Panic("error getting Kubernetes clientset")
+		}
 	}
 
 	clientset, err := kubernetes.NewForConfig(kubeConfig)
