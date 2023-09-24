@@ -18,6 +18,10 @@ type K8sConfig struct {
 	HadesCInamespace string `env:"HADES_CI_NAMESPACE" envDefault:"hades-ci"`
 }
 
+type ExecutorConfig struct {
+	Executor string `env:"EXECUTOR,notEmpty" envDefault:"k8s"`
+}
+
 func LoadConfig(cfg interface{}) {
 
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {

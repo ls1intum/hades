@@ -8,6 +8,7 @@ require (
 	github.com/Mtze/HadesCI/shared v0.0.0-00010101000000-000000000000
 	github.com/docker/docker v24.0.6+incompatible
 	github.com/sirupsen/logrus v1.9.3
+	k8s.io/api v0.28.2
 	k8s.io/apimachinery v0.28.2
 	k8s.io/client-go v0.28.2
 )
@@ -43,6 +44,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/rabbitmq/amqp091-go v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/mod v0.10.0 // indirect
 	golang.org/x/net v0.13.0 // indirect
@@ -58,7 +60,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
-	k8s.io/api v0.28.2 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230918164632-68afd615200d // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
