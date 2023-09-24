@@ -5,6 +5,7 @@ import (
 
 	"github.com/Mtze/HadesCI/hadesScheduler/docker"
 	"github.com/Mtze/HadesCI/hadesScheduler/kube"
+	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/Mtze/HadesCI/shared/utils"
 
@@ -12,6 +13,10 @@ import (
 )
 
 var BuildQueue *queue.Queue
+
+type JobScheduler interface {
+	ScheduleJob(job payload.BuildJob) error
+}
 
 func main() {
 	var cfg utils.RabbitMQConfig
@@ -31,21 +36,22 @@ func main() {
 
 	var forever chan struct{}
 
+	var scheduler JobScheduler
+
 	if condition := executorCfg.Executor == "k8s"; condition {
 
 		log.Info("Started HadesScheduler in Kubernetes mode")
-		scheduler := kube.Scheduler{}
-		BuildQueue.Dequeue(scheduler.ScheduleJob)
+		scheduler = kube.Scheduler{}
 
 	} else if condition := executorCfg.Executor == "docker"; condition {
 
 		log.Info("Started HadesScheduler in Docker mode")
-		scheduler := docker.Scheduler{}
-		BuildQueue.Dequeue(scheduler.ScheduleJob)
+		scheduler = docker.Scheduler{}
 
 	} else {
 		log.Panic("Invalid executor specified")
 	}
+	BuildQueue.Dequeue(scheduler.ScheduleJob)
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	<-forever
