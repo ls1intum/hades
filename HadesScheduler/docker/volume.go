@@ -29,6 +29,5 @@ func deleteSharedVolume(ctx context.Context, client *client.Client, name string)
 		return err
 	}
 
-	log.Debugf("Volume %s deleted", name)
 	return nil
 }
