@@ -4,6 +4,7 @@
     <working_directory value="$PROJECT_DIR$" />
     <envs>
       <env name="DEBUG" value="true" />
+      <env name="EXECUTOR" value="docker" />
     </envs>
     <kind value="DIRECTORY" />
     <directory value="$PROJECT_DIR$/HadesScheduler" />
