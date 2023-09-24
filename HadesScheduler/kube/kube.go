@@ -33,26 +33,31 @@ var clientset *kubernetes.Clientset
 var namespace *corev1.Namespace
 
 func init() {
-
+	log.Debug("Kube init function called")
 	var k8sCfg utils.K8sConfig
 	utils.LoadConfig(&k8sCfg)
 
 	var err error
 
 	hadesCInamespace := k8sCfg.HadesCInamespace
-	log.Debugf("Using namespace '%s'", hadesCInamespace)
 
 	clientset = initializeKubeconfig()
-	namespace, err = createNamespace(clientset, hadesCInamespace)
 
+	// Ensure that the namespace exists
+
+	log.Debugf("Ensure that %s namespace exists", hadesCInamespace)
+	namespace, err = getNamespace(clientset, hadesCInamespace)
 	if err != nil {
-		log.Warn("Failed to create hades namespace")
-		log.Info("Trying to get existing namespace")
-		namespace, err = getNamespace(clientset, hadesCInamespace)
+		log.Infof("Namespace '%s' does not exist - Trying creating a new one", hadesCInamespace)
+
+		namespace, err = createNamespace(clientset, hadesCInamespace)
 		if err != nil {
 			log.WithError(err).Panic("error getting existing namespace - no more options to try - exiting")
 		}
+		log.Infof("Namespace '%s' created", namespace.Name)
 	}
+	log.Debugf("Using namespace '%s'", namespace.Name)
+
 }
 
 func (k *Scheduler) ScheduleJob(buildJob payload.BuildJob) error {
@@ -137,7 +142,7 @@ func createNamespace(clientset *kubernetes.Clientset, namespace string) (*corev1
 }
 
 func getNamespaces(clientset *kubernetes.Clientset) *corev1.NamespaceList {
-	log.Infof("Getting namespaces")
+	log.Debugf("Getting namespaces")
 
 	namespaces, err := clientset.CoreV1().Namespaces().List(context.Background(), v1.ListOptions{})
 
@@ -152,7 +157,7 @@ func getNamespaces(clientset *kubernetes.Clientset) *corev1.NamespaceList {
 }
 
 func getNamespace(clientset *kubernetes.Clientset, namespace string) (*corev1.Namespace, error) {
-	log.Infof("Getting namespace %s", namespace)
+	log.Debugf("Getting namespace %s", namespace)
 
 	ns, err := clientset.CoreV1().Namespaces().Get(context.Background(), namespace, v1.GetOptions{})
 
