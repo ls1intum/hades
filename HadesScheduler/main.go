@@ -38,19 +38,17 @@ func main() {
 
 	var scheduler JobScheduler
 
-	if condition := executorCfg.Executor == "k8s"; condition {
-
+	switch executorCfg.Executor {
+	case "k8s":
 		log.Info("Started HadesScheduler in Kubernetes mode")
 		scheduler = kube.Scheduler{}
-
-	} else if condition := executorCfg.Executor == "docker"; condition {
-
+	case "docker":
 		log.Info("Started HadesScheduler in Docker mode")
 		scheduler = docker.Scheduler{}
-
-	} else {
+	default:
 		log.Panic("Invalid executor specified")
 	}
+
 	BuildQueue.Dequeue(scheduler.ScheduleJob)
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
