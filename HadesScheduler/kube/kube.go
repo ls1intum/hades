@@ -35,7 +35,7 @@ var namespace *corev1.Namespace
 
 func init() {
 	log.Debug("Kube init function called")
-	var k8sCfg utils.K8sConfig
+	var k8sCfg K8sConfig
 	utils.LoadConfig(&k8sCfg)
 
 	var err error
