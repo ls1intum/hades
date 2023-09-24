@@ -191,7 +191,7 @@ func createJob(clientset *kubernetes.Clientset, namespace string, buildJob paylo
 	var backOffLimit int32 = 0
 
 	//TODO: Use function to generate clone command
-	cloneCommand := utils.BuildCloneCommands(buildJob.BuildConfig.Repositories...)
+	cloneCommand := utils.BuildCloneCommands(buildJob.Credentials, buildJob.BuildConfig.Repositories...)
 	log.Debugf("Clone command: %s", cloneCommand)
 
 	jobSpec := &batchv1.Job{
