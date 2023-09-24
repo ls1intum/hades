@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+
 	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/docker/docker/api/types"
@@ -29,7 +30,7 @@ func init() {
 	}
 }
 
-func (d *Scheduler) ScheduleJob(job payload.BuildJob) error {
+func (d Scheduler) ScheduleJob(job payload.BuildJob) error {
 	ctx := context.Background()
 
 	// Create the shared volume

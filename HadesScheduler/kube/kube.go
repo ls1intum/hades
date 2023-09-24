@@ -60,7 +60,7 @@ func init() {
 
 }
 
-func (k *Scheduler) ScheduleJob(buildJob payload.BuildJob) error {
+func (k Scheduler) ScheduleJob(buildJob payload.BuildJob) error {
 
 	log.Infof("Scheduling job %s", buildJob.BuildConfig.ExecutionContainer)
 
