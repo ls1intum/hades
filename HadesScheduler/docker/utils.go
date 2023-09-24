@@ -1,9 +1,11 @@
 package docker
 
-import "io/ioutil"
+import (
+	"os"
+)
 
 func writeBashScriptToFile(bashScriptContent string) (string, error) {
-	tmpFile, err := ioutil.TempFile("", "bash-script-*.sh")
+	tmpFile, err := os.CreateTemp("", "bash-script-*.sh")
 	if err != nil {
 		return "", err
 	}
