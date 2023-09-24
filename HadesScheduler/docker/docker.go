@@ -12,7 +12,6 @@ import (
 	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	_ "github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
@@ -23,10 +22,17 @@ var cli *client.Client
 
 type Scheduler struct{}
 
+type DockerConfig struct {
+	DockerHost string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
+}
+
 func init() {
+	var DockerCfg DockerConfig
+	utils.LoadConfig(&DockerCfg)
+
 	var err error
 	// Create a new Docker client
-	cli, err = client.NewClientWithOpts(client.FromEnv)
+	cli, err = client.NewClientWithOpts(client.WithHost(DockerCfg.DockerHost), client.WithAPIVersionNegotiation())
 	if err != nil {
 		log.WithError(err).Fatal("Failed to create Docker client")
 	}
@@ -52,6 +58,16 @@ func (d Scheduler) ScheduleJob(job payload.BuildJob) error {
 		return err
 	}
 	log.Debugf("Create Shared Volume in %s", time.Since(startOfVolume))
+	// Delete the shared volume after the job is done
+	defer func() {
+		time.Sleep(1 * time.Second)
+		startOfDelete := time.Now()
+		err = deleteSharedVolume(ctx, cli, config.SharedVolumeName)
+		if err != nil {
+			log.WithError(err).Error("Failed to delete shared volume")
+		}
+		log.Debugf("Delete Shared Volume in %s", time.Since(startOfDelete))
+	}()
 
 	startOfClone := time.Now()
 	// Clone the repository
@@ -70,16 +86,6 @@ func (d Scheduler) ScheduleJob(job payload.BuildJob) error {
 	}
 	log.Debugf("Execute repo in %s", time.Since(startOfExecute))
 	log.Debugf("Total time: %s", time.Since(startOfPull))
-
-	// TODO enable deletion of shared volume
-	time.Sleep(1 * time.Second)
-	startOfDelete := time.Now()
-	err = deleteSharedVolume(ctx, cli, config.SharedVolumeName)
-	if err != nil {
-		log.WithError(err).Error("Failed to delete shared volume")
-		return err
-	}
-	log.Debugf("Delete Shared Volume in %s", time.Since(startOfDelete))
 
 	return nil
 }
@@ -175,22 +181,22 @@ func executeRepository(ctx context.Context, client *client.Client, buildConfig p
 	}
 	defer os.Remove(scriptPath)
 
-	hostConfigWithScript := defaultHostConfig
-	hostConfigWithScript.Mounts = append(defaultHostConfig.Mounts, mount.Mount{
-		Type:   mount.TypeBind,
-		Source: scriptPath,
-		Target: "/tmp/script.sh",
-	})
 	// Create the container
 	resp, err := client.ContainerCreate(ctx, &container.Config{
 		Image:      buildConfig.ExecutionContainer,
 		Entrypoint: []string{"/bin/sh", "/tmp/script.sh"},
 		Volumes: map[string]struct{}{
-			"/shared":        {},
-			"/tmp/script.sh": {}, // this volume will hold our script
+			"/shared": {},
 		},
-	}, &hostConfigWithScript, nil, nil, "")
+	}, &defaultHostConfig, nil, nil, "")
 	if err != nil {
+		return err
+	}
+
+	// Copy the script to the container
+	err = copyFileToContainer(ctx, client, resp.ID, scriptPath, "/tmp")
+	if err != nil {
+		log.WithError(err).Error("Failed to copy script to container")
 		return err
 	}
 

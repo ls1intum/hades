@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"github.com/Mtze/HadesCI/hadesScheduler/config"
 	"github.com/docker/docker/api/types"
@@ -8,6 +10,8 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	log "github.com/sirupsen/logrus"
+	"io"
 	"os"
 )
 
@@ -41,4 +45,45 @@ func writeContainerLogsToFile(ctx context.Context, client *client.Client, contai
 
 	_, err = stdcopy.StdCopy(out, out, logReader)
 	return err
+}
+
+func copyFileToContainer(ctx context.Context, client *client.Client, containerID, srcPath, dstPath string) error {
+	scriptFile, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer scriptFile.Close()
+
+	// Create a buffer to hold the tar archive
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	// Read the script content
+	scriptContent, err := io.ReadAll(scriptFile)
+	if err != nil {
+		return err
+	}
+	defer tw.Close()
+
+	// Add the script content to the tar archive
+	tarHeader := &tar.Header{
+		Name: "script.sh",
+		Size: int64(len(scriptContent)),
+		Mode: 0755, // Make sure the script is executable
+	}
+	if err := tw.WriteHeader(tarHeader); err != nil {
+		return err
+	}
+	if _, err := tw.Write(scriptContent); err != nil {
+		return err
+	}
+
+	// Now send the tar archive to CopyToContainer
+	err = client.CopyToContainer(ctx, containerID, dstPath, &buf, types.CopyToContainerOptions{
+		AllowOverwriteDirWithFile: false,
+	})
+	if err != nil {
+		log.WithError(err).Error("Failed to copy script to container")
+		return err
+	}
+	return nil
 }
