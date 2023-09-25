@@ -203,13 +203,11 @@ func deleteNamespace(clientset *kubernetes.Clientset, namespace string) {
 func createJob(clientset *kubernetes.Clientset, namespace string, buildJob payload.BuildJob) (*batchv1.Job, error) {
 	log.Infof("Creating job %v in namespace %s", buildJob, namespace)
 
-	//TODO: Use function to generate build command
 	sharedVolumeName := "shared-volume-" + buildJob.Name
 
 	jobs := clientset.BatchV1().Jobs(namespace)
 	var backOffLimit int32 = 0
 
-	//TODO: Use function to generate clone command
 	cloneCommand := utils.BuildCloneCommands(buildJob.Credentials, buildJob.BuildConfig.Repositories...)
 	log.Debugf("Clone command: %s", cloneCommand)
 
