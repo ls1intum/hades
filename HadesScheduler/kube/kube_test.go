@@ -27,3 +27,4 @@ func TestDeleteNamespace(t *testing.T) {
 	client := initializeKubeconfig()
 	deleteNamespace(client, "test")
 }
+

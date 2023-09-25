@@ -22,6 +22,7 @@ jobs:
             image: ghcr.io/mtze/hades/hades-api
           - dockerfile: ./HadesScheduler/Dockerfile
             image: ghcr.io/mtze/hades/hades-scheduler
+
     steps:
       - name: Compute Tag
         uses: actions/github-script@v6
