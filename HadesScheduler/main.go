@@ -41,6 +41,7 @@ func main() {
 	switch executorCfg.Executor {
 	case "k8s":
 		log.Info("Started HadesScheduler in Kubernetes mode")
+		kube.Init()
 		scheduler = kube.Scheduler{}
 	case "docker":
 		log.Info("Started HadesScheduler in Docker mode")

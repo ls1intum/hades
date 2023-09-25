@@ -3,7 +3,7 @@
 version: '3.7'
 services:
   hadesAPI:
-    image: hades-api
+    image: ghcr.io/mtze/hades/hades-api
     build:
       context: .
       dockerfile: ./HadesAPI/Dockerfile
@@ -12,19 +12,23 @@ services:
     networks:
       - hades
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     environment:
       - RABBITMQ_URL=rabbitmq:5672
+      - RABBITMQ_DEFAULT_USER
+      - RABBITMQ_DEFAULT_PASS
 
   hadesScheduler:
-    image: hades-scheduler
+    image: ghcr.io/mtze/hades/hades-scheduler
     build:
       context: .
       dockerfile: ./HadesScheduler/Dockerfile
     networks:
       - hades
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     environment:
       - RABBITMQ_URL=rabbitmq:5672
 
@@ -41,7 +45,7 @@ services:
       - RABBITMQ_DEFAULT_PASS
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 30s
+      interval: 5s
       timeout: 10s
       retries: 5
 networks:
