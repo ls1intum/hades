@@ -290,7 +290,7 @@ func createJob(clientset *kubernetes.Clientset, namespace string, buildJob paylo
 }
 
 func createExecutionScriptConfigMap(clientset *kubernetes.Clientset, namespace string, buildJob payload.BuildJob) (*corev1.ConfigMap, error) {
-	log.Infof("Creating configmap for execution script %v in namespace %s", buildJob, namespace)
+	log.Infof("Creating configmap for execution script %v in namespace %s", buildJob.Name, namespace)
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: buildJob.Name,

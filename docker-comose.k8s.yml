@@ -1,0 +1,12 @@
+
+version: '3.7'
+services:
+
+  hadesScheduler:
+    environment:
+      - RABBITMQ_URL=rabbitmq:5672
+      - KUBECONFIG=/root/.kube/config
+      - RABBITMQ_DEFAULT_USER
+      - RABBITMQ_DEFAULT_PASS
+    volumes:
+      - ./.kube/config:/root/.kube/config
