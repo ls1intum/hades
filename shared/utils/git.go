@@ -2,16 +2,17 @@ package utils
 
 import (
 	"fmt"
-	"github.com/Mtze/HadesCI/shared/payload"
 	"net/url"
 	"strings"
+
+	"github.com/Mtze/HadesCI/shared/payload"
 )
 
 func BuildCloneCommand(username, password string, repo payload.Repository) string {
 	username = url.PathEscape(username)
 	password = url.PathEscape(password)
 	cloneURL := strings.Replace(repo.URL, "https://", fmt.Sprintf("https://%s:%s@", username, password), 1)
-	return fmt.Sprintf("git clone %s %s", cloneURL, repo.Path)
+	return fmt.Sprintf("git clone %s %s", cloneURL, "/shared"+repo.Path)
 }
 
 func BuildCloneCommands(credentials payload.Credentials, repos ...payload.Repository) string {

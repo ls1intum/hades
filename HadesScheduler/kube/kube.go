@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -20,7 +19,9 @@ import (
 )
 
 const (
-	waitForNamespace = 5 * time.Second
+	waitForNamespace    = 5 * time.Second
+	cloneContainerImage = "alpine/git:latest"
+	sharedVolumeName    = "shared"
 )
 
 type JobScheduler interface {
@@ -63,6 +64,12 @@ func init() {
 func (k Scheduler) ScheduleJob(buildJob payload.BuildJob) error {
 
 	log.Infof("Scheduling job %s", buildJob.BuildConfig.ExecutionContainer)
+
+	_, err := createExecutionScriptConfigMap(clientset, namespace.Name, buildJob)
+	if err != nil {
+		log.WithError(err).Error("error creating configmap")
+		return err
+	}
 
 	job, err := createJob(clientset, namespace.Name, buildJob)
 
@@ -182,10 +189,15 @@ func deleteNamespace(clientset *kubernetes.Clientset, namespace string) {
 func createJob(clientset *kubernetes.Clientset, namespace string, buildJob payload.BuildJob) (*batchv1.Job, error) {
 	log.Infof("Creating job %v in namespace %s", buildJob, namespace)
 
-	buildCommand := "sleep 10"
+	//TODO: Use function to generate build command
+	sharedVolumeName := "shared-volume-" + buildJob.Name
 
 	jobs := clientset.BatchV1().Jobs(namespace)
 	var backOffLimit int32 = 0
+
+	//TODO: Use function to generate clone command
+	cloneCommand := utils.BuildCloneCommands(buildJob.Credentials, buildJob.BuildConfig.Repositories...)
+	log.Debugf("Clone command: %s", cloneCommand)
 
 	jobSpec := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -195,11 +207,53 @@ func createJob(clientset *kubernetes.Clientset, namespace string, buildJob paylo
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name:    "clone",
+							Image:   cloneContainerImage,
+							Command: []string{"/bin/sh", "-c"},
+							Args:    []string{cloneCommand},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      sharedVolumeName,
+									MountPath: "/shared",
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:    buildJob.Name,
 							Image:   buildJob.BuildConfig.ExecutionContainer,
-							Command: strings.Split(buildCommand, " "),
+							Command: []string{"/bin/sh", "/tmp/build-script/build.sh"},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      sharedVolumeName,
+									MountPath: "/shared",
+								},
+								{
+									Name:      "build-script",
+									MountPath: "/tmp/build-script",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: sharedVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{}, // An emptyDir volume is shared among containers in the same Pod
+							},
+						},
+						{
+							Name: "build-script",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: buildJob.Name,
+									},
+								},
+							},
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
@@ -219,4 +273,24 @@ func createJob(clientset *kubernetes.Clientset, namespace string, buildJob paylo
 	log.Infof("Created K8s job  %s successfully", buildJob.Name)
 	log.Debugf("Job details: %v", job)
 	return job, nil
+}
+
+func createExecutionScriptConfigMap(clientset *kubernetes.Clientset, namespace string, buildJob payload.BuildJob) (*corev1.ConfigMap, error) {
+	log.Infof("Creating configmap for execution script %v in namespace %s", buildJob, namespace)
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: buildJob.Name,
+		},
+		Data: map[string]string{
+			"build.sh": "cd /shared && " + buildJob.BuildConfig.BuildScript,
+		},
+	}
+	cm, err := clientset.CoreV1().ConfigMaps(namespace).Create(context.TODO(), configMap, metav1.CreateOptions{})
+	if err != nil {
+		log.WithError(err).Error("error creating configmap")
+		return nil, err
+	}
+
+	return cm, nil
+
 }
