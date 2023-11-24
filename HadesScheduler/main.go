@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Mtze/HadesCI/hadesScheduler/docker"
 	"github.com/Mtze/HadesCI/hadesScheduler/kube"
@@ -19,6 +20,11 @@ type JobScheduler interface {
 }
 
 func main() {
+	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
+		log.SetLevel(log.DebugLevel)
+		log.Warn("DEBUG MODE ENABLED")
+	}
+
 	var cfg utils.RabbitMQConfig
 	utils.LoadConfig(&cfg)
 

@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"os"
-
 	"github.com/caarlos0/env/v9"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
@@ -23,12 +21,6 @@ type ExecutorConfig struct {
 }
 
 func LoadConfig(cfg interface{}) {
-
-	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
-		log.SetLevel(log.DebugLevel)
-		log.Warn("DEBUG MODE ENABLED")
-	}
-
 	err := godotenv.Load()
 	if err != nil {
 		log.WithError(err).Warn("Error loading .env file")
