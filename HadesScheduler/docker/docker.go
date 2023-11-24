@@ -3,19 +3,22 @@ package docker
 import (
 	"context"
 	"fmt"
-	"github.com/Mtze/HadesCI/hadesScheduler/config"
 	"io"
 	"sync"
 	"time"
+
+	"github.com/Mtze/HadesCI/hadesScheduler/config"
+
+	"os"
 
 	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	_ "github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
-	"os"
 )
 
 var cli *client.Client
@@ -86,6 +89,16 @@ func (d Scheduler) ScheduleJob(job payload.BuildJob) error {
 	}
 	log.Debugf("Execute repo in %s", time.Since(startOfExecute))
 	log.Debugf("Total time: %s", time.Since(startOfPull))
+
+	// TODO enable deletion of shared volume
+	time.Sleep(1 * time.Second)
+	startOfDelete := time.Now()
+	err = deleteSharedVolume(ctx, cli, config.SharedVolumeName)
+	if err != nil {
+		log.WithError(err).Error("Failed to delete shared volume")
+		return err
+	}
+	log.Debugf("Delete Shared Volume in %s", time.Since(startOfDelete))
 
 	return nil
 }
@@ -181,14 +194,21 @@ func executeRepository(ctx context.Context, client *client.Client, buildConfig p
 	}
 	defer os.Remove(scriptPath)
 
+	hostConfigWithScript := defaultHostConfig
+	hostConfigWithScript.Mounts = append(defaultHostConfig.Mounts, mount.Mount{
+		Type:   mount.TypeBind,
+		Source: scriptPath,
+		Target: "/tmp/script.sh",
+	})
 	// Create the container
 	resp, err := client.ContainerCreate(ctx, &container.Config{
 		Image:      buildConfig.ExecutionContainer,
 		Entrypoint: []string{"/bin/sh", "/tmp/script.sh"},
 		Volumes: map[string]struct{}{
-			"/shared": {},
+			"/shared":        {},
+			"/tmp/script.sh": {}, // this volume will hold our script
 		},
-	}, &defaultHostConfig, nil, nil, "")
+	}, &hostConfigWithScript, nil, nil, "")
 	if err != nil {
 		return err
 	}

@@ -30,6 +30,24 @@ HadesCI is built upon the following key components:
 
   - **Kubernetes Executor**: Intended for production use, the Kubernetes executor executes build jobs within a Kubernetes cluster.
 
+## Getting Started
+
+### Prerequisites
+
+- You need a kubeconfig file to connect to a Kubernetes cluster.
+- [Docker](https://docs.docker.com/get-docker/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+### Running with Docker Compose
+
+Update the `.env` file with the path to your kubeconfig file
+
+Start hadesci with docker-compose:
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.k8s.yml up -d
+```
+
 ## Development
 
 ### Prerequisites

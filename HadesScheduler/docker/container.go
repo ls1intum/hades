@@ -4,6 +4,9 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"io"
+	"os"
+
 	"github.com/Mtze/HadesCI/hadesScheduler/config"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -11,8 +14,6 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"os"
 )
 
 var defaultHostConfig = container.HostConfig{
