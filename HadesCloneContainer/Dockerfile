@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 # Build the Go application
-RUN go build -o hades-clone .
+RUN go build -o hades-clone ./HadesCloneContainer
 
 # Start a new stage for the minimal runtime container
 FROM alpine:latest
