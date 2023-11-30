@@ -50,11 +50,11 @@ func Init(queueName, url string) (*Queue, error) {
 		log.WithError(err).Error("error declaring RabbitMQ queue")
 		return nil, err
 	}
-	log.Info("Queue initialized", q)
+	log.Debug("Queue initialized", q)
 	return &q, nil
 }
 
-func (q *Queue) Enqueue(ctx context.Context, msg payload.BuildJob) error {
+func (q *Queue) Enqueue(ctx context.Context, msg payload.QueuePayload, prio uint8) error {
 	log.Debugf("Enqueue function called with ctx %+v message: %v", ctx, msg)
 
 	body, err := json.Marshal(msg)
@@ -71,6 +71,7 @@ func (q *Queue) Enqueue(ctx context.Context, msg payload.BuildJob) error {
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        []byte(body),
+			Priority:    prio,
 		})
 	if err != nil {
 		log.WithError(err).Error("error publishing message")
@@ -79,7 +80,7 @@ func (q *Queue) Enqueue(ctx context.Context, msg payload.BuildJob) error {
 	return nil
 }
 
-func (q *Queue) Dequeue(callback func(job payload.BuildJob) error) error {
+func (q *Queue) Dequeue(callback func(job payload.QueuePayload) error) error {
 	msgs, err := q.channel.Consume(
 		q.queue.Name, // queue
 		"",           // consumer
@@ -95,7 +96,7 @@ func (q *Queue) Dequeue(callback func(job payload.BuildJob) error) error {
 	}
 
 	for d := range msgs {
-		var buildJob payload.BuildJob
+		var buildJob payload.QueuePayload
 		err := json.Unmarshal(d.Body, &buildJob)
 		if err != nil {
 			log.WithError(err).Warn("error unmarshalling message %s", d.Body)

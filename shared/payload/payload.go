@@ -1,24 +1,23 @@
 package payload
 
-type BuildJob struct {
-	Name string `json:"name" binding:"required"`
+import "time"
 
-	Credentials Credentials `json:"credentials" binding:"required"`
-	BuildConfig BuildConfig `json:"buildConfig" binding:"required"`
+type RESTPayload struct {
+	Priority int `json:"priority"`
+	QueuePayload
 }
 
-type Credentials struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+type QueuePayload struct {
+	Name      string            `json:"name"`
+	Timestamp time.Time         `json:"timestamp"`
+	Metadata  map[string]string `json:"metadata"`
+	Steps     []Step            `json:"steps"`
 }
 
-type BuildConfig struct {
-	Repositories       []Repository `json:"repositories" binding:"required,dive"`
-	ExecutionContainer string       `json:"executionContainer" binding:"required"`
-	BuildScript        string       `json:"buildScript" binding:"required"`
-}
-
-type Repository struct {
-	URL  string `json:"url" binding:"required,url"`
-	Path string `json:"path" binding:"required,dirpath"`
+type Step struct {
+	ID       int               `json:"id"`
+	Name     string            `json:"name"`
+	Image    string            `json:"image"`
+	Script   string            `json:"script"`
+	Metadata map[string]string `json:"metadata"`
 }

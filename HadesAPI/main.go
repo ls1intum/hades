@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/Mtze/HadesCI/shared/utils"
@@ -17,6 +18,10 @@ type HadesAPIConfig struct {
 }
 
 func main() {
+	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
+		log.SetLevel(log.DebugLevel)
+		log.Warn("DEBUG MODE ENABLED")
+	}
 
 	var cfg HadesAPIConfig
 	utils.LoadConfig(&cfg)
@@ -26,7 +31,8 @@ func main() {
 	log.Debug("Connecting to RabbitMQ: ", rabbitmqURL)
 	BuildQueue, err = queue.Init("builds", rabbitmqURL)
 	if err != nil {
-		log.Panic(err)
+		log.WithError(err).Fatal("Failed to connect to RabbitMQ")
+		return
 	}
 
 	log.Infof("Starting HadesAPI on port %d", cfg.APIPort)

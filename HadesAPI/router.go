@@ -15,7 +15,8 @@ func ping(c *gin.Context) {
 }
 
 func AddBuildToQueue(c *gin.Context) {
-	var payload payload.BuildJob
+	var payload payload.RESTPayload
+	payload.Priority = 3 // Default priority
 	if err := c.ShouldBind(&payload); err != nil {
 		log.WithError(err).Error("Failed to bind JSON")
 		c.String(http.StatusBadRequest, "Failed to bind JSON")
@@ -23,5 +24,5 @@ func AddBuildToQueue(c *gin.Context) {
 	}
 
 	log.Debug("Received build request ", payload)
-	BuildQueue.Enqueue(c.Request.Context(), payload)
+	BuildQueue.Enqueue(c.Request.Context(), payload.QueuePayload, uint8(payload.Priority))
 }
