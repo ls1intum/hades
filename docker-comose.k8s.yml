@@ -8,5 +8,6 @@ services:
       - KUBECONFIG=/root/.kube/config
       - RABBITMQ_DEFAULT_USER
       - RABBITMQ_DEFAULT_PASS
+      - HADES_EXECUTOR=k8s
     volumes:
       - ./.kube/config:/root/.kube/config

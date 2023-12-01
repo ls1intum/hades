@@ -1,0 +1,18 @@
+# docker compose file for the project with three services
+
+version: '3.7'
+services:
+  hadesAPI:
+    environment:
+      - RABBITMQ_URL=rabbitmq:5672
+      - RABBITMQ_DEFAULT_USER
+      - RABBITMQ_DEFAULT_PASS
+      - DEBUG=true
+  hadesScheduler:
+    environment:
+      - RABBITMQ_URL=rabbitmq:5672
+      - RABBITMQ_DEFAULT_USER
+      - RABBITMQ_DEFAULT_PASS
+      - HADES_EXECUTOR=docker
+      - CONTAINER_AUTOREMOVE=false
+      - DEBUG=true

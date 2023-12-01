@@ -17,7 +17,7 @@ type K8sConfig struct {
 }
 
 type ExecutorConfig struct {
-	Executor string `env:"EXECUTOR,notEmpty" envDefault:"k8s"`
+	Executor string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
 }
 
 func LoadConfig(cfg interface{}) {
