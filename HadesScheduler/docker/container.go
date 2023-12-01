@@ -7,25 +7,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/Mtze/HadesCI/hadesScheduler/config"
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	log "github.com/sirupsen/logrus"
 )
-
-var defaultHostConfig = container.HostConfig{
-	Mounts: []mount.Mount{
-		{
-			Type:   mount.TypeVolume,
-			Source: config.SharedVolumeName,
-			Target: "/shared",
-		},
-	},
-	AutoRemove: true,
-}
 
 func writeContainerLogsToFile(ctx context.Context, client *client.Client, containerID string, logFilePath string) error {
 	out, err := os.Create(logFilePath)

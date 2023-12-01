@@ -1,0 +1,28 @@
+{
+    "name": "", 
+    "metadata": {},
+    "timestamp": "2021-01-01T00:00:00.000Z",
+    "priority": 1, // optional, default 3
+    "jobs" : [
+        {
+            "id" : 1, // mandatory to declare the order of execution
+            "name" : "Clone",
+            "image" : "git:alpine", // mandatory
+            "script" : "echo hello", // optional
+            "metadata" : {
+                "GIT_USERNAME[_*]" : "user",
+                "GIT_PASSWORD[_*]" : "pass",
+                "GIT_URL_*": "fake.fake", 
+                "GIT_BRANCH_*": "main",
+                "GIT_COMMIT_*": "hadfuisahsdfui"
+            }
+        },
+        {
+            "id" : 2,
+            "name" : "Execute",
+            "image" : "java:alpine",
+            "script" : "maven run",
+            "metadata" : {}
+        }
+    ]
+}

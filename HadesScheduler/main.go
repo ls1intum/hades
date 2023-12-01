@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/Mtze/HadesCI/hadesScheduler/docker"
-	"github.com/Mtze/HadesCI/hadesScheduler/kube"
 	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/Mtze/HadesCI/shared/utils"
@@ -16,7 +15,7 @@ import (
 var BuildQueue *queue.Queue
 
 type JobScheduler interface {
-	ScheduleJob(job payload.BuildJob) error
+	ScheduleJob(job payload.QueuePayload) error
 }
 
 func main() {
@@ -45,15 +44,15 @@ func main() {
 	var scheduler JobScheduler
 
 	switch executorCfg.Executor {
-	case "k8s":
-		log.Info("Started HadesScheduler in Kubernetes mode")
-		kube.Init()
-		scheduler = kube.Scheduler{}
+	// case "k8s":
+	// 	log.Info("Started HadesScheduler in Kubernetes mode")
+	// 	kube.Init()
+	// 	scheduler = kube.Scheduler{}
 	case "docker":
 		log.Info("Started HadesScheduler in Docker mode")
 		scheduler = docker.Scheduler{}
 	default:
-		log.Panic("Invalid executor specified")
+		log.Fatal("Invalid executor specified")
 	}
 
 	BuildQueue.Dequeue(scheduler.ScheduleJob)

@@ -3,13 +3,8 @@ package docker
 import (
 	"context"
 	"fmt"
-	"io"
-	"sync"
-	"time"
-
-	"github.com/Mtze/HadesCI/hadesScheduler/config"
-
 	"os"
+	"time"
 
 	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/utils"
@@ -22,6 +17,7 @@ import (
 )
 
 var cli *client.Client
+var global_envs []string = []string{}
 
 type Scheduler struct{}
 
@@ -41,188 +37,100 @@ func init() {
 	}
 }
 
-func (d Scheduler) ScheduleJob(job payload.BuildJob) error {
+func (d Scheduler) ScheduleJob(job payload.QueuePayload) error {
 	ctx := context.Background()
 
-	startOfPull := time.Now()
-	// Pull the images
-	err := pullImages(ctx, cli, job.BuildConfig.ExecutionContainer, config.CloneContainerImage, config.ResultContainerImage)
-	if err != nil {
-		log.WithError(err).Error("Failed to pull images")
-		return err
-	}
-	log.Debugf("Pulled images in %s", time.Since(startOfPull))
-
-	startOfVolume := time.Now()
+	// Create a unique volume name for this job
+	volumeName := fmt.Sprintf("shared-%d", time.Now().UnixNano())
 	// Create the shared volume
-	err = createSharedVolume(ctx, cli, config.SharedVolumeName)
-	if err != nil {
+	if err := createSharedVolume(ctx, cli, volumeName); err != nil {
 		log.WithError(err).Error("Failed to create shared volume")
 		return err
 	}
-	log.Debugf("Create Shared Volume in %s", time.Since(startOfVolume))
+
+	// Read the global env variables from the job metadata
+	for k, v := range job.Metadata {
+		global_envs = append(global_envs, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	for _, step := range job.Steps {
+		executeStep(ctx, cli, step, volumeName)
+	}
+
 	// Delete the shared volume after the job is done
 	defer func() {
 		time.Sleep(1 * time.Second)
-		startOfDelete := time.Now()
-		err = deleteSharedVolume(ctx, cli, config.SharedVolumeName)
-		if err != nil {
+		if err := deleteSharedVolume(ctx, cli, volumeName); err != nil {
 			log.WithError(err).Error("Failed to delete shared volume")
 		}
-		log.Debugf("Delete Shared Volume in %s", time.Since(startOfDelete))
+
+		global_envs = []string{}
 	}()
 
-	startOfClone := time.Now()
-	// Clone the repository
-	err = cloneRepository(ctx, cli, job.Credentials, job.BuildConfig.Repositories...)
-	if err != nil {
-		log.WithError(err).Error("Failed to clone repository")
-		return err
-	}
-	log.Debugf("Clone repo in %s", time.Since(startOfClone))
-
-	startOfExecute := time.Now()
-	err = executeRepository(ctx, cli, job.BuildConfig)
-	if err != nil {
-		log.WithError(err).Error("Failed to execute repository")
-		return err
-	}
-	log.Debugf("Execute repo in %s", time.Since(startOfExecute))
-	log.Debugf("Total time: %s", time.Since(startOfPull))
-
-	// TODO enable deletion of shared volume
-	time.Sleep(1 * time.Second)
-	startOfDelete := time.Now()
-	err = deleteSharedVolume(ctx, cli, config.SharedVolumeName)
-	if err != nil {
-		log.WithError(err).Error("Failed to delete shared volume")
-		return err
-	}
-	log.Debugf("Delete Shared Volume in %s", time.Since(startOfDelete))
-
 	return nil
 }
 
-func pullImages(ctx context.Context, client *client.Client, images ...string) error {
-	var wg sync.WaitGroup
-	errorsCh := make(chan error, len(images))
-
-	for _, image := range images {
-		wg.Add(1)
-
-		go func(img string) {
-			defer wg.Done()
-
-			response, err := client.ImagePull(ctx, img, types.ImagePullOptions{})
-			if err != nil {
-				errorsCh <- fmt.Errorf("failed to pull image %s: %v", img, err)
-				return
-			}
-			defer response.Close()
-			io.Copy(io.Discard, response) // consume the response to prevent potential leaks
-		}(image)
+func executeStep(ctx context.Context, client *client.Client, step payload.Step, volumeName string) error {
+	// Pull the images
+	err := pullImages(ctx, cli, step.Image)
+	if err != nil {
+		log.WithError(err).Errorf("Failed to pull image %s", step.Image)
+		return err
 	}
 
-	// wait for all goroutines to complete
-	wg.Wait()
-	close(errorsCh)
-
-	// Collect errors
-	var errors []error
-	for err := range errorsCh {
-		errors = append(errors, err)
+	// Copy the global envs and add the step specific ones
+	var envs []string
+	copy(envs, global_envs)
+	for k, v := range step.Metadata {
+		envs = append(envs, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	if len(errors) > 0 {
-		return fmt.Errorf("encountered %d errors while pulling images: %+v", len(errors), errors)
+	container_config := container.Config{
+		Image:      step.Image,
+		Env:        envs,
+		WorkingDir: "/shared", // Set the working directory to the shared volume
 	}
 
-	return nil
-}
-
-func cloneRepository(ctx context.Context, client *client.Client, credentials payload.Credentials, repositories ...payload.Repository) error {
-	// Use the index to modify the slice in place
-	for i := range repositories {
-		repositories[i].Path = "/shared" + repositories[i].Path
-	}
-	commandStr := utils.BuildCloneCommands(credentials, repositories...)
-	log.Debug(commandStr)
-
-	// Create the container
-	resp, err := client.ContainerCreate(ctx, &container.Config{
-		Image:      config.CloneContainerImage,
-		Entrypoint: []string{"/bin/sh", "-c"},
-		Cmd:        []string{commandStr},
-		Volumes: map[string]struct{}{
-			"/shared": {},
+	host_config := container.HostConfig{
+		Mounts: []mount.Mount{
+			{
+				Type:   mount.TypeVolume,
+				Source: volumeName,
+				Target: "/shared",
+			},
 		},
-	}, &defaultHostConfig, nil, nil, "")
-	if err != nil {
-		return err
+		AutoRemove: true,
 	}
 
-	// Start the container
-	err = client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
-	if err != nil {
-		return err
-	}
-
-	statusCh, errCh := client.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
+	// Create the bash script if there is one
+	if step.Script != "" {
+		scriptPath, err := writeBashScriptToFile(step.Script)
 		if err != nil {
-			log.WithError(err).Errorf("Error waiting for container with ID %s", resp.ID)
+			log.WithError(err).Error("Failed to write bash script to a temporary file")
 			return err
 		}
-	case status := <-statusCh:
-		if status.StatusCode != 0 {
-			log.Errorf("Container with ID %s exited with status %d", resp.ID, status.StatusCode)
-			return fmt.Errorf("container exited with status %d", status.StatusCode)
-		}
+		defer os.Remove(scriptPath)
+
+		host_config.Mounts = append(host_config.Mounts, mount.Mount{
+			Type:   mount.TypeBind,
+			Source: scriptPath,
+			Target: "/tmp/script.sh",
+		})
+
+		// Overwrite the default entrypoint
+		container_config.Entrypoint = []string{"/bin/bash", "/tmp/script.sh"}
 	}
 
-	log.Infof("Container %s started with ID: %s\n", config.CloneContainerImage, resp.ID)
-	return nil
-}
-
-func executeRepository(ctx context.Context, client *client.Client, buildConfig payload.BuildConfig) error {
-	// First, write the Bash script to a temporary file
-	scriptPath, err := writeBashScriptToFile("cd /shared", buildConfig.BuildScript)
+	resp, err := client.ContainerCreate(ctx, &container_config, &host_config, nil, nil, "")
 	if err != nil {
-		log.WithError(err).Error("Failed to write bash script to a temporary file")
-		return err
-	}
-	defer os.Remove(scriptPath)
-
-	hostConfigWithScript := defaultHostConfig
-	hostConfigWithScript.Mounts = append(defaultHostConfig.Mounts, mount.Mount{
-		Type:   mount.TypeBind,
-		Source: scriptPath,
-		Target: "/tmp/script.sh",
-	})
-	// Create the container
-	resp, err := client.ContainerCreate(ctx, &container.Config{
-		Image:      buildConfig.ExecutionContainer,
-		Entrypoint: []string{"/bin/sh", "/tmp/script.sh"},
-		Volumes: map[string]struct{}{
-			"/shared":        {},
-			"/tmp/script.sh": {}, // this volume will hold our script
-		},
-	}, &hostConfigWithScript, nil, nil, "")
-	if err != nil {
-		return err
-	}
-
-	// Copy the script to the container
-	err = copyFileToContainer(ctx, client, resp.ID, scriptPath, "/tmp")
-	if err != nil {
-		log.WithError(err).Error("Failed to copy script to container")
+		log.WithError(err).Errorf("Failed to create container %s", step.Image)
 		return err
 	}
 
 	// Start the container
 	err = client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
 	if err != nil {
+		log.WithError(err).Errorf("Failed to start container %s with ID %s", step.Image, resp.ID)
 		return err
 	}
 
@@ -231,24 +139,16 @@ func executeRepository(ctx context.Context, client *client.Client, buildConfig p
 	select {
 	case err := <-errCh:
 		if err != nil {
-			log.WithError(err).Errorf("Error waiting for container %s with ID %s", buildConfig.ExecutionContainer, resp.ID)
+			log.WithError(err).Errorf("Error waiting for container %s with ID %s", step.Image, resp.ID)
 			return err
 		}
 	case status := <-statusCh:
 		if status.StatusCode != 0 {
-			log.Errorf("Container %s with ID %s exited with status %d", buildConfig.ExecutionContainer, resp.ID, status.StatusCode)
+			log.Errorf("Container %s with ID %s exited with status %d", step.Image, resp.ID, status.StatusCode)
 			return fmt.Errorf("container exited with status %d", status.StatusCode)
 		}
 	}
 
-	// Fetch logs and write to a file
-	logFilePath := "./logfile.log" // TODO make this configurable
-	err = writeContainerLogsToFile(ctx, client, resp.ID, logFilePath)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to write logs of container %s with ID %s", buildConfig.ExecutionContainer, resp.ID)
-		return err
-	}
-
-	log.Infof("Container %s with ID: %s completed", buildConfig.ExecutionContainer, resp.ID)
+	log.Debugf("Container %s with ID: %s completed", step.Image, resp.ID)
 	return nil
 }

@@ -1,0 +1,14 @@
+version: '3.7'
+services:
+  hadesclonecontainer:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - HADES_HELLO_URL=http://hades_hello_1:8080/example.git
+      - HADES_HELLO_USERNAME=user
+      - HADES_HELLO_PASSWORD=secret
+      - HADES_HELLO_PATH=./hello
+      - REPOSITORY_DIR=/opt/repositories
+    volumes:
+      - ./repo:/opt/repositories
