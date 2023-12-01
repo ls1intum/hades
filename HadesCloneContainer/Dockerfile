@@ -23,4 +23,4 @@ COPY --from=builder /app/hades-clone .
 RUN chmod +x /app/hades-clone
 
 # Run your Go application and then sleep indefinitely
-ENTRYPOINT ["/bin/sh", "-c", "/app/hades-clone"]
+ENTRYPOINT ["/app/hades-clone"]
