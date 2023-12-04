@@ -3,7 +3,6 @@ package docker
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/Mtze/HadesCI/shared/payload"
@@ -104,21 +103,8 @@ func executeStep(ctx context.Context, client *client.Client, step payload.Step, 
 
 	// Create the bash script if there is one
 	if step.Script != "" {
-		scriptPath, err := writeBashScriptToFile(step.Script)
-		if err != nil {
-			log.WithError(err).Error("Failed to write bash script to a temporary file")
-			return err
-		}
-		defer os.Remove(scriptPath)
-
-		host_config.Mounts = append(host_config.Mounts, mount.Mount{
-			Type:   mount.TypeBind,
-			Source: scriptPath,
-			Target: "/tmp/script.sh",
-		})
-
 		// Overwrite the default entrypoint
-		container_config.Entrypoint = []string{"/bin/bash", "/tmp/script.sh"}
+		container_config.Entrypoint = []string{"/bin/bash", "-c", step.Script}
 	}
 
 	resp, err := client.ContainerCreate(ctx, &container_config, &host_config, nil, nil, "")
