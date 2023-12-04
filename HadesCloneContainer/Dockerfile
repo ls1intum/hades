@@ -4,11 +4,16 @@ FROM golang:1.21-alpine AS builder
 # Set the working directory inside the container
 WORKDIR /app
 
+# Copy go.mod and go.sum files
+COPY go.mod go.sum ./
+RUN go mod download
+
 # Copy the Go application source code into the container
-COPY . .
+COPY ./HadesCloneContainer ./HadesCloneContainer
 
 # Build the Go application
-RUN go build -o hades-clone ./HadesCloneContainer
+WORKDIR /app/HadesCloneContainer
+RUN go build -o hades-clone .
 
 # Start a new stage for the minimal runtime container
 FROM alpine:latest
@@ -17,7 +22,7 @@ FROM alpine:latest
 WORKDIR /app
 
 # Copy the built binary from the builder container into the minimal runtime container
-COPY --from=builder /app/hades-clone . 
+COPY --from=builder /app/HadesCloneContainer/hades-clone . 
 
 # Ensure the binary is executable
 RUN chmod +x /app/hades-clone
