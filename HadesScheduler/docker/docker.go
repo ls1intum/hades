@@ -18,16 +18,19 @@ import (
 
 var cli *client.Client
 var global_envs []string = []string{}
+var container_autoremove bool
 
 type Scheduler struct{}
 
 type DockerConfig struct {
-	DockerHost string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
+	DockerHost          string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
+	ContainerAutoremove bool   `env:"CONTAINER_AUTOREMOVE" envDefault:"true`
 }
 
 func init() {
 	var DockerCfg DockerConfig
 	utils.LoadConfig(&DockerCfg)
+	container_autoremove = DockerCfg.ContainerAutoremove
 
 	var err error
 	// Create a new Docker client
@@ -99,7 +102,7 @@ func executeStep(ctx context.Context, client *client.Client, step payload.Step, 
 				Target: "/shared",
 			},
 		},
-		AutoRemove: true,
+		AutoRemove: container_autoremove, // Remove the container after it is done only if the config is set to true
 	}
 
 	// Create the bash script if there is one

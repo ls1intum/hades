@@ -29,6 +29,7 @@ func main() {
 
 	var executorCfg utils.ExecutorConfig
 	utils.LoadConfig(&executorCfg)
+	log.Debug("Executor config: ", executorCfg)
 
 	var err error
 	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s/", cfg.User, cfg.Password, cfg.Url)
@@ -52,7 +53,7 @@ func main() {
 		log.Info("Started HadesScheduler in Docker mode")
 		scheduler = docker.Scheduler{}
 	default:
-		log.Fatal("Invalid executor specified")
+		log.Fatalf("Invalid executor specified: %s", executorCfg.Executor)
 	}
 
 	BuildQueue.Dequeue(scheduler.ScheduleJob)
