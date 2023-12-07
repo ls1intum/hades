@@ -11,6 +11,7 @@ import (
 )
 
 var BuildQueue *queue.Queue
+var MonitorClient *MonitoringClient
 
 type HadesAPIConfig struct {
 	APIPort        uint `env:"API_PORT,notEmpty" envDefault:"8080"`
@@ -35,12 +36,19 @@ func main() {
 		return
 	}
 
+	MonitorClient, err = NewMonitoringClient(cfg.RabbitMQConfig.Url, cfg.RabbitMQConfig.User, cfg.RabbitMQConfig.Password)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to connect to RabbitMQ Management API")
+		return
+	}
+
 	log.Infof("Starting HadesAPI on port %d", cfg.APIPort)
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.Default()
 	r.GET("/ping", ping)
 	r.POST("/build", AddBuildToQueue)
+	r.GET("/monitoring", MonitoringQueue)
 
 	log.Panic(r.Run(fmt.Sprintf(":%d", cfg.APIPort)))
 }
