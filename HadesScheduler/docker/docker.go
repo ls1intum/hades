@@ -107,7 +107,7 @@ func executeStep(ctx context.Context, client *client.Client, step payload.Step, 
 	// Create the bash script if there is one
 	if step.Script != "" {
 		// Overwrite the default entrypoint
-		container_config.Entrypoint = []string{"/bin/bash", "-c", step.Script}
+		container_config.Entrypoint = []string{"/bin/sh", "-c", step.Script}
 	}
 
 	resp, err := client.ContainerCreate(ctx, &container_config, &host_config, nil, nil, "")
