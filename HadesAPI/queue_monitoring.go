@@ -20,25 +20,25 @@ type MonitoringValues struct {
 }
 
 type MonitoringClient struct {
-	host string
-	user string
-	pass string
+	endpoint string
+	user     string
+	pass     string
 }
 
-func NewMonitoringClient(host, user, pass string) (*MonitoringClient, error) {
-	u, err := url.Parse(host)
+func NewMonitoringClient(q_url, user, pass string) (*MonitoringClient, error) {
+	u, err := url.Parse(q_url)
 	if err != nil {
 		log.WithError(err).Error("error parsing RabbitMQ URL")
 		return nil, err
 	}
-	return &MonitoringClient{u.Host, user, pass}, nil
+	endpoint := fmt.Sprintf(monitoring_url, u.Host, "builds")
+	return &MonitoringClient{endpoint, user, pass}, nil
 }
 
 func (m *MonitoringClient) getSizes() (message_size, consumer_size int) {
-	url := fmt.Sprintf(monitoring_url, m.host, "builds")
-	log.Debug("Getting queue size from ", url)
+	log.Debug("Getting queue size from ", m.endpoint)
 
-	req, _ := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", m.endpoint, nil)
 	req.SetBasicAuth(m.user, m.pass)
 
 	client := http.Client{}
@@ -69,7 +69,6 @@ func (m *MonitoringClient) GetQueueState() MonitoringValues {
 			ConsumerSize: cons_size,
 		}
 	}
-	url := fmt.Sprintf(monitoring_url+"/get", m.host, "builds")
 
 	req_payload := struct {
 		Count    int    `json:"count"`
@@ -87,7 +86,7 @@ func (m *MonitoringClient) GetQueueState() MonitoringValues {
 		log.Fatal(err)
 	}
 
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonValue))
+	req, _ := http.NewRequest("POST", m.endpoint+"/get", bytes.NewBuffer(jsonValue))
 	req.SetBasicAuth(m.user, m.pass)
 	req.Header.Set("Content-Type", "application/json")
 
