@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/Mtze/HadesCI/hadesScheduler/docker"
@@ -12,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var BuildQueue *queue.Queue
+var JobQueue queue.JobQueue
 
 type JobScheduler interface {
 	ScheduleJob(job payload.QueuePayload) error
@@ -24,7 +23,7 @@ func main() {
 		log.Warn("DEBUG MODE ENABLED")
 	}
 
-	var cfg utils.RabbitMQConfig
+	var cfg utils.RedisConfig
 	utils.LoadConfig(&cfg)
 
 	var executorCfg utils.ExecutorConfig
@@ -32,9 +31,7 @@ func main() {
 	log.Debug("Executor config: ", executorCfg)
 
 	var err error
-	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s/", cfg.User, cfg.Password, cfg.Url)
-	log.Debug("Connecting to RabbitMQ: ", rabbitmqURL)
-	BuildQueue, err = queue.Init("builds", rabbitmqURL)
+	JobQueue, err = queue.InitRedis("builds", cfg.Addr)
 
 	if err != nil {
 		log.Panic(err)
@@ -56,7 +53,7 @@ func main() {
 		log.Fatalf("Invalid executor specified: %s", executorCfg.Executor)
 	}
 
-	BuildQueue.Dequeue(scheduler.ScheduleJob)
+	JobQueue.Dequeue(scheduler.ScheduleJob)
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	<-forever

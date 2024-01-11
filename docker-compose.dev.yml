@@ -4,15 +4,13 @@ version: '3.7'
 services:
   hadesAPI:
     environment:
-      - RABBITMQ_URL=rabbitmq:5672
-      - RABBITMQ_DEFAULT_USER
-      - RABBITMQ_DEFAULT_PASS
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD
       - DEBUG=true
   hadesScheduler:
     environment:
-      - RABBITMQ_URL=rabbitmq:5672
-      - RABBITMQ_DEFAULT_USER
-      - RABBITMQ_DEFAULT_PASS
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD
       - HADES_EXECUTOR=docker
       - CONTAINER_AUTOREMOVE=false
       - DEBUG=true

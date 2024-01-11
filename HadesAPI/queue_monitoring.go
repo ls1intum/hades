@@ -28,7 +28,7 @@ type MonitoringClient struct {
 func NewMonitoringClient(q_url, user, pass string) (*MonitoringClient, error) {
 	u, err := url.Parse(q_url)
 	if err != nil {
-		log.WithError(err).Error("error parsing RabbitMQ URL")
+		log.WithError(err).Error("error parsing monitoring URL")
 		return nil, err
 	}
 	endpoint := fmt.Sprintf(monitoring_url, u.Host, "builds")

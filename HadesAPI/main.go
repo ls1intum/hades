@@ -10,12 +10,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var BuildQueue *queue.Queue
+var JobQueue queue.JobQueue
 var MonitorClient *MonitoringClient
 
 type HadesAPIConfig struct {
-	APIPort        uint `env:"API_PORT,notEmpty" envDefault:"8080"`
-	RabbitMQConfig utils.RabbitMQConfig
+	APIPort     uint `env:"API_PORT,notEmpty" envDefault:"8080"`
+	RedisConfig utils.RedisConfig
 }
 
 func main() {
@@ -28,17 +28,9 @@ func main() {
 	utils.LoadConfig(&cfg)
 
 	var err error
-	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s/", cfg.RabbitMQConfig.User, cfg.RabbitMQConfig.Password, cfg.RabbitMQConfig.Url)
-	log.Debug("Connecting to RabbitMQ: ", rabbitmqURL)
-	BuildQueue, err = queue.Init("builds", rabbitmqURL)
+	JobQueue, err = queue.InitRedis("builds", cfg.RedisConfig.Addr)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to connect to RabbitMQ")
-		return
-	}
-
-	MonitorClient, err = NewMonitoringClient(cfg.RabbitMQConfig.Url, cfg.RabbitMQConfig.User, cfg.RabbitMQConfig.Password)
-	if err != nil {
-		log.WithError(err).Fatal("Failed to connect to RabbitMQ Management API")
+		log.WithError(err).Fatal("Failed to connect to Redis")
 		return
 	}
 
