@@ -26,3 +26,8 @@ func AddBuildToQueue(c *gin.Context) {
 	log.Debug("Received build request ", payload)
 	BuildQueue.Enqueue(c.Request.Context(), payload.QueuePayload, uint8(payload.Priority))
 }
+
+func MonitoringQueue(c *gin.Context) {
+	state := MonitorClient.GetQueueState()
+	c.JSON(http.StatusOK, state)
+}
