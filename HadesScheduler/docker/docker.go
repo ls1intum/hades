@@ -23,7 +23,7 @@ type Scheduler struct{}
 
 type DockerConfig struct {
 	DockerHost          string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
-	ContainerAutoremove bool   `env:"CONTAINER_AUTOREMOVE" envDefault:"true`
+	ContainerAutoremove bool   `env:"CONTAINER_AUTOREMOVE" envDefault:"true"`
 }
 
 func init() {

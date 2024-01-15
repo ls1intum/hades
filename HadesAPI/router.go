@@ -24,7 +24,12 @@ func AddBuildToQueue(c *gin.Context) {
 	}
 
 	log.Debug("Received build request ", payload)
-	JobQueue.Enqueue(c.Request.Context(), payload.QueuePayload, uint8(payload.Priority))
+	err := JobQueue.Enqueue(c.Request.Context(), payload.QueuePayload, uint8(payload.Priority))
+	if err != nil {
+		log.WithError(err).Error("Failed to enqueue build")
+		c.String(http.StatusInternalServerError, "Failed to enqueue build")
+		return
+	}
 }
 
 func MonitoringQueue(c *gin.Context) {

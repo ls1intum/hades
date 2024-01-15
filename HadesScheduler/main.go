@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/Mtze/HadesCI/hadesScheduler/docker"
@@ -32,13 +33,11 @@ func main() {
 
 	var err error
 	JobQueue, err = queue.InitRedis("builds", cfg.Addr)
-
 	if err != nil {
 		log.Panic(err)
 	}
 
 	var forever chan struct{}
-
 	var scheduler JobScheduler
 
 	switch executorCfg.Executor {
@@ -53,7 +52,8 @@ func main() {
 		log.Fatalf("Invalid executor specified: %s", executorCfg.Executor)
 	}
 
-	JobQueue.Dequeue(scheduler.ScheduleJob)
+	ctx := context.Background()
+	JobQueue.Dequeue(ctx, scheduler.ScheduleJob)
 
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
 	<-forever
