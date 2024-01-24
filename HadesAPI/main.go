@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 	log "github.com/sirupsen/logrus"
 )
 
-var JobQueue queue.JobQueue
+var AsynqClient *asynq.Client
 var MonitorClient *MonitoringClient
 
 type HadesAPIConfig struct {
@@ -28,8 +28,8 @@ func main() {
 	utils.LoadConfig(&cfg)
 
 	var err error
-	JobQueue, err = queue.InitRedis("builds", cfg.RedisConfig.Addr)
-	if err != nil {
+	AsynqClient = asynq.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr})
+	if AsynqClient == nil {
 		log.WithError(err).Fatal("Failed to connect to Redis")
 		return
 	}
