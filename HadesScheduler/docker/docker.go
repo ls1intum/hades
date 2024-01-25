@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Mtze/HadesCI/shared/payload"
@@ -18,16 +19,17 @@ import (
 var cli *client.Client
 var global_envs []string = []string{}
 var container_autoremove bool
+var DockerCfg DockerConfig
 
 type Scheduler struct{}
 
 type DockerConfig struct {
-	DockerHost          string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
-	ContainerAutoremove bool   `env:"CONTAINER_AUTOREMOVE" envDefault:"true"`
+	DockerHost           string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
+	ContainerAutoremove  bool   `env:"CONTAINER_AUTOREMOVE" envDefault:"true`
+	DockerScriptExecutor string `env:"DOCKER_SCRIPT_EXECUTOR" envDefault:"/bin/bash -c"`
 }
 
 func init() {
-	var DockerCfg DockerConfig
 	utils.LoadConfig(&DockerCfg)
 	container_autoremove = DockerCfg.ContainerAutoremove
 
@@ -105,7 +107,8 @@ func executeStep(ctx context.Context, client *client.Client, step payload.Step, 
 	// Create the bash script if there is one
 	if step.Script != "" {
 		// Overwrite the default entrypoint
-		container_config.Entrypoint = []string{"/bin/sh", "-c", step.Script}
+		container_config.Entrypoint = strings.Split(DockerCfg.DockerScriptExecutor, " ")
+		container_config.Entrypoint = append(container_config.Entrypoint, step.Script)
 	}
 
 	resp, err := client.ContainerCreate(ctx, &container_config, &host_config, nil, nil, "")

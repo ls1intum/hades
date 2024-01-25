@@ -1,8 +1,10 @@
 package main
 
 import (
+	"container/heap"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -19,39 +21,46 @@ func isValidPath(path string) bool {
 }
 
 func main() {
+	if os.Getenv("DEBUG") == "true" {
+		log.SetLevel(log.DebugLevel)
+	}
+
 	if env_dir := os.Getenv("REPOSITORY_DIR"); env_dir != "" && isValidPath(env_dir) {
 		dir = env_dir
 	}
 	log.Info("Starting HadesCloneContainer")
 	log.Info("Cloning repositories to ", dir)
 
-	repos := getReposFromEnv()
-	for _, repo := range repos {
+	repo_map := getReposFromEnv()
+	repos := getReposFromMap(repo_map)
+	for repos.Len() > 0 {
+		repo := heap.Pop(&repos).(*Item).Repository
+		log.Debugf("Cloning repository: %+v", repo)
 		repodir := dir
 		// URL is mandatory
-		if repo["URL"] == "" {
+		if repo.URL == "" {
 			log.Warn("Skipping repository without URL")
 			continue
 		}
 		clone_options := &git.CloneOptions{
-			URL: repo["URL"],
+			URL: repo.URL,
 		}
 		// Check if username and password are set and use them for authentication
-		if repo["USERNAME"] != "" && repo["PASSWORD"] != "" {
+		if repo.Username != "" && repo.Password != "" {
 			clone_options.Auth = &http.BasicAuth{
-				Username: repo["USERNAME"],
-				Password: repo["PASSWORD"],
+				Username: repo.Username,
+				Password: repo.Password,
 			}
 		}
 		// Check if a branch is specified
-		if repo["BRANCH"] != "" {
-			clone_options.ReferenceName = plumbing.ReferenceName("refs/heads/" + repo["BRANCH"])
+		if repo.Branch != "" {
+			clone_options.ReferenceName = plumbing.ReferenceName("refs/heads/" + repo.Branch)
 		}
 
-		if repo["PATH"] != "" {
-			repodir = path.Join(repodir, repo["PATH"])
+		if repo.Path != "" {
+			repodir = path.Join(repodir, repo.Path)
 		} else {
-			parts := strings.Split(repo["URL"], "/")
+			parts := strings.Split(repo.URL, "/")
 			if len(parts) > 0 {
 				repoName := strings.TrimSuffix(parts[len(parts)-1], ".git")
 				repodir = path.Join(repodir, repoName)
@@ -64,7 +73,7 @@ func main() {
 			log.WithError(err).Error("Failed to clone repository")
 			continue
 		}
-		log.Infof("Cloned repository %s to %s", repo["URL"], repodir)
+		log.Infof("Cloned repository %s to %s", repo.URL, repodir)
 	}
 }
 
@@ -99,4 +108,16 @@ func getReposFromEnv() map[string]map[string]string {
 	}
 
 	return repoVars
+}
+
+func getReposFromMap(repo_map map[string]map[string]string) PriorityQueue {
+	repos := make(PriorityQueue, 0)
+	heap.Init(&repos)
+	for _, repo := range repo_map {
+		tmp := FromMap(repo)
+		order, _ := strconv.Atoi(repo["ORDER"])
+		item := &Item{Repository: tmp, order: order}
+		heap.Push(&repos, item)
+	}
+	return repos
 }
