@@ -49,6 +49,7 @@ func main() {
 		RootPath:          "/monitoring", // RootPath specifies the root for asynqmon app
 		RedisConnOpt:      asynq_client_opts,
 		PrometheusAddress: cfg.PrometheusAddress,
+		PayloadFormatter:  MetadataObfuscator,
 	})
 	r.Any("/monitoring/*a", gin.WrapH(h))
 
