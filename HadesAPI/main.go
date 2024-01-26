@@ -15,6 +15,7 @@ var AsynqClient *asynq.Client
 type HadesAPIConfig struct {
 	APIPort     uint `env:"API_PORT,notEmpty" envDefault:"8080"`
 	RedisConfig utils.RedisConfig
+	AuthKey     string `env:"AUTH_KEY"`
 }
 
 func main() {
@@ -37,6 +38,14 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.Default()
+	if cfg.AuthKey == "" {
+		log.Warn("No auth key set")
+	} else {
+		log.Info("Auth key set")
+		r.Use(gin.BasicAuth(gin.Accounts{
+			"hades": cfg.AuthKey,
+		}))
+	}
 	r.GET("/ping", ping)
 	r.POST("/build", AddBuildToQueue)
 
