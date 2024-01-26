@@ -42,8 +42,3 @@ func AddBuildToQueue(c *gin.Context) {
 	}
 	log.Printf(" [*] Successfully enqueued task: %+v", info.ID)
 }
-
-func MonitoringQueue(c *gin.Context) {
-	state := MonitorClient.GetQueueState()
-	c.JSON(http.StatusOK, state)
-}

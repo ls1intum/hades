@@ -11,7 +11,6 @@ import (
 )
 
 var AsynqClient *asynq.Client
-var MonitorClient *MonitoringClient
 
 type HadesAPIConfig struct {
 	APIPort     uint `env:"API_PORT,notEmpty" envDefault:"8080"`
@@ -40,7 +39,6 @@ func main() {
 	r := gin.Default()
 	r.GET("/ping", ping)
 	r.POST("/build", AddBuildToQueue)
-	r.GET("/monitoring", MonitoringQueue)
 
 	log.Panic(r.Run(fmt.Sprintf(":%d", cfg.APIPort)))
 }
