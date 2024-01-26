@@ -41,9 +41,7 @@ func init() {
 	}
 }
 
-func (d Scheduler) ScheduleJob(job payload.QueuePayload) error {
-	ctx := context.Background()
-
+func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	// Create a unique volume name for this job
 	volumeName := fmt.Sprintf("shared-%d", time.Now().UnixNano())
 	// Create the shared volume

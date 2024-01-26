@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/Mtze/HadesCI/shared/payload"
+	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -24,10 +27,18 @@ func AddBuildToQueue(c *gin.Context) {
 	}
 
 	log.Debug("Received build request ", payload)
-	BuildQueue.Enqueue(c.Request.Context(), payload.QueuePayload, uint8(payload.Priority))
-}
+	json_payload, err := json.Marshal(payload.QueuePayload)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-func MonitoringQueue(c *gin.Context) {
-	state := MonitorClient.GetQueueState()
-	c.JSON(http.StatusOK, state)
+	task := asynq.NewTask(payload.Name, json_payload)
+	queuePriority := utils.PrioFromInt(payload.Priority)
+	info, err := AsynqClient.Enqueue(task, asynq.Queue(queuePriority))
+	if err != nil {
+		log.WithError(err).Error("Failed to enqueue build")
+		c.String(http.StatusInternalServerError, "Failed to enqueue build")
+		return
+	}
+	log.Printf(" [*] Successfully enqueued task: %+v", info.ID)
 }

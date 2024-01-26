@@ -6,10 +6,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type RabbitMQConfig struct {
-	Url      string `env:"RABBITMQ_URL,notEmpty"`
-	User     string `env:"RABBITMQ_DEFAULT_USER,notEmpty"`
-	Password string `env:"RABBITMQ_DEFAULT_PASS,notEmpty"`
+type RedisConfig struct {
+	Addr string `env:"REDIS_ADDR,notEmpty" envDefault:"localhost:6379"`
+	Pwd  string `env:"REDIS_PWD"`
 }
 
 type K8sConfig struct {

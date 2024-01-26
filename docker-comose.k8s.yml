@@ -4,10 +4,9 @@ services:
 
   hadesScheduler:
     environment:
-      - RABBITMQ_URL=rabbitmq:5672
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD
       - KUBECONFIG=/root/.kube/config
-      - RABBITMQ_DEFAULT_USER
-      - RABBITMQ_DEFAULT_PASS
       - HADES_EXECUTOR=k8s
     volumes:
       - ./.kube/config:/root/.kube/config

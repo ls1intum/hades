@@ -4,18 +4,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Mtze/HadesCI/shared/queue"
 	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 	log "github.com/sirupsen/logrus"
 )
 
-var BuildQueue *queue.Queue
-var MonitorClient *MonitoringClient
+var AsynqClient *asynq.Client
 
 type HadesAPIConfig struct {
-	APIPort        uint `env:"API_PORT,notEmpty" envDefault:"8080"`
-	RabbitMQConfig utils.RabbitMQConfig
+	APIPort     uint `env:"API_PORT,notEmpty" envDefault:"8080"`
+	RedisConfig utils.RedisConfig
 }
 
 func main() {
@@ -28,17 +27,9 @@ func main() {
 	utils.LoadConfig(&cfg)
 
 	var err error
-	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s/", cfg.RabbitMQConfig.User, cfg.RabbitMQConfig.Password, cfg.RabbitMQConfig.Url)
-	log.Debug("Connecting to RabbitMQ: ", rabbitmqURL)
-	BuildQueue, err = queue.Init("builds", rabbitmqURL)
-	if err != nil {
-		log.WithError(err).Fatal("Failed to connect to RabbitMQ")
-		return
-	}
-
-	MonitorClient, err = NewMonitoringClient(cfg.RabbitMQConfig.Url, cfg.RabbitMQConfig.User, cfg.RabbitMQConfig.Password)
-	if err != nil {
-		log.WithError(err).Fatal("Failed to connect to RabbitMQ Management API")
+	AsynqClient = asynq.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr})
+	if AsynqClient == nil {
+		log.WithError(err).Fatal("Failed to connect to Redis")
 		return
 	}
 
@@ -48,7 +39,6 @@ func main() {
 	r := gin.Default()
 	r.GET("/ping", ping)
 	r.POST("/build", AddBuildToQueue)
-	r.GET("/monitoring", MonitoringQueue)
 
 	log.Panic(r.Run(fmt.Sprintf(":%d", cfg.APIPort)))
 }

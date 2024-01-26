@@ -13,12 +13,11 @@ services:
     networks:
       - hades
     depends_on:
-      rabbitmq:
+      redis:
         condition: service_healthy
     environment:
-      - RABBITMQ_URL=rabbitmq:5672
-      - RABBITMQ_DEFAULT_USER
-      - RABBITMQ_DEFAULT_PASS
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD
 
   hadesScheduler:
     image: ghcr.io/mtze/hades/hades-scheduler
@@ -32,29 +31,25 @@ services:
     networks:
       - hades
     depends_on:
-      rabbitmq:
+      redis:
         condition: service_healthy
     environment:
-      - RABBITMQ_URL=rabbitmq:5672
-      - RABBITMQ_DEFAULT_USER
-      - RABBITMQ_DEFAULT_PASS
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD
       - HADES_EXECUTOR=docker
 
-  rabbitmq:
-    container_name: rabbitmq
-    image: rabbitmq:3-management
+  redis:
+    image: redis:7.2
     ports:
-      - "15672:15672"
-      - "5672:5672"
-    networks:
-      - hades
+      - "6379:6379"
     environment:
-      - RABBITMQ_DEFAULT_USER
-      - RABBITMQ_DEFAULT_PASS
+      - REDIS_PASSWORD
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 5s
-      timeout: 10s
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
       retries: 5
+      start_period: 30s
+
 networks:
   hades:
