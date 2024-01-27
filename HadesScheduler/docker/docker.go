@@ -27,6 +27,8 @@ type DockerConfig struct {
 	DockerHost           string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
 	ContainerAutoremove  bool   `env:"CONTAINER_AUTOREMOVE" envDefault:"true"`
 	DockerScriptExecutor string `env:"DOCKER_SCRIPT_EXECUTOR" envDefault:"/bin/bash -c"`
+	CPU_limit            uint   `env:"DOCKER_CPU_LIMIT"`
+	RAM_limit            string `env:"DOCKER_RAM_LIMIT"`
 }
 
 func init() {
@@ -102,6 +104,19 @@ func executeStep(ctx context.Context, client *client.Client, step payload.Step, 
 			},
 		},
 		AutoRemove: container_autoremove, // Remove the container after it is done only if the config is set to true
+	}
+
+	// Limit the resource usage of the containers
+	if DockerCfg.CPU_limit != 0 {
+		host_config.Resources.NanoCPUs = int64(DockerCfg.CPU_limit * 1e9)
+	}
+	if DockerCfg.RAM_limit != "" {
+		bytes, err := utils.ParseMemoryLimit(DockerCfg.RAM_limit)
+		if err != nil {
+			log.WithError(err).Errorf("Failed to parse RAM limit %s", DockerCfg.RAM_limit)
+		} else {
+			host_config.Resources.Memory = bytes
+		}
 	}
 
 	// Create the bash script if there is one
