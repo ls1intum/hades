@@ -38,17 +38,17 @@ func LoadConfig(cfg interface{}) {
 }
 
 func ParseMemoryLimit(limit string) (int64, error) {
-	unit := limit[len(limit)-2:]
-	number := limit[:len(limit)-2]
+	unit := limit[len(limit)-1:]
+	number := limit[:len(limit)-1]
 	value, err := strconv.ParseInt(number, 10, 64)
 	if err != nil {
 		return 0, err
 	}
 
 	switch strings.ToUpper(unit) {
-	case "GB", "G":
+	case "g", "G":
 		return value * 1024 * 1024 * 1024, nil
-	case "MB", "M":
+	case "m", "M":
 		return value * 1024 * 1024, nil
 	default:
 		return 0, fmt.Errorf("unknown unit: %s", unit)
