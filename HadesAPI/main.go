@@ -14,9 +14,10 @@ import (
 var AsynqClient *asynq.Client
 
 type HadesAPIConfig struct {
-	APIPort           uint `env:"API_PORT,notEmpty" envDefault:"8080"`
-	RedisConfig       utils.RedisConfig
-	PrometheusAddress string `env:"PROMETHEUS_ADDRESS" envDefault:""`
+	APIPort     uint `env:"API_PORT,notEmpty" envDefault:"8080"`
+	RedisConfig utils.RedisConfig
+	AuthKey     string `env:"AUTH_KEY"`
+  PrometheusAddress string `env:"PROMETHEUS_ADDRESS" envDefault:""`
 }
 
 func main() {
@@ -42,6 +43,15 @@ func main() {
 	r := gin.New()
 	r.Use(gin.ErrorLogger())
 	r.Use(gin.Recovery())
+	if cfg.AuthKey == "" {
+		log.Warn("No auth key set")
+	} else {
+		log.Info("Auth key set")
+		r.Use(gin.BasicAuth(gin.Accounts{
+			"hades": cfg.AuthKey,
+		}))
+	}
+
 	r.GET("/ping", ping)
 	r.POST("/build", AddBuildToQueue)
 
