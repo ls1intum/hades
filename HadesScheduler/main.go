@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"os"
 
@@ -37,8 +38,12 @@ func main() {
 	utils.LoadConfig(&executorCfg)
 	log.Debug("Executor config: ", executorCfg)
 
-	var err error
-	AsynqServer = asynq.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr}, asynq.Config{
+	redis_opts := asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr}
+	// Check whether TLS should be enabled
+	if cfg.RedisConfig.TLS_Enabled {
+		redis_opts.TLSConfig = &tls.Config{}
+	}
+	AsynqServer = asynq.NewServer(redis_opts, asynq.Config{
 		Concurrency: int(cfg.Concurrency),
 		Queues: map[string]int{
 			"critical": 5,
@@ -51,11 +56,11 @@ func main() {
 		Logger:         log.StandardLogger(),
 	})
 	if AsynqServer == nil {
-		log.Panic(err)
+		log.Fatal("Failed to create Asynq server")
+		return
 	}
 
 	var scheduler JobScheduler
-
 	switch executorCfg.Executor {
 	// case "k8s":
 	// 	log.Info("Started HadesScheduler in Kubernetes mode")

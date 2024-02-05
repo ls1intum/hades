@@ -7,8 +7,9 @@ import (
 )
 
 type RedisConfig struct {
-	Addr string `env:"REDIS_ADDR,notEmpty" envDefault:"localhost:6379"`
-	Pwd  string `env:"REDIS_PWD"`
+	Addr        string `env:"REDIS_ADDR,notEmpty" envDefault:"localhost:6379"`
+	Pwd         string `env:"REDIS_PWD"`
+	TLS_Enabled bool   `env:"REDIS_TLS_ENABLED" envDefault:"false"`
 }
 
 type K8sConfig struct {

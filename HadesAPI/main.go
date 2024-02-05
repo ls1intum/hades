@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"os"
 
@@ -27,10 +28,14 @@ func main() {
 	var cfg HadesAPIConfig
 	utils.LoadConfig(&cfg)
 
-	var err error
-	AsynqClient = asynq.NewClient(asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr})
+	redis_opts := asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr}
+	// Check whether TLS should be enabled
+	if cfg.RedisConfig.TLS_Enabled {
+		redis_opts.TLSConfig = &tls.Config{}
+	}
+	AsynqClient = asynq.NewClient(redis_opts)
 	if AsynqClient == nil {
-		log.WithError(err).Fatal("Failed to connect to Redis")
+		log.Fatal("Failed to connect to Redis")
 		return
 	}
 
