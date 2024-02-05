@@ -6,7 +6,7 @@ replace github.com/Mtze/HadesCI/shared => ../shared
 
 require (
 	github.com/Mtze/HadesCI/shared v0.0.0-00010101000000-000000000000
-	github.com/docker/docker v25.0.1+incompatible
+	github.com/docker/docker v25.0.2+incompatible
 	github.com/hibiken/asynq v0.24.1
 	github.com/sirupsen/logrus v1.9.3
 )
