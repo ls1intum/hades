@@ -1,0 +1,7 @@
+--- 
+
+- name: Create hades directory in /opt
+  become: true
+  ansible.builtin.file:
+    path: /opt/hades
+    state: directory

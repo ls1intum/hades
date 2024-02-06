@@ -1,0 +1,10 @@
+---
+# defaults file for hades
+hades_redis_host: "localhost"
+hades_redis_port: 6379
+hades_redis_password: ""
+
+hades_executor: "docker"
+
+hades_user: "hades"
+hades_password: ""

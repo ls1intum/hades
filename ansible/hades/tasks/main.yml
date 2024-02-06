@@ -1,0 +1,5 @@
+---
+# tasks file for hades
+
+- name: Check host configuration 
+  include: check_host_config.yml
