@@ -15,9 +15,11 @@ type QueuePayload struct {
 }
 
 type Step struct {
-	ID       int               `json:"id"`
-	Name     string            `json:"name"`
-	Image    string            `json:"image"`
-	Script   string            `json:"script"`
-	Metadata map[string]string `json:"metadata"`
+	ID          int               `json:"id"`
+	Name        string            `json:"name"`
+	Image       string            `json:"image"`
+	Script      string            `json:"script"`
+	Metadata    map[string]string `json:"metadata"`
+	CPULimit    uint              `json:"cpu_limit"`
+	MemoryLimit string            `json:"memory_limit"`
 }
