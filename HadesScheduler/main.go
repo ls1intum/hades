@@ -63,13 +63,13 @@ func main() {
 	// 	scheduler = kube.Scheduler{}
 	case "docker":
 		log.Info("Started HadesScheduler in Docker mode")
-		scheduler = docker.Scheduler{}
+		scheduler = docker.NewDockerScheduler()
 	default:
 		log.Fatalf("Invalid executor specified: %s", executorCfg.Executor)
 	}
 
 	AsynqServer.Run(asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
-		log.Debug("Received task: ", t)
+		log.Debug("Received task: ", t.Type())
 		var job payload.QueuePayload
 		if err := json.Unmarshal(t.Payload(), &job); err != nil {
 			log.WithError(err).Error("Failed to unmarshal task payload")

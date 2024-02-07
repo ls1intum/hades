@@ -26,6 +26,17 @@ func AddBuildToQueue(c *gin.Context) {
 		return
 	}
 
+	// Check whether the request is valid
+	for _, step := range payload.QueuePayload.Steps {
+		if step.MemoryLimit != "" {
+			if _, err := utils.ParseMemoryLimit(step.MemoryLimit); err != nil {
+				log.WithError(err).Error("Failed to parse RAM limit")
+				c.String(http.StatusBadRequest, "Failed to parse RAM limit")
+				return
+			}
+		}
+	}
+
 	log.Debug("Received build request ", payload)
 	json_payload, err := json.Marshal(payload.QueuePayload)
 	if err != nil {
