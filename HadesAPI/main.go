@@ -15,10 +15,10 @@ import (
 var AsynqClient *asynq.Client
 
 type HadesAPIConfig struct {
-	APIPort     uint `env:"API_PORT,notEmpty" envDefault:"8080"`
-	RedisConfig utils.RedisConfig
-	AuthKey     string `env:"AUTH_KEY"`
-  PrometheusAddress string `env:"PROMETHEUS_ADDRESS" envDefault:""`
+	APIPort           uint `env:"API_PORT,notEmpty" envDefault:"8080"`
+	RedisConfig       utils.RedisConfig
+	AuthKey           string `env:"AUTH_KEY"`
+	PrometheusAddress string `env:"PROMETHEUS_ADDRESS" envDefault:""`
 }
 
 func main() {
@@ -61,7 +61,7 @@ func main() {
 
 	h := asynqmon.New(asynqmon.Options{
 		RootPath:          "/monitoring", // RootPath specifies the root for asynqmon app
-		RedisConnOpt:      asynq_client_opts,
+		RedisConnOpt:      redis_opts,
 		PrometheusAddress: cfg.PrometheusAddress,
 		PayloadFormatter:  MetadataObfuscator,
 	})
