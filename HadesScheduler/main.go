@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"os"
 
@@ -37,8 +38,12 @@ func main() {
 	utils.LoadConfig(&executorCfg)
 	log.Debug("Executor config: ", executorCfg)
 
-	var err error
-	AsynqServer = asynq.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr}, asynq.Config{
+	redis_opts := asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr}
+	// Check whether TLS should be enabled
+	if cfg.RedisConfig.TLS_Enabled {
+		redis_opts.TLSConfig = &tls.Config{}
+	}
+	AsynqServer = asynq.NewServer(redis_opts, asynq.Config{
 		Concurrency: int(cfg.Concurrency),
 		Queues: map[string]int{
 			"critical": 5,
@@ -51,11 +56,11 @@ func main() {
 		Logger:         log.StandardLogger(),
 	})
 	if AsynqServer == nil {
-		log.Panic(err)
+		log.Fatal("Failed to create Asynq server")
+		return
 	}
 
 	var scheduler JobScheduler
-
 	switch executorCfg.Executor {
 	// case "k8s":
 	// 	log.Info("Started HadesScheduler in Kubernetes mode")
@@ -63,13 +68,13 @@ func main() {
 	// 	scheduler = kube.Scheduler{}
 	case "docker":
 		log.Info("Started HadesScheduler in Docker mode")
-		scheduler = docker.Scheduler{}
+		scheduler = docker.NewDockerScheduler()
 	default:
 		log.Fatalf("Invalid executor specified: %s", executorCfg.Executor)
 	}
 
 	AsynqServer.Run(asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
-		log.Debug("Received task: ", t)
+		log.Debug("Received task: ", t.Type())
 		var job payload.QueuePayload
 		if err := json.Unmarshal(t.Payload(), &job); err != nil {
 			log.WithError(err).Error("Failed to unmarshal task payload")

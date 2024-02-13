@@ -1,14 +1,19 @@
 package utils
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/caarlos0/env/v9"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 )
 
 type RedisConfig struct {
-	Addr string `env:"REDIS_ADDR,notEmpty" envDefault:"localhost:6379"`
-	Pwd  string `env:"REDIS_PWD"`
+	Addr        string `env:"REDIS_ADDR,notEmpty" envDefault:"localhost:6379"`
+	Pwd         string `env:"REDIS_PWD"`
+	TLS_Enabled bool   `env:"REDIS_TLS_ENABLED" envDefault:"false"`
 }
 
 type K8sConfig struct {
@@ -31,4 +36,22 @@ func LoadConfig(cfg interface{}) {
 	}
 
 	log.Debug("Config loaded: ", cfg)
+}
+
+func ParseMemoryLimit(limit string) (int64, error) {
+	unit := limit[len(limit)-1:]
+	number := limit[:len(limit)-1]
+	value, err := strconv.ParseInt(number, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	switch strings.ToUpper(unit) {
+	case "g", "G":
+		return value * 1024 * 1024 * 1024, nil
+	case "m", "M":
+		return value * 1024 * 1024, nil
+	default:
+		return 0, fmt.Errorf("unknown unit: %s", unit)
+	}
 }
