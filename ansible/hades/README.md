@@ -23,5 +23,27 @@ A list of other roles hosted on Galaxy should go here, plus any details in regar
 
 Example Playbook
 ----------------
+  
+```yaml
+- name: Setup hades scheduler
+  hosts: hades_dev_scheduler
+  roles: 
+    - role: hades
+      vars: 
+        hades_version: "latest"
+        hades_node_role: "scheduler"
+        hades_redis_host: "redis.hades.example"
+        hades_redis_password: "redis_password"
 
-TODO
+
+- name: Setup hades api 
+  hosts: hades_dev_api
+  roles: 
+    - role: hades
+      vars: 
+        hades_version: "latest"
+        hades_node_role: "api"
+        hades_api_certificate_fullchain_path: "/var/lib/cert/cert.fullchain.pem"
+        hades_api_certificate_key_path: "/var/lib/cert/cert.privkey.pem"
+        hades_redis_password: "redis_password"
+```
