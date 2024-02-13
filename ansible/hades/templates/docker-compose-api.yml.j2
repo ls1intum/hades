@@ -14,7 +14,7 @@ services:
       - REDIS_ADDR=redis:{{ hades_redis_port }}
       - REDIS_PASSWORD
       - HADES_DEBUG={{ hades_api_debug }}
-      - AUTH_KEY="{{ hades_api_password }}"
+      - AUTH_KEY
 
 
   redis:
