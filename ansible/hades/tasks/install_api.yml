@@ -23,6 +23,7 @@
   notify: Restart hades api
 
 - name: Pull new api docker image
+  become: true
   ansible.builtin.command: docker-compose -f /opt/hades/api/docker-compose.yml pull
   args:
     chdir: /opt/hades/api

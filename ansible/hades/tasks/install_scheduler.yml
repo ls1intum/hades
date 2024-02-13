@@ -21,6 +21,7 @@
     mode: 0644
 
 - name: Pull new scheduler docker image
+  become: true
   ansible.builtin.command: docker-compose -f /opt/hades/scheduler/docker-compose.yml pull
   args:
     chdir: /opt/hades/scheduler

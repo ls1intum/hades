@@ -1,7 +1,7 @@
 ---
 hades_version: "latest"
-hades_scheduler_version: {{ hades_version }}
-hades_api_version: {{ hades_version }}
+hades_scheduler_version: "{{ hades_version }}"
+hades_api_version: "{{ hades_version }}"
 
 hades_node_role: "scheduler" # possible options are "scheduler" and "api"
 
@@ -10,6 +10,8 @@ hades_api_password: ""
 
 hades_api_port: 8080
 hades_api_host: "localhost"
+hades_api_certificate_fullchain_path: ""
+hades_api_certificate_key_path: ""
 
 hades_redis_host: "localhost"
 hades_redis_port: 6379
@@ -21,5 +23,5 @@ hades_scheduler_concurrency: 1
 hades_executor: "docker"
 
 hades_debug: false
-hades_api_debug: {{ hades_debug }}
-hades_scheduler_debug: {{ hades_debug }}
+hades_api_debug: "{{ hades_debug }}"
+hades_scheduler_debug: "{{ hades_debug }}"

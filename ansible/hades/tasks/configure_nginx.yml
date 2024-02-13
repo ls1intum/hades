@@ -1,16 +1,19 @@
 ---
 
 - name: Install nginx
+  become: true
   ansible.builtin.package:
     name: nginx
     state: present
 
 - name: Remove default ngnix configuration
+  become: true
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
 
 - name : Copy hades nginx configuration
+  become: true
   ansible.builtin.template:
     src: hades.nginx.j2
     dest: /etc/nginx/sites-available/hades
@@ -18,6 +21,7 @@
   notify: Reload nginx
 
 - name: Create symbolic link to hades nginx configuration
+  become: true
   ansible.builtin.file:
     src: /etc/nginx/sites-available/hades
     dest: /etc/nginx/sites-enabled/hades
