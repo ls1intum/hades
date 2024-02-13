@@ -1,0 +1,29 @@
+--- 
+
+- name: Create hades api directory
+  become: true
+  ansible.builtin.file:
+    path: /opt/hades/api
+    state: directory
+
+- name: Create hades config env file
+  become: true
+  ansible.builtin.template:
+    src: hades.env.j2
+    dest: /opt/hades/api/.env
+    mode: 0644
+  notify: Restart hades api
+
+- name: Add hades api docker compose
+  become: true
+  ansible.builtin.template:
+    src: docker-compose-api.yml.j2
+    dest: /opt/hades/api/docker-compose.yml
+    mode: 0644
+  notify: Restart hades api
+
+- name: Pull new api docker image
+  ansible.builtin.command: docker-compose -f /opt/hades/api/docker-compose.yml pull
+  args:
+    chdir: /opt/hades/api
+  notify: Restart hades api

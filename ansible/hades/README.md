@@ -1,6 +1,9 @@
 Hades CI
 =========
 
+Currently this role deploys redis on the same host as the hades API. 
+
+
 Requirements
 ------------
 
