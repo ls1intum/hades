@@ -19,7 +19,11 @@ type HadesAPIConfig struct {
 	RedisConfig       utils.RedisConfig
 	AuthKey           string `env:"AUTH_KEY"`
 	PrometheusAddress string `env:"PROMETHEUS_ADDRESS" envDefault:""`
+	// How long the task should be kept for monitoring
+	RetentionTime uint `env:"RETENTION_IN_MIN" envDefault:"30"`
 }
+
+var cfg HadesAPIConfig
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
@@ -27,7 +31,6 @@ func main() {
 		log.Warn("DEBUG MODE ENABLED")
 	}
 
-	var cfg HadesAPIConfig
 	utils.LoadConfig(&cfg)
 
 	redis_opts := asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr, Password: cfg.RedisConfig.Pwd}
