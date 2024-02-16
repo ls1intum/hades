@@ -50,8 +50,8 @@ func AddBuildToQueue(c *gin.Context) {
 		task,
 		asynq.Queue(queuePriority),
 		asynq.Retention(time.Duration(cfg.RetentionTime)*time.Minute), // Keep the result for 30 minutes
-		asynq.Timeout(0),  // No timeout
-		asynq.MaxRetry(3), // Retry 3 times
+		asynq.Timeout(time.Duration(cfg.Timeout)*time.Minute),         // Timeout for each queued task
+		asynq.MaxRetry(int(cfg.MaxRetries)),                           // Retry times
 	)
 	if err != nil {
 		log.WithError(err).Error("Failed to enqueue build")
