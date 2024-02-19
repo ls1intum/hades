@@ -8,7 +8,6 @@ import (
 
 	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/utils"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
@@ -142,7 +141,7 @@ func (d Scheduler) executeStep(ctx context.Context, client *client.Client, step 
 	}
 
 	// Start the container
-	err = client.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
+	err = client.ContainerStart(ctx, resp.ID, container.StartOptions{})
 	if err != nil {
 		log.WithError(err).Errorf("Failed to start container %s with ID %s", step.Image, resp.ID)
 		return err

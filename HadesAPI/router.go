@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/Mtze/HadesCI/shared/utils"
@@ -45,7 +46,13 @@ func AddBuildToQueue(c *gin.Context) {
 
 	task := asynq.NewTask(payload.Name, json_payload)
 	queuePriority := utils.PrioFromInt(payload.Priority)
-	info, err := AsynqClient.Enqueue(task, asynq.Queue(queuePriority))
+	info, err := AsynqClient.Enqueue(
+		task,
+		asynq.Queue(queuePriority),
+		asynq.Retention(time.Duration(cfg.RetentionTime)*time.Minute), // Keep the result for 30 minutes
+		asynq.Timeout(time.Duration(cfg.Timeout)*time.Minute),         // Timeout for each queued task
+		asynq.MaxRetry(int(cfg.MaxRetries)),                           // Retry times
+	)
 	if err != nil {
 		log.WithError(err).Error("Failed to enqueue build")
 		c.String(http.StatusInternalServerError, "Failed to enqueue build")
