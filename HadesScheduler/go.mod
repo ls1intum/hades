@@ -6,7 +6,7 @@ replace github.com/Mtze/HadesCI/shared => ../shared
 
 require (
 	github.com/Mtze/HadesCI/shared v0.0.0-00010101000000-000000000000
-	github.com/docker/docker v25.0.3+incompatible
+	github.com/docker/docker v26.0.0+incompatible
 	github.com/hibiken/asynq v0.24.1
 	github.com/sirupsen/logrus v1.9.3
 )
@@ -27,6 +27,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
+	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/term v0.5.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
