@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	log "github.com/sirupsen/logrus"
@@ -20,7 +21,7 @@ func writeContainerLogsToFile(ctx context.Context, client *client.Client, contai
 	}
 	defer out.Close()
 
-	logReader, err := client.ContainerLogs(ctx, containerID, types.ContainerLogsOptions{
+	logReader, err := client.ContainerLogs(ctx, containerID, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Timestamps: true,
