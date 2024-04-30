@@ -15,21 +15,16 @@ COPY ./shared ./shared
 
 # Build the Go application
 WORKDIR /app/HadesAPI
-RUN go build -o hadesCI-api .
+RUN CGO_ENABLED=0 go build -o hadesCI-api .
 
 # Start a new stage for the minimal runtime container
-FROM alpine:latest
-
-RUN apk update && apk add --no-cache ca-certificates libc6-compat
+FROM gcr.io/distroless/static-debian12
 
 # Set the working directory inside the minimal runtime container
 WORKDIR /app
 
 # Copy the built binary from the builder container into the minimal runtime container
 COPY --from=builder /app/HadesAPI/hadesCI-api . 
-
-# Ensure the binary is executable
-RUN chmod +x /app/hadesCI-api
 
 # Run your Go application
 CMD ["/app/hadesCI-api"]
