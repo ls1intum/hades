@@ -19,11 +19,11 @@ jobs:
       matrix:
         include:
           - dockerfile: ./HadesAPI/Dockerfile
-            image: ghcr.io/mtze/hades/hades-api
+            image: ghcr.io/ls1intum/hades/hades-api
           - dockerfile: ./HadesScheduler/Dockerfile
-            image: ghcr.io/mtze/hades/hades-scheduler
+            image: ghcr.io/ls1intum/hades/hades-scheduler
           - dockerfile: ./HadesCloneContainer/Dockerfile
-            image: ghcr.io/mtze/hades/hades-clone-container
+            image: ghcr.io/ls1intum/hades/hades-clone-container
 
     steps:
       - name: Extract metadata (tags, labels) for Docker
