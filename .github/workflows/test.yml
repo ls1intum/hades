@@ -15,6 +15,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: 1.22
+          cache-dependency-path: "**/*.sum"
       - name: Install dependencies
         run: cd ${{ matrix.directory }} && go mod download
       - name: Test with Go
