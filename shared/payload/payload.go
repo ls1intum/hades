@@ -8,7 +8,7 @@ type RESTPayload struct {
 }
 
 type QueuePayload struct {
-	Name      string            `json:"name"`
+	Name      string            `json:"name" binding:"required"`
 	Timestamp time.Time         `json:"timestamp"`
 	Metadata  map[string]string `json:"metadata"`
 	Steps     []Step            `json:"steps"`

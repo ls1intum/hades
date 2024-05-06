@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"os"
 
@@ -38,27 +37,7 @@ func main() {
 	utils.LoadConfig(&executorCfg)
 	log.Debug("Executor config: ", executorCfg)
 
-	redis_opts := asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr}
-	// Check whether TLS should be enabled
-	if cfg.RedisConfig.TLS_Enabled {
-		redis_opts.TLSConfig = &tls.Config{}
-	}
-	AsynqServer = asynq.NewServer(redis_opts, asynq.Config{
-		Concurrency: int(cfg.Concurrency),
-		Queues: map[string]int{
-			"critical": 5,
-			"high":     4,
-			"normal":   3,
-			"low":      2,
-			"minimal":  1,
-		},
-		StrictPriority: true,
-		Logger:         log.StandardLogger(),
-	})
-	if AsynqServer == nil {
-		log.Fatal("Failed to create Asynq server")
-		return
-	}
+	AsynqServer = utils.SetupQueueServer(cfg.RedisConfig.Addr, cfg.RedisConfig.Pwd, cfg.RedisConfig.TLS_Enabled, int(cfg.Concurrency))
 
 	var scheduler JobScheduler
 	switch executorCfg.Executor {
