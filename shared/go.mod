@@ -1,4 +1,4 @@
-module github.com/Mtze/HadesCI/shared
+module github.com/ls1intum/hades/shared
 
 go 1.21.0
 

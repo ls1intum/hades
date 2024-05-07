@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/Mtze/HadesCI/shared/payload"
 	"github.com/hibiken/asynqmon"
+	"github.com/ls1intum/hades/shared/payload"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -1,16 +1,16 @@
-module github.com/Mtze/HadesCI/hadesAPI
+module github.com/ls1intum/hades/hadesAPI
 
 go 1.21.0
 
 require (
-	github.com/Mtze/HadesCI/shared v0.0.0
+	github.com/ls1intum/hades/shared v0.0.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/hibiken/asynq v0.24.1
 	github.com/hibiken/asynqmon v0.7.2
 	github.com/sirupsen/logrus v1.9.3
 )
 
-replace github.com/Mtze/HadesCI/shared => ../shared
+replace github.com/ls1intum/hades/shared => ../shared
 
 require (
 	github.com/bytedance/sonic v1.9.1 // indirect

@@ -1,11 +1,11 @@
-module github.com/Mtze/HadesCI/hadesScheduler
+module github.com/ls1intum/hades/hadesScheduler
 
 go 1.21.0
 
-replace github.com/Mtze/HadesCI/shared => ../shared
+replace github.com/ls1intum/hades/shared => ../shared
 
 require (
-	github.com/Mtze/HadesCI/shared v0.0.0-00010101000000-000000000000
+	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
 	github.com/docker/docker v26.1.1+incompatible
 	github.com/hibiken/asynq v0.24.1
 	github.com/sirupsen/logrus v1.9.3

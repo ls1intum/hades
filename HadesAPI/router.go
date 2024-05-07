@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Mtze/HadesCI/shared/payload"
-	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
+	"github.com/ls1intum/hades/shared/payload"
+	"github.com/ls1intum/hades/shared/utils"
 	log "github.com/sirupsen/logrus"
 )
 

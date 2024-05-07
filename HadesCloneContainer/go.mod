@@ -1,4 +1,4 @@
-module github.com/Mtze/HadesCI/hadesCloneContainer
+module github.com/ls1intum/hades/hadesCloneContainer
 
 go 1.21.0
 
