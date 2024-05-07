@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
 	"github.com/hibiken/asynqmon"
+	"github.com/ls1intum/hades/shared/utils"
 	log "github.com/sirupsen/logrus"
 )
 

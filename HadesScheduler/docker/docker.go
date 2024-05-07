@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mtze/HadesCI/shared/payload"
-	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	_ "github.com/docker/docker/client"
+	"github.com/ls1intum/hades/shared/payload"
+	"github.com/ls1intum/hades/shared/utils"
 	log "github.com/sirupsen/logrus"
 )
 

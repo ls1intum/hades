@@ -3,7 +3,7 @@
 version: '3.7'
 services:
   hadesAPI:
-    image: ghcr.io/mtze/hades/hades-api
+    image: ghcr.io/ls1intum/hades/hades-api
     build:
       context: .
       dockerfile: ./HadesAPI/Dockerfile
@@ -20,7 +20,7 @@ services:
       - REDIS_PASSWORD
 
   hadesScheduler:
-    image: ghcr.io/mtze/hades/hades-scheduler
+    image: ghcr.io/ls1intum/hades/hades-scheduler
     build:
       context: .
       dockerfile: ./HadesScheduler/Dockerfile
