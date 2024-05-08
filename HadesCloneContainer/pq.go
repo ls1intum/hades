@@ -1,7 +1,5 @@
 package main
 
-import "container/heap"
-
 /// Based on the example from https://pkg.go.dev/container/heap#example-package-PriorityQueue
 
 type Item struct {
@@ -40,11 +38,4 @@ func (pq *PriorityQueue) Pop() any {
 	item.index = -1 // for safety
 	*pq = old[0 : n-1]
 	return item
-}
-
-// update modifies the priority and value of an Item in the queue.
-func (pq *PriorityQueue) update(item *Item, value Repository, order int) {
-	item.Repository = value
-	item.order = order
-	heap.Fix(pq, item.index)
 }
