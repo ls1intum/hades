@@ -25,7 +25,7 @@ type Scheduler struct {
 
 type DockerConfig struct {
 	DockerHost           string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
-	ContainerAutoremove  bool   `env:"CONTAINER_AUTOREMOVE" envDefault:"true"`
+	ContainerAutoremove  bool   `env:"DOCKER_CONTAINER_AUTOREMOVE" envDefault:"true"`
 	DockerScriptExecutor string `env:"DOCKER_SCRIPT_EXECUTOR" envDefault:"/bin/bash -c"`
 	CPU_limit            uint   `env:"DOCKER_CPU_LIMIT"`    // Number of CPUs - e.g. '6'
 	MEMORY_limit         string `env:"DOCKER_MEMORY_LIMIT"` // RAM usage in g or m  - e.g. '4g'
