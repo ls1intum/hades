@@ -3,10 +3,10 @@ module github.com/ls1intum/hades/hadesAPI
 go 1.21.0
 
 require (
-	github.com/ls1intum/hades/shared v0.0.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/hibiken/asynq v0.24.1
 	github.com/hibiken/asynqmon v0.7.2
+	github.com/ls1intum/hades/shared v0.0.0
 	github.com/sirupsen/logrus v1.9.3
 )
 
@@ -14,7 +14,7 @@ replace github.com/ls1intum/hades/shared => ../shared
 
 require (
 	github.com/bytedance/sonic v1.9.1 // indirect
-	github.com/caarlos0/env/v9 v9.0.0 // indirect
+	github.com/caarlos0/env/v11 v11.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect

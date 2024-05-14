@@ -5,15 +5,15 @@ go 1.21.0
 replace github.com/ls1intum/hades/shared => ../shared
 
 require (
-	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
 	github.com/docker/docker v26.1.1+incompatible
 	github.com/hibiken/asynq v0.24.1
+	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
 	github.com/sirupsen/logrus v1.9.3
 )
 
 require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
-	github.com/caarlos0/env/v9 v9.0.0 // indirect
+	github.com/caarlos0/env/v11 v11.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
