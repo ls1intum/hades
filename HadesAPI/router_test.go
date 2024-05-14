@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Mtze/HadesCI/shared/payload"
-	"github.com/Mtze/HadesCI/shared/utils"
+	"github.com/ls1intum/hades/shared/payload"
+	"github.com/ls1intum/hades/shared/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"

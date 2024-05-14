@@ -3,7 +3,7 @@
 version: '3.7'
 services:
   hadesAPI:
-    image: ghcr.io/mtze/hades/hades-api
+    image: ghcr.io/ls1intum/hades/hades-api
     build:
       context: .
       dockerfile: ./HadesAPI/Dockerfile
@@ -17,10 +17,10 @@ services:
         condition: service_healthy
     environment:
       - REDIS_ADDR=redis:6379
-      - REDIS_PASSWORD
+      - REDIS_PWD
 
   hadesScheduler:
-    image: ghcr.io/mtze/hades/hades-scheduler
+    image: ghcr.io/ls1intum/hades/hades-scheduler
     build:
       context: .
       dockerfile: ./HadesScheduler/Dockerfile
@@ -35,7 +35,7 @@ services:
         condition: service_healthy
     environment:
       - REDIS_ADDR=redis:6379
-      - REDIS_PASSWORD
+      - REDIS_PWD
       - HADES_EXECUTOR=docker
 
   redis:
@@ -45,7 +45,7 @@ services:
     networks:
       - hades
     environment:
-      - REDIS_PASSWORD
+      - REDIS_PWD
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s

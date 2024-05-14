@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/Mtze/HadesCI/hadesScheduler/docker"
-	"github.com/Mtze/HadesCI/shared/payload"
-	"github.com/Mtze/HadesCI/shared/utils"
 	"github.com/hibiken/asynq"
+	"github.com/ls1intum/hades/hadesScheduler/docker"
+	"github.com/ls1intum/hades/shared/payload"
+	"github.com/ls1intum/hades/shared/utils"
 
 	log "github.com/sirupsen/logrus"
 )
