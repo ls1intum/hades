@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"fmt"
 	"os"
 
@@ -35,38 +34,20 @@ func main() {
 
 	utils.LoadConfig(&cfg)
 
-	redis_opts := asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr, Password: cfg.RedisConfig.Pwd}
-	// Check whether TLS should be enabled
-	if cfg.RedisConfig.TLS_Enabled {
-		redis_opts.TLSConfig = &tls.Config{}
-	}
-	AsynqClient = asynq.NewClient(redis_opts)
+	AsynqClient = utils.SetupQueueClient(cfg.RedisConfig.Addr, cfg.RedisConfig.Pwd, cfg.RedisConfig.TLS_Enabled)
 	if AsynqClient == nil {
-		log.Fatal("Failed to connect to Redis")
 		return
 	}
 
 	log.Infof("Starting HadesAPI on port %d", cfg.APIPort)
 	gin.SetMode(gin.ReleaseMode)
 
-	r := gin.New()
-	r.Use(gin.ErrorLogger())
-	r.Use(gin.Recovery())
-	if cfg.AuthKey == "" {
-		log.Warn("No auth key set")
-	} else {
-		log.Info("Auth key set")
-		r.Use(gin.BasicAuth(gin.Accounts{
-			"hades": cfg.AuthKey,
-		}))
-	}
+	r := setupRouter(cfg.AuthKey)
 
-	r.GET("/ping", ping)
-	r.POST("/build", AddBuildToQueue)
-
+	// Start the monitoring server
 	h := asynqmon.New(asynqmon.Options{
 		RootPath:          "/monitoring", // RootPath specifies the root for asynqmon app
-		RedisConnOpt:      redis_opts,
+		RedisConnOpt:      asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr, Password: cfg.RedisConfig.Pwd},
 		PrometheusAddress: cfg.PrometheusAddress,
 		PayloadFormatter:  MetadataObfuscator,
 	})

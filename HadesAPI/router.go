@@ -12,6 +12,24 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+func setupRouter(auth_key string) *gin.Engine {
+	r := gin.New()
+	r.Use(gin.ErrorLogger())
+	r.Use(gin.Recovery())
+	if auth_key == "" {
+		log.Warn("No auth key set")
+	} else {
+		log.Info("Auth key set")
+		r.Use(gin.BasicAuth(gin.Accounts{
+			"hades": auth_key,
+		}))
+	}
+
+	r.GET("/ping", ping)
+	r.POST("/build", AddBuildToQueue)
+	return r
+}
+
 func ping(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "pong",
