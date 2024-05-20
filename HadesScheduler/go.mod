@@ -5,7 +5,7 @@ go 1.21.0
 replace github.com/ls1intum/hades/shared => ../shared
 
 require (
-	github.com/docker/docker v26.1.2+incompatible
+	github.com/docker/docker v26.1.3+incompatible
 	github.com/hibiken/asynq v0.24.1
 	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
 	github.com/sirupsen/logrus v1.9.3
