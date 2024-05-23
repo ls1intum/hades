@@ -16,9 +16,10 @@
   when: hades_node_role == "scheduler"
 
 - name: Install hades api
-  ansible.builtin.include_tasks: install_api.yml
-  when: hades_node_role == "api"
+  block: 
+    - name: Install hades api
+      ansible.builtin.include_tasks: install_api.yml
 
-- name: Configure nginx
-  ansible.builtin.include_tasks: configure_nginx.yml
+    - name: Configure nginx
+      ansible.builtin.include_tasks: configure_nginx.yml
   when: hades_node_role == "api"
