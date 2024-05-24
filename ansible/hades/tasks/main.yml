@@ -1,0 +1,25 @@
+---
+# tasks file for hades
+
+
+- name: Check host configuration 
+  ansible.builtin.include_tasks: check_host_config.yml
+
+- name: Create hades directory in /opt
+  become: true
+  ansible.builtin.file:
+    path: /opt/hades
+    state: directory
+
+- name: Install hades scheduler
+  ansible.builtin.include_tasks: install_scheduler.yml
+  when: hades_node_role == "scheduler"
+
+- name: Install hades api
+  block: 
+    - name: Install hades api
+      ansible.builtin.include_tasks: install_api.yml
+
+    - name: Configure nginx
+      ansible.builtin.include_tasks: configure_nginx.yml
+  when: hades_node_role == "api"

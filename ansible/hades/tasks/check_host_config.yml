@@ -1,0 +1,11 @@
+---
+
+- name: Check if docker is installed
+  ansible.builtin.stat:
+    path: /usr/bin/docker
+  register: docker_installed
+
+- name: Fail if docker is not installed
+  ansible.builtin.fail:
+    msg: "Docker is not installed"
+  when: docker_installed.stat.exists == False

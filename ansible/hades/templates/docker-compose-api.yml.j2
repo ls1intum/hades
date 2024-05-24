@@ -1,0 +1,36 @@
+---
+version: '3.7'
+services:
+  hadesAPI:
+    image: ghcr.io/mtze/hades/hades-api:{{ hades_api_version }}
+    ports:
+      - "{{hades_api_port}}:8080"
+    networks:
+      - hades
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_ADDR=redis:{{ hades_redis_port }}
+      - REDIS_PASSWORD
+      - HADES_DEBUG={{ hades_api_debug }}
+      - AUTH_KEY
+
+
+  redis:
+    image: redis:{{ hades_redis_version }}
+    ports:
+      - "{{ hades_redis_port }}:6379"
+    networks:
+      - hades
+    environment:
+      - REDIS_PASSWORD
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  hades:
