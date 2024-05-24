@@ -3,13 +3,13 @@ package docker
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
-	_ "github.com/docker/docker/client"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	log "github.com/sirupsen/logrus"
@@ -21,6 +21,8 @@ type Scheduler struct {
 	container_autoremove bool
 	cpu_limit            uint
 	memory_limit         string
+	fluentd_addr         string
+	fluentd_max_retries  uint
 }
 
 type DockerConfig struct {
@@ -31,7 +33,7 @@ type DockerConfig struct {
 	MEMORY_limit         string `env:"DOCKER_MEMORY_LIMIT"` // RAM usage in g or m  - e.g. '4g'
 }
 
-func NewDockerScheduler() Scheduler {
+func NewDockerScheduler() *Scheduler {
 	var dockerCfg DockerConfig
 	utils.LoadConfig(&dockerCfg)
 	log.Debugf("Docker config: %+v", dockerCfg)
@@ -42,13 +44,20 @@ func NewDockerScheduler() Scheduler {
 	if err != nil {
 		log.WithError(err).Fatal("Failed to create Docker client")
 	}
-	return Scheduler{
+	return &Scheduler{
 		cli:                  cli,
 		container_autoremove: dockerCfg.ContainerAutoremove,
 		script_executor:      dockerCfg.DockerScriptExecutor,
 		cpu_limit:            dockerCfg.CPU_limit,
 		memory_limit:         dockerCfg.MEMORY_limit,
 	}
+}
+
+func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler {
+	d.fluentd_addr = addr
+	d.fluentd_max_retries = max_retries
+	log.Debug("Fluentd logging enabled with address ", addr, " and max retries ", max_retries)
+	return d
 }
 
 func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
@@ -104,6 +113,17 @@ func (d Scheduler) executeStep(ctx context.Context, client *client.Client, step 
 		WorkingDir: "/shared", // Set the working directory to the shared volume
 	}
 
+	var log_config container.LogConfig
+	if d.fluentd_addr != "" {
+		log_config = container.LogConfig{
+			Type: "fluentd",
+			Config: map[string]string{
+				"fluentd-address":     d.fluentd_addr,
+				"fluentd-max-retries": strconv.FormatUint(uint64(d.fluentd_max_retries), 10),
+			},
+		}
+	}
+
 	host_config := container.HostConfig{
 		Mounts: []mount.Mount{
 			{
@@ -112,6 +132,7 @@ func (d Scheduler) executeStep(ctx context.Context, client *client.Client, step 
 				Target: "/shared",
 			},
 		},
+		LogConfig:  log_config,
 		AutoRemove: d.container_autoremove, // Remove the container after it is done only if the config is set to true
 	}
 

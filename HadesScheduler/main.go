@@ -20,8 +20,10 @@ type JobScheduler interface {
 }
 
 type HadesSchedulerConfig struct {
-	Concurrency uint `env:"CONCURRENCY" envDefault:"1"`
-	RedisConfig utils.RedisConfig
+	Concurrency       uint   `env:"CONCURRENCY" envDefault:"1"`
+	FluentdAddr       string `env:"FLUENTD_ADDR" envDefault:""`
+	FluentdMaxRetries uint   `env:"FLUENTD_MAX_RETRIES" envDefault:"3"`
+	RedisConfig       utils.RedisConfig
 }
 
 func main() {
@@ -47,7 +49,7 @@ func main() {
 	// 	scheduler = kube.Scheduler{}
 	case "docker":
 		log.Info("Started HadesScheduler in Docker mode")
-		scheduler = docker.NewDockerScheduler()
+		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries)
 	default:
 		log.Fatalf("Invalid executor specified: %s", executorCfg.Executor)
 	}

@@ -52,6 +52,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+  
+  fluentbit:
+    container_name: fluentbit
+    image: fluent/fluent-bit
+    ports:
+      - "24224:24224"
+    command: /fluent-bit/bin/fluent-bit -i forward -o stdout -p format=json_lines -f 1
+    networks:
+      - hades
 
 networks:
   hades:
