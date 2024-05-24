@@ -7,6 +7,7 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/ls1intum/hades/hadesScheduler/docker"
+	"github.com/ls1intum/hades/hadesScheduler/k8s"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 
@@ -41,10 +42,9 @@ func main() {
 
 	var scheduler JobScheduler
 	switch executorCfg.Executor {
-	// case "k8s":
-	// 	log.Info("Started HadesScheduler in Kubernetes mode")
-	// 	kube.Init()
-	// 	scheduler = kube.Scheduler{}
+	case "k8s":
+		log.Info("Started HadesScheduler in Kubernetes mode")
+		scheduler = k8s.NewK8sScheduler()
 	case "docker":
 		log.Info("Started HadesScheduler in Docker mode")
 		scheduler = docker.NewDockerScheduler()

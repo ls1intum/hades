@@ -16,10 +16,6 @@ type RedisConfig struct {
 	TLS_Enabled bool   `env:"REDIS_TLS_ENABLED" envDefault:"false"`
 }
 
-type K8sConfig struct {
-	HadesCInamespace string `env:"HADES_CI_NAMESPACE" envDefault:"hades-ci"`
-}
-
 type ExecutorConfig struct {
 	Executor string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
 }
