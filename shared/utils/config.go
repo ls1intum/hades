@@ -17,13 +17,17 @@ type RedisConfig struct {
 }
 
 type ExecutorConfig struct {
+	// Executor is the executor to use for running the jobs (default: docker)
+	// Possible values: docker, k8s
 	Executor string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
 }
 
 func LoadConfig(cfg interface{}) {
+	log.Debugf("Loading config for %T", cfg)
+
 	err := godotenv.Load()
 	if err != nil {
-		log.WithError(err).Warn("Error loading .env file")
+		log.WithError(err).Info("Could not load .env file...")
 	}
 
 	err = env.Parse(cfg)
@@ -31,7 +35,7 @@ func LoadConfig(cfg interface{}) {
 		log.WithError(err).Fatal("Error parsing environment variables")
 	}
 
-	log.Debug("Config loaded: ", cfg)
+	log.Debugf("Config loaded for Type %T: %+v", cfg, cfg)
 }
 
 func ParseMemoryLimit(limit string) (int64, error) {

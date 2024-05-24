@@ -34,7 +34,8 @@
             "preLaunchTask": "Start Redis Container", // This will start the Redis container before launching the scheduler - defined in .vscode/tasks.json
             "env": {
                 "DEBUG": "true",
-                "HADES_EXECUTOR": "k8s"
+                "HADES_EXECUTOR": "k8s",
+                "K8S_CONFIG_MODE": "kubeconfig",
             }
         }
     ],
