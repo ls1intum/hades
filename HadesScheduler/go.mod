@@ -1,6 +1,6 @@
 module github.com/ls1intum/hades/hadesScheduler
 
-go 1.21.0
+go 1.22
 
 replace github.com/ls1intum/hades/shared => ../shared
 

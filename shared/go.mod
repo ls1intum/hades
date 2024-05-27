@@ -1,6 +1,6 @@
 module github.com/ls1intum/hades/shared
 
-go 1.21.0
+go 1.22
 
 require (
 	github.com/caarlos0/env/v11 v11.0.0
