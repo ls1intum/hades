@@ -56,6 +56,7 @@ func AddBuildToQueue(c *gin.Context) {
 		}
 	}
 
+	payload.QueuePayload.ID = utils.GenerateUUID()
 	log.Debug("Received build request ", payload)
 	json_payload, err := json.Marshal(payload.QueuePayload)
 	if err != nil {
@@ -77,4 +78,8 @@ func AddBuildToQueue(c *gin.Context) {
 		return
 	}
 	log.Printf(" [*] Successfully enqueued task: %+v", info.ID)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Successfully enqueued task",
+		"task_id": payload.QueuePayload.ID.String(),
+	})
 }

@@ -1,6 +1,10 @@
 package payload
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type RESTPayload struct {
 	Priority int `json:"priority"`
@@ -8,6 +12,7 @@ type RESTPayload struct {
 }
 
 type QueuePayload struct {
+	ID        uuid.UUID         `json:"id"`
 	Name      string            `json:"name" binding:"required"`
 	Timestamp time.Time         `json:"timestamp"`
 	Metadata  map[string]string `json:"metadata"`

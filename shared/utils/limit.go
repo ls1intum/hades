@@ -1,7 +1,5 @@
 package utils
 
-import log "github.com/sirupsen/logrus"
-
 func FindLimit(x, y int) int {
 	if x == 0 {
 		return y
@@ -22,7 +20,7 @@ func FindMemoryLimit(x, y string) int {
 	if x != "" {
 		bytes, err := ParseMemoryLimit(x)
 		if err != nil {
-			log.WithError(err).Errorf("Failed to parse global RAM limit %s", x)
+			log.With("error", err).Error("Failed to parse global RAM limit", "limit", x)
 			first_ram_limit = 0
 		} else {
 			first_ram_limit = bytes
@@ -32,7 +30,7 @@ func FindMemoryLimit(x, y string) int {
 	if y != "" {
 		bytes, err := ParseMemoryLimit(y)
 		if err != nil {
-			log.WithError(err).Errorf("Failed to parse step RAM limit %s", y)
+			log.With("error", err).Error("Failed to parse step RAM limit", "limit", y)
 			second_ram_limit = 0
 		} else {
 			second_ram_limit = bytes
