@@ -77,9 +77,9 @@ func AddBuildToQueue(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Failed to enqueue build")
 		return
 	}
-	log.Printf(" [*] Successfully enqueued task: %+v", info.ID)
+	log.Printf(" [*] Successfully enqueued job: %+v", info.ID)
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Successfully enqueued task",
-		"task_id": payload.QueuePayload.ID.String(),
+		"message": "Successfully enqueued job",
+		"job_id":  payload.QueuePayload.ID.String(),
 	})
 }

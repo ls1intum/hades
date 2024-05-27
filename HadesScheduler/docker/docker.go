@@ -55,6 +55,8 @@ type DockerStep struct {
 	payload.Step
 }
 
+type jobIDContextKey string
+
 func NewDockerScheduler() *Scheduler {
 	var dockerCfg DockerEnvConfig
 	utils.LoadConfig(&dockerCfg)
@@ -100,8 +102,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		job_logger = slog.New(slogfluentd.Option{
 			Level:  slog.LevelDebug,
 			Client: fluentd_client,
-			Tag:    job.ID.String(),
-		}.NewFluentdHandler())
+		}.NewFluentdHandler()).With(slog.String("job_id", job.ID.String()))
 
 		// Configure the handler for the container logs
 		container_logs_options = container.LogConfig{
@@ -109,7 +110,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 			Config: map[string]string{
 				"fluentd-address":     d.FluentdOptions.Addr,
 				"fluentd-max-retries": strconv.FormatUint(uint64(d.FluentdOptions.MaxRetry), 10),
-				"tag":                 job.ID.String(),
+				"labels":              "job_id",
 			},
 		}
 	}
@@ -166,6 +167,8 @@ func (d DockerJob) execute(ctx context.Context) error {
 			DockerProps: d.DockerProps,
 			Step:        step,
 		}
+
+		ctx := context.WithValue(ctx, jobIDContextKey("job_id"), d.ID.String())
 		err := docker_step.execute(ctx)
 		if err != nil {
 			d.logger.Error("Failed to execute step", slog.Any("error", err))
@@ -188,10 +191,12 @@ func (s DockerStep) execute(ctx context.Context) error {
 		envs = append(envs, fmt.Sprintf("%s=%s", k, v))
 	}
 
+	job_id := ctx.Value(jobIDContextKey("job_id")).(string)
 	container_config := container.Config{
 		Image:      s.Image,
 		Env:        envs,
 		WorkingDir: "/shared", // Set the working directory to the shared volume
+		Labels:     map[string]string{"job_id": job_id},
 	}
 
 	host_config := container.HostConfig{
