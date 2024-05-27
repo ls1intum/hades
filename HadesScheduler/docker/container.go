@@ -5,13 +5,13 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log/slog"
 	"os"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
-	log "github.com/sirupsen/logrus"
 )
 
 func writeContainerLogsToFile(ctx context.Context, client *client.Client, containerID string, logFilePath string) error {
@@ -70,7 +70,7 @@ func copyFileToContainer(ctx context.Context, client *client.Client, containerID
 		AllowOverwriteDirWithFile: false,
 	})
 	if err != nil {
-		log.WithError(err).Error("Failed to copy script to container")
+		slog.Error("Failed to copy script to container", slog.Any("error", err))
 		return err
 	}
 	return nil

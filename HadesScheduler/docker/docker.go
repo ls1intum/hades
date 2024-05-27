@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -10,22 +11,14 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+	"github.com/ls1intum/hades/hadesScheduler/fluentd"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
-	log "github.com/sirupsen/logrus"
+	slogfluentd "github.com/samber/slog-fluentd/v2"
+	"golang.org/x/exp/maps"
 )
 
-type Scheduler struct {
-	cli                  *client.Client
-	script_executor      string
-	container_autoremove bool
-	cpu_limit            uint
-	memory_limit         string
-	fluentd_addr         string
-	fluentd_max_retries  uint
-}
-
-type DockerConfig struct {
+type DockerEnvConfig struct {
 	DockerHost           string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
 	ContainerAutoremove  bool   `env:"DOCKER_CONTAINER_AUTOREMOVE" envDefault:"true"`
 	DockerScriptExecutor string `env:"DOCKER_SCRIPT_EXECUTOR" envDefault:"/bin/bash -c"`
@@ -33,156 +26,233 @@ type DockerConfig struct {
 	MEMORY_limit         string `env:"DOCKER_MEMORY_LIMIT"` // RAM usage in g or m  - e.g. '4g'
 }
 
+type DockerProps struct {
+	scriptExecutor       string
+	containerAutoremove  bool
+	cpu_limit            uint
+	memory_limit         string
+	volumeName           string
+	containerLogsOptions container.LogConfig
+}
+
+type Scheduler struct {
+	cli *client.Client
+	DockerProps
+	fluentd.FluentdOptions
+}
+
+type DockerJob struct {
+	cli    *client.Client
+	logger *slog.Logger
+	DockerProps
+	payload.QueuePayload
+}
+
+type DockerStep struct {
+	cli    *client.Client
+	logger *slog.Logger
+	DockerProps
+	payload.Step
+}
+
 func NewDockerScheduler() *Scheduler {
-	var dockerCfg DockerConfig
+	var dockerCfg DockerEnvConfig
 	utils.LoadConfig(&dockerCfg)
-	log.Debugf("Docker config: %+v", dockerCfg)
+	slog.Debug("Docker config: %+v", "config", dockerCfg)
 
 	var err error
 	// Create a new Docker client
 	cli, err := client.NewClientWithOpts(client.WithHost(dockerCfg.DockerHost), client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.WithError(err).Fatal("Failed to create Docker client")
+		slog.Error("Failed to create Docker client", slog.Any("error", err))
 	}
 	return &Scheduler{
-		cli:                  cli,
-		container_autoremove: dockerCfg.ContainerAutoremove,
-		script_executor:      dockerCfg.DockerScriptExecutor,
-		cpu_limit:            dockerCfg.CPU_limit,
-		memory_limit:         dockerCfg.MEMORY_limit,
+		cli: cli,
+		DockerProps: DockerProps{
+			scriptExecutor:      dockerCfg.DockerScriptExecutor,
+			containerAutoremove: dockerCfg.ContainerAutoremove,
+			cpu_limit:           dockerCfg.CPU_limit,
+			memory_limit:        dockerCfg.MEMORY_limit,
+		},
 	}
 }
 
 func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler {
-	d.fluentd_addr = addr
-	d.fluentd_max_retries = max_retries
-	log.Debug("Fluentd logging enabled with address ", addr, " and max retries ", max_retries)
+	if addr != "" {
+		d.FluentdOptions = fluentd.FluentdOptions{
+			Addr:     addr,
+			MaxRetry: max_retries,
+		}
+	}
 	return d
 }
 
 func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
+	// Create a custom logger only for this job
+	var job_logger *slog.Logger = slog.Default()
+	var container_logs_options container.LogConfig = container.LogConfig{}
+	if d.FluentdOptions.Addr != "" {
+		fluentd_client, err := fluentd.GetFluentdClient(d.FluentdOptions)
+		if err != nil {
+			slog.Error("Failed to create fluentd client", slog.Any("error", err))
+			return err
+		}
+		job_logger = slog.New(slogfluentd.Option{
+			Level:  slog.LevelDebug,
+			Client: fluentd_client,
+			Tag:    job.ID.String(),
+		}.NewFluentdHandler())
+
+		// Configure the handler for the container logs
+		container_logs_options = container.LogConfig{
+			Type: "fluentd",
+			Config: map[string]string{
+				"fluentd-address":     d.FluentdOptions.Addr,
+				"fluentd-max-retries": strconv.FormatUint(uint64(d.FluentdOptions.MaxRetry), 10),
+				"tag":                 job.ID.String(),
+			},
+		}
+	}
 	// Create a unique volume name for this job
-	volumeName := fmt.Sprintf("shared-%d", time.Now().UnixNano())
+	volumeName := fmt.Sprintf("shared-%s", job.ID.String())
 	// Create the shared volume
 	if err := createSharedVolume(ctx, d.cli, volumeName); err != nil {
-		log.WithError(err).Error("Failed to create shared volume")
+		job_logger.Error("Failed to create shared volume", slog.Any("error", err))
 		return err
 	}
 
-	var global_envs []string
-	// Read the global env variables from the job metadata
-	for k, v := range job.Metadata {
-		global_envs = append(global_envs, fmt.Sprintf("%s=%s", k, v))
+	// Add created volume to the job's docker config
+	jobDockerConfig := d.DockerProps
+	jobDockerConfig.volumeName = volumeName
+	jobDockerConfig.containerLogsOptions = container_logs_options
+	docker_job := DockerJob{
+		cli:          d.cli,
+		logger:       job_logger,
+		DockerProps:  jobDockerConfig,
+		QueuePayload: job,
 	}
-
-	for _, step := range job.Steps {
-		d.executeStep(ctx, d.cli, step, volumeName, global_envs)
+	err := docker_job.execute(ctx)
+	if err != nil {
+		job_logger.Error("Failed to execute job", slog.Any("error", err))
+		return err
 	}
 
 	// Delete the shared volume after the job is done
 	defer func() {
 		time.Sleep(1 * time.Second)
 		if err := deleteSharedVolume(ctx, d.cli, volumeName); err != nil {
-			log.WithError(err).Error("Failed to delete shared volume")
+			job_logger.Error("Failed to delete shared volume", slog.Any("error", err))
 		}
 
-		global_envs = []string{}
+		job_logger.Info("Volume deleted", slog.Any("volume", volumeName))
 	}()
 
 	return nil
 }
 
-func (d Scheduler) executeStep(ctx context.Context, client *client.Client, step payload.Step, volumeName string, envs []string) error {
+func (d DockerJob) execute(ctx context.Context) error {
+	for _, step := range d.Steps {
+		d.logger.Info("Executing step", slog.Any("step", step))
+
+		// Copy the global envs and add the step specific ones
+		var envs = make(map[string]string)
+		maps.Copy(envs, d.Metadata)
+		maps.Copy(envs, step.Metadata)
+		step.Metadata = envs
+
+		docker_step := DockerStep{
+			cli:         d.cli,
+			logger:      d.logger,
+			DockerProps: d.DockerProps,
+			Step:        step,
+		}
+		err := docker_step.execute(ctx)
+		if err != nil {
+			d.logger.Error("Failed to execute step", slog.Any("error", err))
+			return err
+		}
+	}
+	return nil
+}
+
+func (s DockerStep) execute(ctx context.Context) error {
 	// Pull the images
-	err := pullImages(ctx, d.cli, step.Image)
+	err := pullImages(ctx, s.cli, s.Image)
 	if err != nil {
-		log.WithError(err).Errorf("Failed to pull image %s", step.Image)
+		s.logger.Error("Failed to pull image", slog.Any("error", err))
 		return err
 	}
 
-	// Copy the global envs and add the step specific ones
-	var step_envs []string
-	copy(step_envs, envs)
-	for k, v := range step.Metadata {
+	var envs []string
+	for k, v := range s.Metadata {
 		envs = append(envs, fmt.Sprintf("%s=%s", k, v))
 	}
 
 	container_config := container.Config{
-		Image:      step.Image,
+		Image:      s.Image,
 		Env:        envs,
 		WorkingDir: "/shared", // Set the working directory to the shared volume
-	}
-
-	var log_config container.LogConfig
-	if d.fluentd_addr != "" {
-		log_config = container.LogConfig{
-			Type: "fluentd",
-			Config: map[string]string{
-				"fluentd-address":     d.fluentd_addr,
-				"fluentd-max-retries": strconv.FormatUint(uint64(d.fluentd_max_retries), 10),
-			},
-		}
 	}
 
 	host_config := container.HostConfig{
 		Mounts: []mount.Mount{
 			{
 				Type:   mount.TypeVolume,
-				Source: volumeName,
+				Source: s.volumeName,
 				Target: "/shared",
 			},
 		},
-		LogConfig:  log_config,
-		AutoRemove: d.container_autoremove, // Remove the container after it is done only if the config is set to true
+		LogConfig:  s.containerLogsOptions,
+		AutoRemove: s.DockerProps.containerAutoremove, // Remove the container after it is done only if the config is set to true
 	}
 
 	// Limit the resource usage of the containers
-	cpu_limit := utils.FindLimit(int(step.CPULimit), int(d.cpu_limit))
+	cpu_limit := utils.FindLimit(int(s.CPULimit), int(s.DockerProps.cpu_limit))
 	if cpu_limit != 0 {
-		log.Debug("Setting CPU limit to ", cpu_limit)
+		s.logger.Debug("Setting CPU limit to ", "limit", cpu_limit)
 		host_config.Resources.NanoCPUs = int64(float64(cpu_limit) * 1e9)
 	}
-	ram_limit := utils.FindMemoryLimit(step.MemoryLimit, d.memory_limit)
+	ram_limit := utils.FindMemoryLimit(s.MemoryLimit, s.DockerProps.memory_limit)
 	if ram_limit != 0 {
-		log.Debug("Setting RAM limit to ", ram_limit)
+		s.logger.Debug("Setting RAM limit to ", "limit", ram_limit)
 		host_config.Resources.Memory = int64(ram_limit)
 	}
 
 	// Create the bash script if there is one
-	if step.Script != "" {
+	if s.Script != "" {
 		// Overwrite the default entrypoint
-		container_config.Entrypoint = strings.Split(d.script_executor, " ")
-		container_config.Entrypoint = append(container_config.Entrypoint, step.Script)
+		container_config.Entrypoint = strings.Split(s.scriptExecutor, " ")
+		container_config.Entrypoint = append(container_config.Entrypoint, s.Script)
 	}
 
-	resp, err := client.ContainerCreate(ctx, &container_config, &host_config, nil, nil, "")
+	resp, err := s.cli.ContainerCreate(ctx, &container_config, &host_config, nil, nil, "")
 	if err != nil {
-		log.WithError(err).Errorf("Failed to create container %s", step.Image)
+		s.logger.Error("Failed to create container", slog.Any("error", err))
 		return err
 	}
 
 	// Start the container
-	err = client.ContainerStart(ctx, resp.ID, container.StartOptions{})
+	err = s.cli.ContainerStart(ctx, resp.ID, container.StartOptions{})
 	if err != nil {
-		log.WithError(err).Errorf("Failed to start container %s with ID %s", step.Image, resp.ID)
+		s.logger.Error("Failed to start container", slog.Any("error", err))
 		return err
 	}
 
 	// Wait for the container to finish
-	statusCh, errCh := client.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	statusCh, errCh := s.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
 		if err != nil {
-			log.WithError(err).Errorf("Error waiting for container %s with ID %s", step.Image, resp.ID)
+			s.logger.Error("Error waiting for container", slog.Any("error", err), slog.Any("container_id", resp.ID))
 			return err
 		}
 	case status := <-statusCh:
 		if status.StatusCode != 0 {
-			log.Errorf("Container %s with ID %s exited with status %d", step.Image, resp.ID, status.StatusCode)
+			s.logger.Error("Container exited with status", slog.Any("status", status.StatusCode), slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
 			return fmt.Errorf("container exited with status %d", status.StatusCode)
 		}
 	}
 
-	log.Debugf("Container %s with ID: %s completed", step.Image, resp.ID)
+	s.logger.Debug("Container completed", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
 	return nil
 }

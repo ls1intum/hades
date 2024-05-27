@@ -59,8 +59,6 @@ services:
     ports:
       - "24224:24224"
     command: /fluent-bit/bin/fluent-bit -i forward -o stdout -p format=json_lines -f 1
-    networks:
-      - hades
 
 networks:
   hades:
