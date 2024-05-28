@@ -3,10 +3,15 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"testing"
 
+	"github.com/google/uuid"
+	"github.com/ls1intum/hades/shared/payload"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/k3s"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -20,7 +25,7 @@ type K8sTestSuite struct {
 	ctx          context.Context
 }
 
-func setupK3sCluster(suite *K8sTestSuite) {
+func (suite *K8sTestSuite) SetupSuite() {
 	ctx := context.Background()
 	suite.ctx = ctx
 
@@ -57,8 +62,46 @@ func setupK3sCluster(suite *K8sTestSuite) {
 	suite.clientset = k8s
 }
 
-func tearDownK3sCluster(suite *K8sTestSuite) {
+func (suite *K8sTestSuite) TearDownSuite() {
 	if err := suite.k3sContainer.Terminate(suite.ctx); err != nil {
 		suite.T().Fatalf("failed to terminate container: %s", err)
 	}
+}
+
+// --- JobK8sSuite ---
+// TODO: For some reason this cannot be put in a separate file - The K8sTestSuite is not found in that case
+type JobK8sSuite struct {
+	K8sTestSuite
+}
+
+func (suite *JobK8sSuite) TestConfigMapCreate() {
+	job := K8sJob{
+		job: payload.QueuePayload{
+			ID: uuid.New(),
+			Steps: []payload.Step{
+				{ID: 1, Script: "echo 'Step 1'"},
+				{ID: 2, Script: "echo 'Step 2'"},
+			},
+		},
+	}
+
+	// Call configMapSpec on the K8sJob
+	configMap := job.configMapSpec()
+
+	// Create the ConfigMap
+	//TODO: Is it a good idea to have a background context here?
+	scheduledCM, err := suite.clientset.CoreV1().ConfigMaps("default").Create(context.Background(), configMap, metav1.CreateOptions{})
+	assert.Nil(suite.T(), err)
+	suite.T().Log("ConfigMap created: ", scheduledCM)
+
+	// Get configMap from Kubernetes
+	actualCM, err := suite.clientset.CoreV1().ConfigMaps("default").Get(context.Background(), job.job.ID.String(), metav1.GetOptions{})
+	assert.Nil(suite.T(), err)
+	suite.T().Log("ConfigMap retrieved: ", actualCM)
+
+	assert.Equal(suite.T(), scheduledCM, actualCM)
+}
+
+func TestJobs(t *testing.T) {
+	suite.Run(t, new(JobK8sSuite))
 }

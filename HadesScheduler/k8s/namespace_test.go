@@ -13,17 +13,12 @@ type NamespaceTestSuite struct {
 	K8sTestSuite
 }
 
-func (suite *NamespaceTestSuite) SetupSuite() {
-	setupK3sCluster(&suite.K8sTestSuite)
-}
-
 func (suite *NamespaceTestSuite) TearDownSuite() {
 	// Show all namespaces in the cluster
 	namespaces, _ := suite.clientset.CoreV1().Namespaces().List(suite.ctx, v1.ListOptions{})
 	for _, ns := range namespaces.Items {
 		suite.T().Logf("Namespace: %s - %v", ns.Name, ns.Status)
 	}
-	tearDownK3sCluster(&suite.K8sTestSuite)
 }
 
 func (suite *NamespaceTestSuite) TestCreateNamespace() {
