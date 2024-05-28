@@ -12,32 +12,57 @@ import (
 )
 
 type K8sJob struct {
-	job       payload.QueuePayload
-	k8sClient *kubernetes.Clientset
-	namespace string
+	job              payload.QueuePayload
+	k8sClient        *kubernetes.Clientset
+	namespace        string
+	sharedVolumeName string
 }
 
 // Schedules a Hades Job on the Kubernetes cluster
 func (k8sJob K8sJob) execute(ctx context.Context) error {
+	log.Infof("Scheduling job %s", k8sJob.job.ID)
 
-	log.Debugf("Scheduling job %s", k8sJob.job.ID)
-
-	log.Debug("Create ConfigMap for build scripts")
+	log.Debug("Create buildscript ConfigMap")
 	configMap := k8sJob.configMapSpec()
+	log.Debugf("ConfigMap spec: %v", configMap)
 
-	log.Debug("Apply ConfigMap to Kubernetes")
+	log.Debug("Apply buildscirpt ConfigMap to Kubernetes")
 	cm, err := k8sJob.k8sClient.CoreV1().ConfigMaps(k8sJob.namespace).Create(ctx, configMap, metav1.CreateOptions{})
 	if err != nil {
 		log.WithError(err).Error("Failed to create ConfigMap")
 		return err
 	}
-	log.Debugf("Created ConfigMap %s", cm.Name)
+	log.Infof("Successfully created buildscirpt ConfigMap %s", cm.Name)
 
 	log.Debug("Assembling PodSpec")
-	log.Error("Not implemented")
+	jobPodSpec := corev1.Pod{
 
-	log.Debug("Apply PodSpec to Kubernetes")
-	log.Error("Not implemented")
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      k8sJob.job.ID.String(),
+			Namespace: k8sJob.namespace,
+		},
+
+		Spec: corev1.PodSpec{
+			InitContainers: k8sJob.containerSpec(), // each step is represented by a init container to ensure that the build script is executed in the correct order
+			Containers: []corev1.Container{ // dummy container to signal the end of the build - this is a temporary solution as we need to have a container defined in the pod spec
+				{
+					Name:    "dummy",
+					Image:   "busybox",
+					Command: []string{"sh", "-c", "echo 'build completed'"},
+				},
+			},
+			Volumes:       k8sJob.volumeSpec(*configMap),
+			RestartPolicy: corev1.RestartPolicyNever,
+		},
+	}
+	log.Debugf("PodSpec: %v", jobPodSpec)
+
+	log.Infof("Apply PodSpec to Kubernetes")
+	_, err = k8sJob.k8sClient.CoreV1().Pods(k8sJob.namespace).Create(ctx, &jobPodSpec, metav1.CreateOptions{})
+	if err != nil {
+		log.WithError(err).Error("Failed to create Pod")
+		return err
+	}
 
 	return nil
 }
@@ -47,13 +72,14 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 func (k8sJob K8sJob) configMapSpec() *corev1.ConfigMap {
 	configMap := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: k8sJob.job.ID.String(),
+			Name:      k8sJob.job.ID.String(),
+			Namespace: k8sJob.namespace,
 		},
 		Data: map[string]string{},
 	}
 
 	for _, step := range k8sJob.job.Steps {
-		log.Debugf("Creating ConfigMap for step %d", step.ID)
+		log.Debugf("Creating ConfigMap Data item for step %d", step.ID)
 		configMap.Data[step.IDstring()] = step.Script
 	}
 
@@ -75,13 +101,35 @@ func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 					Items: []corev1.KeyToPath{
 						{
 							Key:  step.IDstring(),
-							Path: BuidScriptPath,
+							Path: "buildscript.sh",
 						},
 					},
 				},
 			},
 		})
 	}
+	volumeSpec = append(volumeSpec, corev1.Volume{
+		Name: k.sharedVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	},
+	)
 
 	return volumeSpec
+}
+
+func (k K8sJob) containerSpec() []corev1.Container {
+	containerSpec := []corev1.Container{}
+
+	for _, step := range k.job.Steps {
+		k8sStep := K8sStep{
+			step:                 step,
+			sharedVolumeName:     k.sharedVolumeName,
+			buidScriptVolumeName: step.IDstring(),
+		}
+		containerSpec = append(containerSpec, k8sStep.containerSpec()...)
+	}
+
+	return containerSpec
 }

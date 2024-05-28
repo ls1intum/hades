@@ -36,7 +36,7 @@ func (k8sStep *K8sStep) containerSpec() []corev1.Container {
 					MountPath: "/shared",
 				},
 				{
-					Name:      k8sStep.buidScriptVolumeName,
+					Name:      k8sStep.step.IDstring(),
 					MountPath: BuidScriptPath,
 					ReadOnly:  true,
 				},

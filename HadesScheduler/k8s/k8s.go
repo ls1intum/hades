@@ -12,6 +12,7 @@ import (
 type Scheduler struct {
 	// TODO: This may be problematic - We need to clarify how to access the cluster with the service account and find a solution that is compatible with both modes
 	k8sClient *kubernetes.Clientset
+	namespace string
 }
 
 type K8sConfig struct {
@@ -46,7 +47,11 @@ func NewK8sScheduler() Scheduler {
 
 	// Add the namespace to the scheduler
 	log.Info("Creating namespace in Kubernetes")
-	createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
+	_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
+	if err != nil {
+		// TODO: This may fail if the namespace already exists - we need to handle that case with a check
+		log.WithError(err).Info("Failed to create namespace in Kubernetes")
+	}
 
 	return scheduler
 }
@@ -62,6 +67,7 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 
 		return Scheduler{
 			k8sClient: initializeKubeconfig(K8sConfigKub),
+			namespace: k8sCfg.K8sNamespace,
 		}
 
 	case "serviceaccount":
@@ -81,5 +87,11 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 
 func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	log.Debug("Scheduling job in Kubernetes")
-	return nil
+	k8sJob := K8sJob{
+		job:              job,
+		k8sClient:        k.k8sClient,
+		namespace:        k.namespace,
+		sharedVolumeName: "shared",
+	}
+	return k8sJob.execute(ctx)
 }
