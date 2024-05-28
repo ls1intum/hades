@@ -56,6 +56,7 @@ func AddBuildToQueue(c *gin.Context) {
 		}
 	}
 
+	payload.QueuePayload.ID = utils.GenerateUUID()
 	log.Debug("Received build request ", payload)
 	json_payload, err := json.Marshal(payload.QueuePayload)
 	if err != nil {
