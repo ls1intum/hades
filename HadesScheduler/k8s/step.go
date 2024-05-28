@@ -19,17 +19,16 @@ type K8sStep struct {
 }
 
 const (
-	BuidScriptPath = "/tmp/buildscripts.sh"
+	BuidScriptPath = "/tmp/buildscript.sh"
 )
 
 // Returns the k8s container spec for the step. (To be used to build a Pod spec)
 func (k8sStep *K8sStep) containerSpec() []corev1.Container {
+
 	containerSpec := []corev1.Container{
 		{
-			Name:    k8sStep.step.IDstring(),
-			Image:   k8sStep.step.Image,
-			Command: []string{"/bin/sh", "-c", BuidScriptPath},
-			Args:    []string{},
+			Name:  k8sStep.step.IDstring(),
+			Image: k8sStep.step.Image,
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      k8sStep.sharedVolumeName,
@@ -43,5 +42,11 @@ func (k8sStep *K8sStep) containerSpec() []corev1.Container {
 			},
 		},
 	}
+
+	// Only use a script if it is provided - Otherwise we assume that the image has a script baked in as an entrypoint
+	if k8sStep.step.Script != "" {
+		containerSpec[0].Command = []string{"/bin/sh", "-c", BuidScriptPath}
+	}
+
 	return containerSpec
 }
