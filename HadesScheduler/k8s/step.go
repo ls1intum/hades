@@ -11,11 +11,6 @@ type K8sStep struct {
 
 	// The name of the volume which contains the shared data between all steps.
 	sharedVolumeName string
-
-	// The name of the volume which contains the build script data.
-	// All buildscripts are stored in a ConfigMap. Each script is then specified as a volume on the pod level.
-	// We use the volumes here to mount the buildscript into the container.
-	buidScriptVolumeName string
 }
 
 const (

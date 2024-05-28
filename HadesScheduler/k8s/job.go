@@ -132,9 +132,8 @@ func (k K8sJob) containerSpec() []corev1.Container {
 
 	for _, step := range k.job.Steps {
 		k8sStep := K8sStep{
-			step:                 step,
-			sharedVolumeName:     k.sharedVolumeName,
-			buidScriptVolumeName: step.IDstring(),
+			step:             step,
+			sharedVolumeName: k.sharedVolumeName,
 		}
 		containerSpec = append(containerSpec, k8sStep.containerSpec()...)
 	}
