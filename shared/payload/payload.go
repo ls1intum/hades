@@ -1,6 +1,11 @@
 package payload
 
-import "time"
+import (
+	"strconv"
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type RESTPayload struct {
 	Priority int `json:"priority"`
@@ -8,6 +13,7 @@ type RESTPayload struct {
 }
 
 type QueuePayload struct {
+	ID        uuid.UUID         `json:"id"`
 	Name      string            `json:"name" binding:"required"`
 	Timestamp time.Time         `json:"timestamp"`
 	Metadata  map[string]string `json:"metadata"`
@@ -22,4 +28,8 @@ type Step struct {
 	Metadata    map[string]string `json:"metadata"`
 	CPULimit    uint              `json:"cpu_limit"`
 	MemoryLimit string            `json:"memory_limit"`
+}
+
+func (s Step) IDstring() string {
+	return strconv.Itoa(s.ID)
 }
