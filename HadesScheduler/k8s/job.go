@@ -134,6 +134,7 @@ func (k K8sJob) containerSpec() []corev1.Container {
 		k8sStep := K8sStep{
 			step:             step,
 			sharedVolumeName: k.sharedVolumeName,
+			jobMetadata:      k.job.Metadata,
 		}
 		containerSpec = append(containerSpec, k8sStep.containerSpec()...)
 	}
