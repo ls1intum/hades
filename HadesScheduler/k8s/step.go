@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"fmt"
+
 	"github.com/ls1intum/hades/shared/payload"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -16,10 +18,6 @@ type K8sStep struct {
 	jobMetadata map[string]string
 }
 
-const (
-	BuidScriptPath = "/tmp/buildscript.sh"
-)
-
 // Returns the k8s container spec for the step. (To be used to build a Pod spec)
 func (k8sStep *K8sStep) containerSpec() []corev1.Container {
 
@@ -33,16 +31,16 @@ func (k8sStep *K8sStep) containerSpec() []corev1.Container {
 					MountPath: "/shared",
 				},
 				{
-					Name:      k8sStep.step.IDstring(),
-					MountPath: BuidScriptPath,
-					ReadOnly:  true,
+					Name:      fmt.Sprintf("%s-build-script", k8sStep.step.IDstring()),
+					MountPath: "/tmp/script",
 				},
 			},
+			// TODO: ImagePolicy should be configurable in the future
 			Env: k8sStep.containerEnvSpec()}}
 
 	// Only use a script if it is provided - Otherwise we assume that the image has a script baked in as an entrypoint
 	if k8sStep.step.Script != "" {
-		containerSpec[0].Command = []string{"/bin/sh", "-c", BuidScriptPath}
+		containerSpec[0].Command = []string{"/bin/sh", "-c", "/tmp/script/buildscript.sh"}
 	}
 
 	return containerSpec

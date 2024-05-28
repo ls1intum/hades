@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ls1intum/hades/shared/payload"
 	log "github.com/sirupsen/logrus"
@@ -94,10 +95,15 @@ func (k8sJob K8sJob) configMapSpec() *corev1.ConfigMap {
 func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 	volumeSpec := []corev1.Volume{}
 
+	// Define the access mode for the volume - otherwise the build script is not executable
+	// For some reason the mode has to be a pointer to int32
+	// ref: https://stackoverflow.com/questions/52254980/bash-script-mounted-as-configmap-with-777-permissions-cannot-be-ran
+	mode := int32(0o777)
+
 	// Create a Volume for each build step containing the build script. The build script is stored in a ConfigMap.
 	for _, step := range k.job.Steps {
 		volumeSpec = append(volumeSpec, corev1.Volume{
-			Name: step.IDstring(), // this is the name of the volume that needs to be mounted in a step container
+			Name: fmt.Sprintf("%s-build-script", step.IDstring()), // this is the name of the volume that needs to be mounted in a step container
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -107,6 +113,7 @@ func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 						{
 							Key:  step.IDstring(),
 							Path: "buildscript.sh",
+							Mode: &mode,
 						},
 					},
 				},

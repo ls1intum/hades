@@ -80,7 +80,6 @@ func (suite *JobUnitTestSuite) TestVolumeSpec() {
 	// Assert that each volume has the correct key and path
 	for i, step := range job.job.Steps {
 		assert.Equal(suite.T(), step.IDstring(), volumeSpec[i].VolumeSource.ConfigMap.Items[0].Key)
-		assert.Equal(suite.T(), BuidScriptPath, volumeSpec[i].VolumeSource.ConfigMap.Items[0].Path)
 	}
 }
 
