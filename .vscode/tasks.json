@@ -1,0 +1,11 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Redis Container",
+            "type": "shell",
+            "command": "docker compose up -d redis",
+            "problemMatcher": []
+        }
+    ]
+}

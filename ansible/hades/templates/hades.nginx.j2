@@ -1,0 +1,29 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _; # Catch-all server name
+
+    # Redirect all HTTP requests to HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name _; # Catch-all server name
+
+    # SSL configuration
+    ssl_certificate {{ hades_api_certificate_fullchain_path }};
+    ssl_certificate_key {{ hades_api_certificate_key_path }};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # Proxy settings
+    location / {
+        proxy_pass http://localhost:8080; # Proxy traffic to the Docker container
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
