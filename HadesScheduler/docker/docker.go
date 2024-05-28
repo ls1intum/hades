@@ -60,7 +60,7 @@ type jobIDContextKey string
 func NewDockerScheduler() *Scheduler {
 	var dockerCfg DockerEnvConfig
 	utils.LoadConfig(&dockerCfg)
-	slog.Debug("Docker config: %+v", "config", dockerCfg)
+	slog.Debug("Docker config", "config", dockerCfg)
 
 	var err error
 	// Create a new Docker client
@@ -90,9 +90,9 @@ func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler 
 }
 
 func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
-	// Create a custom logger only for this job
-	var job_logger *slog.Logger = slog.Default()
-	var container_logs_options container.LogConfig = container.LogConfig{}
+	// Create a custom logger only for this job when fluentd is enabled
+	var job_logger *slog.Logger
+	var container_logs_options container.LogConfig
 	if d.FluentdOptions.Addr != "" {
 		fluentd_client, err := fluentd.GetFluentdClient(d.FluentdOptions)
 		if err != nil {
@@ -113,6 +113,10 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 				"labels":              "job_id",
 			},
 		}
+	} else {
+		job_logger = slog.Default().With(slog.String("job_id", job.ID.String()))
+		container_logs_options = container.LogConfig{}
+		job_logger.Warn("No fluentd address provided, using default logger")
 	}
 	// Create a unique volume name for this job
 	volumeName := fmt.Sprintf("shared-%s", job.ID.String())

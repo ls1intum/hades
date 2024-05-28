@@ -34,7 +34,7 @@ func LoadConfig(cfg interface{}) {
 		log.With("error", err).Error("Error parsing environment variables")
 	}
 
-	log.Debug("Config loaded: ", cfg)
+	log.Debug("Config loaded", "config", cfg)
 }
 
 func ParseMemoryLimit(limit string) (int64, error) {
