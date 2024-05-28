@@ -86,6 +86,11 @@ func (k8sJob K8sJob) configMapSpec() *corev1.ConfigMap {
 	return &configMap
 }
 
+// Creates the volumeSpec for the Hades Job PodSpec.
+// For each step in the job config a volume containing the respective build script is created.
+// The respective build script is stored in a ConfigMap and here mounted as a volume.
+// Additionally, a shared volume is created to share data between the steps.
+// Reference: https://kubernetes.io/docs/concepts/configuration/configmap/#configmaps-and-pods
 func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 	volumeSpec := []corev1.Volume{}
 
@@ -96,7 +101,7 @@ func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: cm.Name, // this is the name of the ConfigMap that contains the build script
+						Name: cm.Name, // this is the name of the ConfigMap that contains all the build scripts
 					},
 					Items: []corev1.KeyToPath{
 						{
@@ -119,6 +124,9 @@ func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 	return volumeSpec
 }
 
+// Creates the containerSpec for the Hades Job PodSpec.
+// Each step in the job config is represented by a container.
+// This method combines the containerSpec of each step to a single containerSpec to be used in the PodSpec.
 func (k K8sJob) containerSpec() []corev1.Container {
 	containerSpec := []corev1.Container{}
 
