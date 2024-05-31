@@ -1,19 +1,21 @@
 module github.com/ls1intum/hades/hadesScheduler
 
-go 1.21.0
+go 1.22
 
 replace github.com/ls1intum/hades/shared => ../shared
 
 require (
 	github.com/docker/docker v26.1.3+incompatible
+	github.com/fluent/fluent-logger-golang v1.9.0
 	github.com/hibiken/asynq v0.24.1
 	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
-	github.com/sirupsen/logrus v1.9.3
+	github.com/samber/slog-fluentd/v2 v2.3.0
+	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 )
 
 require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
-	github.com/caarlos0/env/v11 v11.0.0 // indirect
+	github.com/caarlos0/env/v11 v11.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
@@ -32,10 +34,14 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
+	github.com/philhofer/fwd v1.1.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/redis/go-redis/v9 v9.4.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/samber/lo v1.38.1 // indirect
+	github.com/samber/slog-common v0.16.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
+	github.com/tinylib/msgp v1.1.8 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
 	go.opentelemetry.io/otel v1.24.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.22.0 // indirect

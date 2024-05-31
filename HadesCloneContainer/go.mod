@@ -1,6 +1,6 @@
 module github.com/ls1intum/hades/hadesCloneContainer
 
-go 1.21.0
+go 1.22
 
 require (
 	github.com/go-git/go-git/v5 v5.12.0
