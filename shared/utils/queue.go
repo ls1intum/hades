@@ -2,9 +2,9 @@ package utils
 
 import (
 	"crypto/tls"
+	"log/slog"
 
 	"github.com/hibiken/asynq"
-	log "github.com/sirupsen/logrus"
 )
 
 func SetupQueueClient(redis_addr string, redis_pwd string, tls_enabled bool) *asynq.Client {
@@ -15,7 +15,7 @@ func SetupQueueClient(redis_addr string, redis_pwd string, tls_enabled bool) *as
 	}
 	asynqClient := asynq.NewClient(redis_opts)
 	if asynqClient == nil {
-		log.Fatal("Failed to connect to Redis")
+		slog.Error("Failed to connect to Redis")
 		return nil
 	}
 	return asynqClient
@@ -37,10 +37,9 @@ func SetupQueueServer(redis_addr string, redis_pwd string, tls_enabled bool, con
 			"minimal":  1,
 		},
 		StrictPriority: true,
-		Logger:         log.StandardLogger(),
 	})
 	if asynqServer == nil {
-		log.Fatal("Failed to create Asynq server")
+		slog.Error("Failed to create Asynq server")
 		return nil
 	}
 	return asynqServer

@@ -7,7 +7,6 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
-	log "github.com/sirupsen/logrus"
 )
 
 type RedisConfig struct {
@@ -27,15 +26,15 @@ func LoadConfig(cfg interface{}) {
 
 	err := godotenv.Load()
 	if err != nil {
-		log.WithError(err).Info("Could not load .env file...")
+		log.With("error", err).Warn("Error loading .env file")
 	}
 
 	err = env.Parse(cfg)
 	if err != nil {
-		log.WithError(err).Fatal("Error parsing environment variables")
+		log.With("error", err).Error("Error parsing environment variables")
 	}
 
-	log.Debugf("Config loaded for Type %T: %+v", cfg, cfg)
+	log.Debug("Config loaded", "config", cfg)
 }
 
 func ParseMemoryLimit(limit string) (int64, error) {

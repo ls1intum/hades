@@ -11,7 +11,7 @@ import (
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 
-	log "github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 var AsynqServer *asynq.Server
@@ -21,14 +21,16 @@ type JobScheduler interface {
 }
 
 type HadesSchedulerConfig struct {
-	Concurrency uint `env:"CONCURRENCY" envDefault:"1"`
-	RedisConfig utils.RedisConfig
+	Concurrency       uint   `env:"CONCURRENCY" envDefault:"1"`
+	FluentdAddr       string `env:"FLUENTD_ADDR" envDefault:""`
+	FluentdMaxRetries uint   `env:"FLUENTD_MAX_RETRIES" envDefault:"3"`
+	RedisConfig       utils.RedisConfig
 }
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
-		log.SetLevel(log.DebugLevel)
-		log.Warn("DEBUG MODE ENABLED")
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+		slog.Warn("DEBUG MODE ENABLED")
 	}
 
 	var cfg HadesSchedulerConfig
@@ -36,7 +38,7 @@ func main() {
 
 	var executorCfg utils.ExecutorConfig
 	utils.LoadConfig(&executorCfg)
-	log.Debug("Executor config: ", executorCfg)
+	slog.Debug("Executor config: ", "config", executorCfg)
 
 	AsynqServer = utils.SetupQueueServer(cfg.RedisConfig.Addr, cfg.RedisConfig.Pwd, cfg.RedisConfig.TLS_Enabled, int(cfg.Concurrency))
 
@@ -46,22 +48,22 @@ func main() {
 		log.Info("Started HadesScheduler in Kubernetes mode")
 		scheduler = k8s.NewK8sScheduler()
 	case "docker":
-		log.Info("Started HadesScheduler in Docker mode")
-		scheduler = docker.NewDockerScheduler()
+		slog.Info("Started HadesScheduler in Docker mode")
+		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries)
 	default:
-		log.Fatalf("Invalid executor specified: %s", executorCfg.Executor)
+		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
 	}
 
 	AsynqServer.Run(asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
-		log.Debug("Received task: ", t.Type())
 		var job payload.QueuePayload
 		if err := json.Unmarshal(t.Payload(), &job); err != nil {
-			log.WithError(err).Error("Failed to unmarshal task payload")
+			slog.Error("Failed to unmarshal task payload", slog.Any("error", err))
 			return err
 		}
+		slog.Debug("Received job ", "id", job.ID.String())
 
 		if err := scheduler.ScheduleJob(ctx, job); err != nil {
-			log.WithError(err).Error("Failed to schedule job")
+			slog.Error("Failed to schedule job", slog.Any("error", err))
 			return err
 		}
 
