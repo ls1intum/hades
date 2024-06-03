@@ -2,6 +2,9 @@ name: Build Docker Images
 
 on:
   pull_request:
+    branches:
+      - main
+      - release/*
   push:
     branches:
       - main
