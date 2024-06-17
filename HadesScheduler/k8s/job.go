@@ -3,9 +3,9 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/ls1intum/hades/shared/payload"
-	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -21,21 +21,21 @@ type K8sJob struct {
 
 // Schedules a Hades Job on the Kubernetes cluster
 func (k8sJob K8sJob) execute(ctx context.Context) error {
-	log.Infof("Scheduling job %s", k8sJob.job.ID)
+	slog.Info("Scheduling job", "id", k8sJob.job.ID)
 
-	log.Debug("Create buildscript ConfigMap")
+	slog.Debug("Create buildscript ConfigMap")
 	configMap := k8sJob.configMapSpec()
-	log.Debugf("ConfigMap spec: %v", configMap)
+	slog.Debug("ConfigMap spec", "config_map", configMap)
 
-	log.Debug("Apply buildscirpt ConfigMap to Kubernetes")
+	slog.Debug("Apply buildscirpt ConfigMap to Kubernetes")
 	cm, err := k8sJob.k8sClient.CoreV1().ConfigMaps(k8sJob.namespace).Create(ctx, configMap, metav1.CreateOptions{})
 	if err != nil {
-		log.WithError(err).Error("Failed to create ConfigMap")
+		slog.With("error", err).Error("Failed to create ConfigMap")
 		return err
 	}
-	log.Infof("Successfully created buildscirpt ConfigMap %s", cm.Name)
+	slog.Info("Successfully created buildscirpt ConfigMap", "name", cm.Name)
 
-	log.Debug("Assembling PodSpec")
+	slog.Debug("Assembling PodSpec")
 	jobPodSpec := corev1.Pod{
 
 		ObjectMeta: metav1.ObjectMeta{
@@ -56,12 +56,12 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
-	log.Debugf("PodSpec: %v", jobPodSpec)
+	slog.Debug("PodSpec", "spec", jobPodSpec)
 
-	log.Infof("Apply PodSpec to Kubernetes")
+	slog.Info("Apply PodSpec to Kubernetes")
 	_, err = k8sJob.k8sClient.CoreV1().Pods(k8sJob.namespace).Create(ctx, &jobPodSpec, metav1.CreateOptions{})
 	if err != nil {
-		log.WithError(err).Error("Failed to create Pod")
+		slog.With("error", err).Error("Failed to create Pod")
 		return err
 	}
 
@@ -80,7 +80,7 @@ func (k8sJob K8sJob) configMapSpec() *corev1.ConfigMap {
 	}
 
 	for _, step := range k8sJob.job.Steps {
-		log.Debugf("Creating ConfigMap Data item for step %d", step.ID)
+		slog.Debug("Creating ConfigMap Data item for step", "id", step.ID)
 		configMap.Data[step.IDstring()] = step.Script
 	}
 

@@ -3,7 +3,8 @@ package k8s
 import (
 	"context"
 
-	log "github.com/sirupsen/logrus"
+	"log/slog"
+
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -11,7 +12,7 @@ import (
 
 func createNamespace(ctx context.Context, clientset *kubernetes.Clientset, namespace string) (*corev1.Namespace, error) {
 	// Create a namespace in the Kubernetes cluster
-	log.Infof("Creating namespace %s", namespace)
+	slog.Info("Creating namespace", "namespace", namespace)
 
 	ns, err := clientset.CoreV1().Namespaces().Create(
 		ctx,
@@ -22,24 +23,24 @@ func createNamespace(ctx context.Context, clientset *kubernetes.Clientset, names
 		}, v1.CreateOptions{})
 
 	if err != nil {
-		log.WithError(err).Error("error creating namespace")
+		slog.With("error", err).Error("error creating namespace")
 		return nil, err
 	}
-	log.Infof("Namespace %s created", namespace)
+	slog.Info("Namespace created", "namespace", namespace)
 
 	return ns, nil
 }
 
 func deleteNamespace(ctx context.Context, clientset *kubernetes.Clientset, namespace string) error {
 	// Delete a namespace in the Kubernetes cluster
-	log.Infof("Deleting namespace %s", namespace)
+	slog.Info("Deleting namespace", "namespace", namespace)
 
 	err := clientset.CoreV1().Namespaces().Delete(ctx, namespace, v1.DeleteOptions{})
 	if err != nil {
-		log.WithError(err).Error("error deleting namespace")
+		slog.With("error", err).Error("error deleting namespace")
 		return err
 	}
-	log.Infof("Namespace %s deleted - It may take some time until namespace is no longer in terminating state", namespace)
+	slog.Info("Namespace deleted - It may take some time until namespace is no longer in terminating state", "namespace", namespace)
 
 	return nil
 }

@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ls1intum/hades/shared/payload"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
@@ -63,7 +62,7 @@ func (suite *JobUnitTestSuite) TestVolumeSpec() {
 			"2": "echo 'Step 2'",
 		},
 	}
-	log.Infof("ConfigMap: %+v", configMap)
+	suite.T().Logf("ConfigMap: %+v", configMap)
 
 	// Call volumeSpec on the K8sJob
 	volumeSpec := job.volumeSpec(configMap)

@@ -4,11 +4,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"log/slog"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // initializeKubeconfig initializes a Kubernetes clientset based on the provided configuration.
@@ -22,32 +22,32 @@ func initializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
 
 	// Check if kubeconfig is explicitly set
 	if k8sCfg.kubeconfig != "" {
-		log.Infof("Using explicit kubeconfig: %s", k8sCfg.kubeconfig)
+		slog.Info("Using explicit kubeconfig", "config", k8sCfg.kubeconfig)
 		var err error
 		kubeConfig, err = clientcmd.BuildConfigFromFlags("", k8sCfg.kubeconfig)
 		if err != nil {
-			log.WithError(err).Panic("Error creating Kubernetes clientset")
+			slog.With("error", err).Error("Error creating Kubernetes clientset")
 		}
 	} else {
-		log.Info("Kubeconfig not set - using default location")
+		slog.Info("Kubeconfig not set - using default location")
 		// Load kubeconfig from default location
 		userHomeDir, err := os.UserHomeDir()
 		if err != nil {
-			log.WithError(err).Panic("error getting user home dir")
+			slog.With("error", err).Error("error getting user home dir")
 		}
 		kubeConfigPath := filepath.Join(userHomeDir, ".kube", "config")
-		log.Infof("Using kubeconfig: %s", kubeConfigPath)
+		slog.Info("Using kubeconfig", "path", kubeConfigPath)
 
 		// Create kubeconfig object
 		kubeConfig, err = clientcmd.BuildConfigFromFlags("", kubeConfigPath)
 		if err != nil {
-			log.WithError(err).Panic("error getting Kubernetes clientset")
+			slog.With("error", err).Error("error getting Kubernetes clientset")
 		}
 	}
 
 	clientset, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
-		log.WithError(err).Panic("error getting Kubernetes clientset")
+		slog.With("error", err).Error("error getting Kubernetes clientset")
 	}
 
 	return clientset

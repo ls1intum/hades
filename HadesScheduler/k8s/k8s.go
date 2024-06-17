@@ -3,9 +3,10 @@ package k8s
 import (
 	"context"
 
+	"log/slog"
+
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -34,23 +35,23 @@ type K8sConfigServiceaccount struct {
 }
 
 func NewK8sScheduler() Scheduler {
-	log.Debug("Initializing Kubernetes scheduler")
+	slog.Debug("Initializing Kubernetes scheduler")
 
 	// Load the user provided Kubernetes configuration
 	var k8sCfg K8sConfig
 	utils.LoadConfig(&k8sCfg)
-	log.Debugf("Kubernetes config: %+v", k8sCfg)
+	slog.Debug("Kubernetes config", "config", k8sCfg)
 
 	// Initialize the Kubernetes scheduler
-	log.Info("Initializing Kubernetes client")
+	slog.Info("Initializing Kubernetes client")
 	scheduler := initializeClusterAccess(k8sCfg)
 
 	// Add the namespace to the scheduler
-	log.Info("Creating namespace in Kubernetes")
+	slog.Info("Creating namespace in Kubernetes")
 	_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
 	if err != nil {
 		// TODO: This may fail if the namespace already exists - we need to handle that case with a check
-		log.WithError(err).Info("Failed to create namespace in Kubernetes")
+		slog.With("error", err).Info("Failed to create namespace in Kubernetes")
 	}
 
 	return scheduler
@@ -60,7 +61,7 @@ func NewK8sScheduler() Scheduler {
 func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 	switch k8sCfg.ConfigMode {
 	case "kubeconfig":
-		log.Info("Using kubeconfig for Kubernetes access")
+		slog.Info("Using kubeconfig for Kubernetes access")
 
 		var K8sConfigKub K8sConfigKubeconfig
 		utils.LoadConfig(&K8sConfigKub)
@@ -71,22 +72,22 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 		}
 
 	case "serviceaccount":
-		log.Info("Using service account for Kubernetes access")
+		slog.Info("Using service account for Kubernetes access")
 
 		var K8sConfigSvc K8sConfigServiceaccount
 		utils.LoadConfig(&K8sConfigSvc)
 
-		log.Fatal("Service account mode not yet implemented")
+		slog.Warn("Service account mode not yet implemented")
 		return Scheduler{}
 
 	default:
-		log.Fatalf("Invalid Kubernetes config mode specified: '%s'", k8sCfg.ConfigMode)
+		slog.Error("Invalid Kubernetes config mode specified", "config_mode", k8sCfg.ConfigMode)
 		return Scheduler{}
 	}
 }
 
 func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
-	log.Debug("Scheduling job in Kubernetes")
+	slog.Debug("Scheduling job in Kubernetes")
 	k8sJob := K8sJob{
 		job:              job,
 		k8sClient:        k.k8sClient,

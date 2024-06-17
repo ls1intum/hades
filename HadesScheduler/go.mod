@@ -10,7 +10,6 @@ require (
 	github.com/hibiken/asynq v0.24.1
 	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
 	github.com/samber/slog-fluentd/v2 v2.3.0
-	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 )
@@ -44,6 +43,7 @@ require (
 require (
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 )
 
