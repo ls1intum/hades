@@ -2,23 +2,19 @@ name: Build Docker Images
 
 on:
   pull_request:
+    branches:
+      - main
+      - release/*
   push:
     branches:
       - main
       - release/*
-    tags: '*'
   release:
     types:
       - created
-  
-  workflow_run:
-    workflows: ["Go Test"]
-    types:
-      - completed
 
 jobs:
   build:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -29,43 +25,7 @@ jobs:
             image: ghcr.io/ls1intum/hades/hades-scheduler
           - dockerfile: ./HadesCloneContainer/Dockerfile
             image: ghcr.io/ls1intum/hades/hades-clone-container
-
-    steps:
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ matrix.image }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: all
-
-      - name: Install Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Docker Image
-        uses: docker/build-push-action@v5
-        with:
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@main
+    with:
+      image-name: ${{ matrix.image }}
+      docker-file: ${{ matrix.dockerfile }}
