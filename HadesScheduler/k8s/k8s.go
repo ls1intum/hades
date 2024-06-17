@@ -89,7 +89,7 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	slog.Debug("Scheduling job in Kubernetes")
 	k8sJob := K8sJob{
-		job:              job,
+		QueuePayload:     job,
 		k8sClient:        k.k8sClient,
 		namespace:        k.namespace,
 		sharedVolumeName: "shared",

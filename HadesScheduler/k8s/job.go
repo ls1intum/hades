@@ -13,7 +13,7 @@ import (
 )
 
 type K8sJob struct {
-	job              payload.QueuePayload
+	payload.QueuePayload
 	k8sClient        *kubernetes.Clientset
 	namespace        string
 	sharedVolumeName string
@@ -21,7 +21,7 @@ type K8sJob struct {
 
 // Schedules a Hades Job on the Kubernetes cluster
 func (k8sJob K8sJob) execute(ctx context.Context) error {
-	slog.Info("Scheduling job", "id", k8sJob.job.ID)
+	slog.Info("Scheduling job", "id", k8sJob.ID)
 
 	slog.Debug("Create buildscript ConfigMap")
 	configMap := k8sJob.configMapSpec()
@@ -39,7 +39,7 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 	jobPodSpec := corev1.Pod{
 
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      k8sJob.job.ID.String(),
+			Name:      k8sJob.ID.String(),
 			Namespace: k8sJob.namespace,
 		},
 
@@ -73,13 +73,13 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 func (k8sJob K8sJob) configMapSpec() *corev1.ConfigMap {
 	configMap := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      k8sJob.job.ID.String(),
+			Name:      k8sJob.ID.String(),
 			Namespace: k8sJob.namespace,
 		},
 		Data: map[string]string{},
 	}
 
-	for _, step := range k8sJob.job.Steps {
+	for _, step := range k8sJob.Steps {
 		slog.Debug("Creating ConfigMap Data item for step", "id", step.ID)
 		configMap.Data[step.IDstring()] = step.Script
 	}
@@ -101,7 +101,7 @@ func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 	mode := int32(0o777)
 
 	// Create a Volume for each build step containing the build script. The build script is stored in a ConfigMap.
-	for _, step := range k.job.Steps {
+	for _, step := range k.Steps {
 		volumeSpec = append(volumeSpec, corev1.Volume{
 			Name: fmt.Sprintf("%s-build-script", step.IDstring()), // this is the name of the volume that needs to be mounted in a step container
 			VolumeSource: corev1.VolumeSource{
@@ -137,11 +137,11 @@ func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 func (k K8sJob) containerSpec() []corev1.Container {
 	containerSpec := []corev1.Container{}
 
-	for _, step := range k.job.Steps {
+	for _, step := range k.Steps {
 		k8sStep := K8sStep{
 			step:             step,
 			sharedVolumeName: k.sharedVolumeName,
-			jobMetadata:      k.job.Metadata,
+			jobMetadata:      k.Metadata,
 		}
 		containerSpec = append(containerSpec, k8sStep.containerSpec()...)
 	}

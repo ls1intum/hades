@@ -76,7 +76,7 @@ type JobK8sSuite struct {
 
 func (suite *JobK8sSuite) TestConfigMapCreate() {
 	job := K8sJob{
-		job: payload.QueuePayload{
+		QueuePayload: payload.QueuePayload{
 			ID: uuid.New(),
 			Steps: []payload.Step{
 				{ID: 1, Script: "echo 'Step 1'"},
@@ -95,7 +95,7 @@ func (suite *JobK8sSuite) TestConfigMapCreate() {
 	suite.T().Log("ConfigMap created: ", scheduledCM)
 
 	// Get configMap from Kubernetes
-	actualCM, err := suite.clientset.CoreV1().ConfigMaps("default").Get(context.Background(), job.job.ID.String(), metav1.GetOptions{})
+	actualCM, err := suite.clientset.CoreV1().ConfigMaps("default").Get(context.Background(), job.ID.String(), metav1.GetOptions{})
 	assert.Nil(suite.T(), err)
 	suite.T().Log("ConfigMap retrieved: ", actualCM)
 

@@ -18,7 +18,7 @@ type JobUnitTestSuite struct {
 func (suite *JobUnitTestSuite) TestConfigMapSpec() {
 	// Create a new K8sJob with a QueuePayload that has a few steps
 	job := K8sJob{
-		job: payload.QueuePayload{
+		QueuePayload: payload.QueuePayload{
 			ID: uuid.New(),
 			Steps: []payload.Step{
 				{ID: 1, Script: "echo 'Step 1'"},
@@ -31,10 +31,10 @@ func (suite *JobUnitTestSuite) TestConfigMapSpec() {
 	configMap := job.configMapSpec()
 
 	// Assert that the ConfigMap's name is the same as the QueuePayload's ID
-	assert.Equal(suite.T(), job.job.ID.String(), configMap.ObjectMeta.Name)
+	assert.Equal(suite.T(), job.ID.String(), configMap.ObjectMeta.Name)
 
 	// Assert that the ConfigMap's data contains a key for each step in the QueuePayload
-	for _, step := range job.job.Steps {
+	for _, step := range job.Steps {
 		script, ok := configMap.Data[step.IDstring()]
 		assert.True(suite.T(), ok, "ConfigMap should contain key for step")
 		assert.Equal(suite.T(), step.Script, script, "Script for step in ConfigMap should match step's script")
@@ -43,7 +43,7 @@ func (suite *JobUnitTestSuite) TestConfigMapSpec() {
 func (suite *JobUnitTestSuite) TestVolumeSpec() {
 	// Create a new K8sJob with a QueuePayload that has a few steps
 	job := K8sJob{
-		job: payload.QueuePayload{
+		QueuePayload: payload.QueuePayload{
 			ID: uuid.New(),
 			Steps: []payload.Step{
 				{ID: 1, Script: "echo 'Step 1'"},
@@ -55,7 +55,7 @@ func (suite *JobUnitTestSuite) TestVolumeSpec() {
 	// Create a ConfigMap for testing
 	configMap := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: job.job.ID.String(),
+			Name: job.ID.String(),
 		},
 		Data: map[string]string{
 			"1": "echo 'Step 1'",
@@ -68,16 +68,16 @@ func (suite *JobUnitTestSuite) TestVolumeSpec() {
 	volumeSpec := job.volumeSpec(configMap)
 
 	// Assert that the number of volumes matches the number of steps in the QueuePayload
-	assert.Len(suite.T(), volumeSpec, len(job.job.Steps))
+	assert.Len(suite.T(), volumeSpec, len(job.Steps))
 
 	// Assert that each volume has the correct name and ConfigMap reference
-	for i, step := range job.job.Steps {
+	for i, step := range job.Steps {
 		assert.Equal(suite.T(), step.IDstring(), volumeSpec[i].Name)
 		assert.Equal(suite.T(), configMap.Name, volumeSpec[i].VolumeSource.ConfigMap.LocalObjectReference.Name)
 	}
 
 	// Assert that each volume has the correct key and path
-	for i, step := range job.job.Steps {
+	for i, step := range job.Steps {
 		assert.Equal(suite.T(), step.IDstring(), volumeSpec[i].VolumeSource.ConfigMap.Items[0].Key)
 	}
 }
