@@ -6,7 +6,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/docker/docker/api/types"
+	imagetype "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 )
 
@@ -20,7 +20,7 @@ func pullImages(ctx context.Context, client *client.Client, images ...string) er
 		go func(img string) {
 			defer wg.Done()
 
-			response, err := client.ImagePull(ctx, img, types.ImagePullOptions{})
+			response, err := client.ImagePull(ctx, img, imagetype.PullOptions{})
 			if err != nil {
 				errorsCh <- fmt.Errorf("failed to pull image %s: %v", img, err)
 				return
