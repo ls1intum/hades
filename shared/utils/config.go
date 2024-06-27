@@ -15,15 +15,15 @@ type RedisConfig struct {
 	TLS_Enabled bool   `env:"REDIS_TLS_ENABLED" envDefault:"false"`
 }
 
-type K8sConfig struct {
-	HadesCInamespace string `env:"HADES_CI_NAMESPACE" envDefault:"hades-ci"`
-}
-
 type ExecutorConfig struct {
+	// Executor is the executor to use for running the jobs (default: docker)
+	// Possible values: docker, k8s
 	Executor string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
 }
 
 func LoadConfig(cfg interface{}) {
+	log.Debug("Loading config for: ", "config", cfg)
+
 	err := godotenv.Load()
 	if err != nil {
 		log.With("error", err).Warn("Error loading .env file")

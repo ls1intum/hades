@@ -14,7 +14,7 @@
             }
         },
         {
-            "name": "HadesScheduler",
+            "name": "HadesScheduler (docker)",
             "type": "go",
             "request": "launch",
             "mode": "auto",
@@ -22,13 +22,31 @@
             "preLaunchTask": "Start Redis Container", // This will start the Redis container before launching the scheduler - defined in .vscode/tasks.json
             "env": {
                 "DEBUG": "true",
+                "HADES_EXECUTOR": "docker"
+            }
+        }, 
+        {
+            "name": "HadesScheduler (k8s)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/HadesScheduler",
+            "preLaunchTask": "Start Redis Container", // This will start the Redis container before launching the scheduler - defined in .vscode/tasks.json
+            "env": {
+                "DEBUG": "true",
+                "HADES_EXECUTOR": "k8s",
+                "K8S_CONFIG_MODE": "kubeconfig",
             }
         }
     ],
     "compounds": [
         {
-            "name": "HadesAPI and HadesScheduler",
-            "configurations": ["HadesAPI", "HadesScheduler"]
+            "name": "HadesAPI and HadesScheduler (docker)",
+            "configurations": ["HadesAPI", "HadesScheduler (docker)"]
+        },
+        {
+            "name": "HadesAPI and HadesScheduler (k8s)",
+            "configurations": ["HadesAPI", "HadesScheduler (k8s)"]
         }
     ]
 }
