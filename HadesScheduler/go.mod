@@ -5,7 +5,7 @@ go 1.22
 replace github.com/ls1intum/hades/shared => ../shared
 
 require (
-	github.com/docker/docker v27.0.3+incompatible
+	github.com/docker/docker v27.1.0+incompatible
 	github.com/fluent/fluent-logger-golang v1.9.0
 	github.com/hibiken/asynq v0.24.1
 	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
