@@ -55,10 +55,12 @@ services:
   
   fluentbit:
     container_name: fluentbit
-    image: fluent/fluent-bit
+    image: fluent/fluent-bit:latest
     ports:
       - "24224:24224"
-    command: /fluent-bit/bin/fluent-bit -i forward -o stdout -p format=json_lines -f 1
+    volumes:
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+    command: /fluent-bit/bin/fluent-bit -c /fluent-bit/etc/fluent-bit.conf
 
 networks:
   hades:

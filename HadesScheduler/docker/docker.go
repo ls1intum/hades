@@ -92,29 +92,42 @@ func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler 
 func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	// Create a custom logger only for this job when fluentd is enabled
 	var job_logger *slog.Logger
+	var status_logger *slog.Logger
 	var container_logs_options container.LogConfig
 	if d.FluentdOptions.Addr != "" {
 		fluentd_client, err := fluentd.GetFluentdClient(d.FluentdOptions)
 		if err != nil {
 			slog.Error("Failed to create fluentd client", slog.Any("error", err))
-			return err
-		}
-		job_logger = slog.New(slogfluentd.Option{
-			Level:  slog.LevelDebug,
-			Client: fluentd_client,
-		}.NewFluentdHandler()).With(slog.String("job_id", job.ID.String()))
+			job_logger = slog.Default().With(slog.String("job_id", job.ID.String()))
+			status_logger = slog.Default().With(slog.String("job_id", job.ID.String()))
+			container_logs_options = container.LogConfig{}
+		} else {
+			job_logger = slog.New(slogfluentd.Option{
+				Level:  slog.LevelDebug,
+				Client: fluentd_client,
+				Tag:    "build_logs",
+			}.NewFluentdHandler()).With(slog.String("job_id", job.ID.String()))
 
-		// Configure the handler for the container logs
-		container_logs_options = container.LogConfig{
-			Type: "fluentd",
-			Config: map[string]string{
-				"fluentd-address":     d.FluentdOptions.Addr,
-				"fluentd-max-retries": strconv.FormatUint(uint64(d.FluentdOptions.MaxRetry), 10),
-				"labels":              "job_id",
-			},
+			status_logger = slog.New(slogfluentd.Option{
+				Level:  slog.LevelDebug,
+				Client: fluentd_client,
+				Tag:    "build_status",
+			}.NewFluentdHandler()).With(slog.String("job_id", job.ID.String()))
+
+			// Configure the handler for the container logs
+			container_logs_options = container.LogConfig{
+				Type: "fluentd",
+				Config: map[string]string{
+					"fluentd-address":     d.FluentdOptions.Addr,
+					"fluentd-max-retries": strconv.FormatUint(uint64(d.FluentdOptions.MaxRetry), 10),
+					"labels":              "job_id",
+				},
+			}
+			slog.Info("Using fluentd logger", "fluentd_address", d.FluentdOptions.Addr)
 		}
 	} else {
 		job_logger = slog.Default().With(slog.String("job_id", job.ID.String()))
+		status_logger = slog.Default().With(slog.String("job_id", job.ID.String()))
 		container_logs_options = container.LogConfig{}
 		job_logger.Warn("No fluentd address provided, using default logger")
 	}
@@ -136,14 +149,17 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		DockerProps:  jobDockerConfig,
 		QueuePayload: job,
 	}
+	status_logger.Info("Executing")
 	err := docker_job.execute(ctx)
 	if err != nil {
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
+		status_logger.Error("Failed", slog.Any("error", err))
 		return err
 	}
 
 	// Delete the shared volume after the job is done
 	defer func() {
+		status_logger.Info("Cleaning up")
 		time.Sleep(1 * time.Second)
 		if err := deleteSharedVolume(ctx, d.cli, volumeName); err != nil {
 			job_logger.Error("Failed to delete shared volume", slog.Any("error", err))
@@ -152,6 +168,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		job_logger.Info("Volume deleted", slog.Any("volume", volumeName))
 	}()
 
+	status_logger.Info("Completed")
 	return nil
 }
 
