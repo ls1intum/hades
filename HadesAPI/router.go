@@ -27,6 +27,7 @@ func setupRouter(auth_key string) *gin.Engine {
 
 	r.GET("/ping", ping)
 	r.POST("/build", AddBuildToQueue)
+	r.GET("/task/:id", GetTaskState)
 	return r
 }
 
@@ -80,6 +81,30 @@ func AddBuildToQueue(c *gin.Context) {
 	log.Printf(" [*] Successfully enqueued job: %+v", info.ID)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Successfully enqueued job",
-		"job_id":  payload.QueuePayload.ID.String(),
+		"task_id": info.ID,
+		"job_id":  payload.QueuePayload.ID,
 	})
+}
+
+func GetTaskState(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.String(http.StatusBadRequest, "No task ID provided")
+		return
+	}
+	inspector := asynq.NewInspector(asynq.RedisClientOpt{Addr: cfg.RedisConfig.Addr, Password: cfg.RedisConfig.Pwd})
+	queues, err := inspector.Queues()
+	if err != nil {
+		log.WithError(err).Error("Failed to get queues")
+		c.String(http.StatusInternalServerError, "Failed to get queues")
+		return
+	}
+	for _, q := range queues {
+		taskInfo, err := inspector.GetTaskInfo(q, id)
+		if err == nil {
+			c.JSON(http.StatusOK, taskInfo.State.String())
+			return
+		}
+	}
+	c.String(http.StatusNotFound, "Task not found")
 }
