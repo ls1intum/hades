@@ -27,11 +27,13 @@ type K8sConfig struct {
 
 // K8sConfigKubeconfig is used as configuration if used with a kubeconfig file
 type K8sConfigKubeconfig struct {
+	K8sConfig
 	kubeconfig string `env:"KUBECONFIG"`
 }
 
 // K8sConfigServiceaccount is used as configuration if used with a service account
 type K8sConfigServiceaccount struct {
+	K8sConfig
 }
 
 func NewK8sScheduler() Scheduler {
