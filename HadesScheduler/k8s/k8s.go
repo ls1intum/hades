@@ -48,6 +48,8 @@ func NewK8sScheduler() Scheduler {
 	slog.Info("Initializing Kubernetes client")
 	scheduler := initializeClusterAccess(k8sCfg)
 
+	// TODO: Check cluster connection and print cluster nodes to log
+
 	// Add the namespace to the scheduler
 	slog.Info("Creating namespace in Kubernetes")
 	_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)

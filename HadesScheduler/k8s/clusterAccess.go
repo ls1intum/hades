@@ -29,6 +29,7 @@ func initializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
 			slog.With("error", err).Error("Error creating Kubernetes clientset")
 		}
 	} else {
+		// TODO: Discuss if this is a good idea - it may be risky to simply assume the default k8s config is ok to use. If the developer has a prod config set up, we would simply use it without asking.
 		slog.Info("Kubeconfig not set - using default location")
 		// Load kubeconfig from default location
 		userHomeDir, err := os.UserHomeDir()
