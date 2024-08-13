@@ -1,5 +1,5 @@
 meta {
-  name: Create Build Job
+  name: Create Build Job (Test Succeed)
   type: http
   seq: 2
 }
@@ -13,7 +13,9 @@ post {
 body:json {
   {
     "name": "Example Job",
-    "metadata": {}, // global metadata
+    "metadata": {
+      "GLOBAL": "test"
+    },
     "timestamp": "2021-01-01T00:00:00.000Z",
     "priority": 3, // optional, default 3
     "steps": [
@@ -39,15 +41,15 @@ body:json {
         "id": 2, // mandatory to declare the order of execution
         "name": "Execute",
         "image": "ls1tum/artemis-maven-template:java17-18", // mandatory
-        "script": "cd ./example && ./gradlew --status && ./gradlew clean test"
+        "script": "set +e && cd ./shared/example || exit 0 && ./gradlew --status || exit 0 && ./gradlew clean test || exit 0"
       }
     ]
   }
 }
 
 vars:pre-request {
-  user: {{process.env.USERNAME}}
-  password: {{process.env.PASSWORD}}
-  test_repo: {{process.env.TEST_REPO}}
-  assignment_repo: {{process.env.ASSIGNMENT_REPO}}
+  user: ""
+  password: ""
+  test_repo: "https://github.com/Mtze/Artemis-Java-Test.git"
+  assignment_repo: "https://github.com/Mtze/Artemis-Java-Solution.git"
 }
