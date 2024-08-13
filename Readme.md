@@ -37,43 +37,33 @@ HadesCI is built upon the following key components:
 - You need a kubeconfig file to connect to a Kubernetes cluster.
 - [Docker](https://docs.docker.com/get-docker/)
 - [Docker Compose](https://docs.docker.com/compose/install/)
+- [Kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+- [Minikube](https://minikube.sigs.k8s.io/docs/start/)
 
-### Running with Docker Compose
+### Running in Docker Mode
 
-Update the `.env` file with the path to your kubeconfig file
+To run HadesCI in Docker mode, follow these steps:
 
-Start hadesci with docker-compose:
+1. Copy the `.env.example` file to `.env`.
+   - The default is to use docker as the executor!
+   - Changes should not be necessary for a local test.
+2. Start the HadesCI services using Docker Compose
+
+```bash
+docker-compose -f docker-compose.yml up -d
+```
+
+### Running in Kubernetes Mode
+
+> We assume that you have a Kubernetes cluster running and a kubeconfig file to connect to it.
+
+To run HadesCI in Kubernetes mode, follow these steps:
+
+1. Copy the `.env.example` file to `.env`.
+   - Change the `HADES_EXECUTOR` variable to `kubernetes`.
+2. Adjust the Kubeconfig volume mount in the `docker-compose.k8s.yml` file.
+3. Start the HadesCI services using Docker Compose
 
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.k8s.yml up -d
 ```
-
-## Development
-
-### Prerequisites
-
-To get started with HadesCI development, make sure you have the following prerequisites installed:
-
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
-- [Go](https://golang.org/doc/install)
-- [Kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-- [Minikube](https://minikube.sigs.k8s.io/docs/start/)
-
-### Running Locally
-
-To run HadesCI locally, follow these steps:
-
-1. Start a local Kubernetes cluster using Minikube:
-
-   ```bash
-   minikube start
-   ```
-
-2. Run HadesCI with Docker Compose:
-
-   ```bash
-   docker-compose up
-   ```
-
-With these steps, you'll have a local instance of HadesCI up and running, ready for development and testing. Enjoy coding and building scalable CI solutions with HadesCI!

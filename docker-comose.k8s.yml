@@ -9,4 +9,5 @@ services:
       - KUBECONFIG=/root/.kube/config
       - HADES_EXECUTOR=k8s
     volumes:
+      # Adjust this to the path of your kubeconfig file
       - ./.kube/config:/root/.kube/config
