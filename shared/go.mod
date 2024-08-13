@@ -3,7 +3,7 @@ module github.com/ls1intum/hades/shared
 go 1.22
 
 require (
-	github.com/caarlos0/env/v11 v11.0.1
+	github.com/caarlos0/env/v11 v11.2.0
 	github.com/google/uuid v1.6.0
 	github.com/hibiken/asynq v0.24.1
 	github.com/joho/godotenv v1.5.1
