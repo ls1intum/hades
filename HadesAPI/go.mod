@@ -14,6 +14,10 @@ require (
 
 replace github.com/ls1intum/hades/shared => ../shared
 
+
+// This is added because gin produces an ambiguous import error without it - I don't know why :(
+replace github.com/ugorji/go/codec => github.com/ugorji/go/codec v1.2.12
+
 require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
