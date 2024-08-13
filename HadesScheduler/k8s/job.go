@@ -69,7 +69,7 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 }
 
 // Creates a ConfigMapSpec containing the build script of each step of the job
-// Based on this configMap, individual step volumes are created and mounted inside the respectiv container
+// Based on this configMap, individual step volumes are created and mounted inside the respective container
 func (k8sJob K8sJob) configMapSpec() *corev1.ConfigMap {
 	configMap := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
