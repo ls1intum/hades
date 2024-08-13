@@ -1,6 +1,6 @@
 module github.com/ls1intum/hades/hadesAPI
 
-go 1.22
+go 1.22.0
 
 require (
 	github.com/gin-gonic/gin v1.10.0
@@ -13,7 +13,6 @@ require (
 )
 
 replace github.com/ls1intum/hades/shared => ../shared
-
 
 // This is added because gin produces an ambiguous import error without it - I don't know why :(
 replace github.com/ugorji/go/codec => github.com/ugorji/go/codec v1.2.12
