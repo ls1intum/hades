@@ -1,6 +1,7 @@
 package payload
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,4 +28,8 @@ type Step struct {
 	Metadata    map[string]string `json:"metadata"`
 	CPULimit    uint              `json:"cpu_limit"`
 	MemoryLimit string            `json:"memory_limit"`
+}
+
+func (s Step) IDstring() string {
+	return strconv.Itoa(s.ID)
 }
