@@ -12,7 +12,7 @@ import (
 
 func createNamespace(ctx context.Context, clientset *kubernetes.Clientset, namespace string) (*corev1.Namespace, error) {
 	// Create a namespace in the Kubernetes cluster
-	slog.Info("Creating namespace", "namespace", namespace)
+	slog.Debug("Creating namespace", "namespace", namespace)
 
 	ns, err := clientset.CoreV1().Namespaces().Create(
 		ctx,
@@ -33,7 +33,7 @@ func createNamespace(ctx context.Context, clientset *kubernetes.Clientset, names
 
 func deleteNamespace(ctx context.Context, clientset *kubernetes.Clientset, namespace string) error {
 	// Delete a namespace in the Kubernetes cluster
-	slog.Info("Deleting namespace", "namespace", namespace)
+	slog.Debug("Deleting namespace", "namespace", namespace)
 
 	err := clientset.CoreV1().Namespaces().Delete(ctx, namespace, v1.DeleteOptions{})
 	if err != nil {

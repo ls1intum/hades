@@ -27,13 +27,13 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 	configMap := k8sJob.configMapSpec()
 	slog.Debug("ConfigMap spec", "config_map", configMap)
 
-	slog.Debug("Apply buildscirpt ConfigMap to Kubernetes")
+	slog.Debug("Apply buildscript ConfigMap to Kubernetes")
 	cm, err := k8sJob.k8sClient.CoreV1().ConfigMaps(k8sJob.namespace).Create(ctx, configMap, metav1.CreateOptions{})
 	if err != nil {
 		slog.With("error", err).Error("Failed to create ConfigMap")
 		return err
 	}
-	slog.Info("Successfully created buildscirpt ConfigMap", "name", cm.Name)
+	slog.Debug("Successfully created buildscript ConfigMap", "name", cm.Name)
 
 	slog.Debug("Assembling PodSpec")
 	jobPodSpec := corev1.Pod{
