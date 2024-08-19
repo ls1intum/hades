@@ -7,7 +7,7 @@ toolchain go1.22.5
 replace github.com/ls1intum/hades/shared => ../shared
 
 require (
-	github.com/docker/docker v27.1.1+incompatible
+	github.com/docker/docker v27.1.2+incompatible
 	github.com/fluent/fluent-logger-golang v1.9.0
 	github.com/hibiken/asynq v0.24.1
 	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
@@ -45,6 +45,7 @@ require (
 require (
 	github.com/containerd/errdefs v0.1.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
+	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
