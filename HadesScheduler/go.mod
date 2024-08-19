@@ -98,7 +98,7 @@ require (
 	github.com/samber/lo v1.44.0 // indirect
 	github.com/samber/slog-common v0.17.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
-	github.com/testcontainers/testcontainers-go/modules/k3s v0.31.0
+	github.com/testcontainers/testcontainers-go/modules/k3s v0.32.0
 	github.com/tinylib/msgp v1.1.8 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
 	go.opentelemetry.io/otel v1.24.0 // indirect
