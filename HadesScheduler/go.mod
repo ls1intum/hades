@@ -7,7 +7,7 @@ toolchain go1.22.5
 replace github.com/ls1intum/hades/shared => ../shared
 
 require (
-	github.com/docker/docker v27.1.1+incompatible
+	github.com/docker/docker v27.1.2+incompatible
 	github.com/fluent/fluent-logger-golang v1.9.0
 	github.com/hibiken/asynq v0.24.1
 	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
@@ -19,9 +19,7 @@ require (
 require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
-	github.com/Microsoft/hcsshim v0.11.5 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
-	github.com/containerd/containerd v1.7.18 // indirect
 	github.com/cpuguy83/dockercfg v0.3.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
@@ -33,24 +31,24 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/shirou/gopsutil/v3 v3.23.12 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
-	github.com/testcontainers/testcontainers-go v0.32.0
+	github.com/testcontainers/testcontainers-go v0.33.0
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
-	golang.org/x/crypto v0.23.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20231016165738-49dd2c1f3d0b // indirect
-	google.golang.org/grpc v1.60.1 // indirect
+	golang.org/x/crypto v0.24.0 // indirect
 )
 
 require (
-	github.com/containerd/errdefs v0.1.0 // indirect
+	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
+	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
+	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/oauth2 v0.13.0 // indirect
-	golang.org/x/term v0.20.0 // indirect
+	golang.org/x/net v0.26.0 // indirect
+	golang.org/x/oauth2 v0.18.0 // indirect
+	golang.org/x/term v0.21.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -98,7 +96,7 @@ require (
 	github.com/samber/lo v1.44.0 // indirect
 	github.com/samber/slog-common v0.17.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
-	github.com/testcontainers/testcontainers-go/modules/k3s v0.31.0
+	github.com/testcontainers/testcontainers-go/modules/k3s v0.33.0
 	github.com/tinylib/msgp v1.1.8 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
 	go.opentelemetry.io/otel v1.24.0 // indirect
@@ -106,7 +104,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.22.0 // indirect
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect

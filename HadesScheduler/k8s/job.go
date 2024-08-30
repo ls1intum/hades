@@ -137,7 +137,11 @@ func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 func (k K8sJob) containerSpec() []corev1.Container {
 	containerSpec := []corev1.Container{}
 
+	// Add the uuid to the job metadata
+	k.Metadata["UUID"] = k.ID.String()
+
 	for _, step := range k.Steps {
+
 		k8sStep := K8sStep{
 			step:             step,
 			sharedVolumeName: k.sharedVolumeName,

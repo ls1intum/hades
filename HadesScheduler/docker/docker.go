@@ -196,6 +196,10 @@ func (s DockerStep) execute(ctx context.Context) error {
 	}
 
 	job_id := ctx.Value(jobIDContextKey("job_id")).(string)
+
+	// Add the job_id to the container envs
+	envs = append(envs, fmt.Sprintf("UUID=%s", job_id))
+
 	container_config := container.Config{
 		Image:      s.Image,
 		Env:        envs,
