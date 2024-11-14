@@ -190,8 +190,8 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/testcontainers/testcontainers-go v0.34.0 h1:5fbgF0vIN5u+nD3IWabQwRybuB4GY8G2HHgCkbMzMHo=
 github.com/testcontainers/testcontainers-go v0.34.0/go.mod h1:6P/kMkQe8yqPHfPWNulFGdFHTD8HB2vLq/231xY2iPQ=
-github.com/testcontainers/testcontainers-go/modules/k3s v0.33.0 h1:vKz46Z+vClMc6MNnwpcw8tNjOOprJxWzsn4J+1noTM4=
-github.com/testcontainers/testcontainers-go/modules/k3s v0.33.0/go.mod h1:3ePe1rQStxDjBKN05hxN+5Z16hNf+Iu38uIxABmIGk0=
+github.com/testcontainers/testcontainers-go/modules/k3s v0.34.0 h1:uY4iM8S8BK4Ha5vvDj/DBnmzXlEqYGGQedKxZYby20E=
+github.com/testcontainers/testcontainers-go/modules/k3s v0.34.0/go.mod h1:uOBwCScZA5fGwkpAnkwcQWhlwRXMCX+5/mmQ9o0enCY=
 github.com/tinylib/msgp v1.1.8 h1:FCXC1xanKO4I8plpHGH2P7koL/RzZs12l/+r7vakfm0=
 github.com/tinylib/msgp v1.1.8/go.mod h1:qkpG+2ldGg4xRFmx+jfTvZPxfGFhi64BcnL9vkCm/Tw=
 github.com/tklauser/go-sysconf v0.3.12 h1:0QaGUFOdQaIVdPgfITYzaTegZvdCjmYO52cSFAEVmqU=
