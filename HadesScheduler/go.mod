@@ -12,7 +12,7 @@ require (
 	github.com/hibiken/asynq v0.25.0
 	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
 	github.com/samber/slog-fluentd/v2 v2.5.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.34.0
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 )
