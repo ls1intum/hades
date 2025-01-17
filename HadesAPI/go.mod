@@ -9,7 +9,7 @@ require (
 	github.com/ls1intum/hades/shared v0.0.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
-	github.com/testcontainers/testcontainers-go v0.34.0
+	github.com/testcontainers/testcontainers-go v0.35.0
 )
 
 replace github.com/ls1intum/hades/shared => ../shared
