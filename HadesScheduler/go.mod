@@ -13,7 +13,7 @@ require (
 	github.com/ls1intum/hades/shared v0.0.0-20241212135056-89dffd2392b1
 	github.com/samber/slog-fluentd/v2 v2.5.2
 	github.com/stretchr/testify v1.10.0
-	github.com/testcontainers/testcontainers-go v0.34.0
+	github.com/testcontainers/testcontainers-go v0.35.0
 	golang.org/x/exp v0.0.0-20250103183323-7d7fa50e5329
 )
 
