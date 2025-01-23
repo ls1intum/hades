@@ -26,7 +26,7 @@ jobs:
             image: ghcr.io/ls1intum/hades/hades-scheduler
           - dockerfile: ./HadesCloneContainer/Dockerfile
             image: ghcr.io/ls1intum/hades/hades-clone-container
-    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@main
+    uses: ls1intum/.github/.github/workflows/native-build-and-push-docker-image.yml@feat/native-runner
     with:
       image-name: ${{ matrix.image }}
       docker-file: ${{ matrix.dockerfile }}
