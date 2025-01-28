@@ -21,12 +21,12 @@ jobs:
       matrix:
         include:
           - dockerfile: ./HadesAPI/Dockerfile
-            image: ghcr.io/ls1intum/hades/hades-api
+            image: ls1intum/hades/hades-api
           - dockerfile: ./HadesScheduler/Dockerfile
-            image: ghcr.io/ls1intum/hades/hades-scheduler
+            image: ls1intum/hades/hades-scheduler
           - dockerfile: ./HadesCloneContainer/Dockerfile
-            image: ghcr.io/ls1intum/hades/hades-clone-container
-    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@main
+            image: ls1intum/hades/hades-clone-container
+    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.0.0
     with:
       image-name: ${{ matrix.image }}
       docker-file: ${{ matrix.dockerfile }}
