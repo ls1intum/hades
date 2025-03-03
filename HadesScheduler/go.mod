@@ -110,7 +110,7 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	google.golang.org/protobuf v1.36.1 // indirect
-	k8s.io/api v0.32.0
+	k8s.io/api v0.32.2
 	k8s.io/apimachinery v0.32.2
 	k8s.io/client-go v0.32.0
 	k8s.io/klog/v2 v2.130.1 // indirect
