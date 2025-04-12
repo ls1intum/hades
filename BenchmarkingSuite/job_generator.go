@@ -17,6 +17,8 @@ type SubmittedJob struct {
 	SubmittedAt time.Time
 }
 
+type JobFactory func(idx int) payload.RESTPayload
+
 func GenerateUUID() uuid.UUID {
 	return uuid.New()
 }
@@ -34,7 +36,7 @@ func GenerateUUID() uuid.UUID {
 // Returns:
 //   - A slice of SubmittedJob, each containing the submitted job's ID and submission timestamp
 //   - An error, if any issues occur during submission
-func SubmitJobs(host string, jobCount int, concurrency int, template payload.RESTPayload) ([]SubmittedJob, error) {
+func SubmitJobs(host string, jobCount int, concurrency int, factory JobFactory) ([]SubmittedJob, error) {
 	var wg sync.WaitGroup
 	jobs := make([]SubmittedJob, jobCount)
 	jobChan := make(chan int, jobCount)
@@ -51,8 +53,7 @@ func SubmitJobs(host string, jobCount int, concurrency int, template payload.RES
 		go func() {
 			defer wg.Done()
 			for idx := range jobChan {
-				// todo: support customized payload setup as an array of payload.RESTPayload
-				jobResult, err := submitJob(client, host, idx, template)
+				jobResult, err := submitJob(client, host, idx, factory)
 				if err != nil {
 					fmt.Printf("Job %d submission failed: %v\n", idx, err)
 					continue
@@ -69,8 +70,8 @@ func SubmitJobs(host string, jobCount int, concurrency int, template payload.RES
 	return jobs, nil
 }
 
-func submitJob(client *http.Client, host string, idx int, template payload.RESTPayload) (SubmittedJob, error) {
-	job := template
+func submitJob(client *http.Client, host string, idx int, factory JobFactory) (SubmittedJob, error) {
+	job := factory(idx)
 	job.ID = GenerateUUID()
 	job.Name = fmt.Sprintf("benchmark-job-%d", idx)
 	job.Timestamp = time.Now()
