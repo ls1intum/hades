@@ -1,4 +1,4 @@
-module benchmarkingSuite
+module github.com/ls1intum/hades/benchmarkingSuite
 
 go 1.23.3
 

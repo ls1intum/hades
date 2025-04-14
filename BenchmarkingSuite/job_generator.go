@@ -1,4 +1,4 @@
-package BenchmarkingSuite
+package main
 
 import (
 	"bytes"
