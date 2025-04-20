@@ -18,6 +18,11 @@ services:
     environment:
       - REDIS_ADDR=redis:6379
       - REDIS_PWD
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: host.docker.internal:24224
+        tag: hadesAPI
 
   hadesScheduler:
     image: ghcr.io/ls1intum/hades/hades-scheduler
@@ -37,6 +42,11 @@ services:
       - REDIS_ADDR=redis:6379
       - REDIS_PWD
       - HADES_EXECUTOR=docker
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: host.docker.internal:24224
+        tag: hadesScheduler
 
   redis:
     image: redis:7.2
