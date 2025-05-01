@@ -1,8 +1,8 @@
 module github.com/ls1intum/hades/hadesScheduler
 
-go 1.24.0
+go 1.23.0
 
-toolchain go1.24.2
+toolchain go1.24.1
 
 replace github.com/ls1intum/hades/shared => ../shared
 
@@ -41,6 +41,7 @@ require (
 	github.com/ebitengine/purego v0.8.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/moby/go-archive v0.1.0 // indirect
 	github.com/moby/sys/atomicwriter v0.1.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
@@ -110,9 +111,9 @@ require (
 	golang.org/x/text v0.24.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
-	k8s.io/api v0.33.0
-	k8s.io/apimachinery v0.33.0
-	k8s.io/client-go v0.33.0
+	k8s.io/api v0.33.0-alpha.2
+	k8s.io/apimachinery v0.33.0-alpha.2
+	k8s.io/client-go v0.33.0-alpha.2
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
