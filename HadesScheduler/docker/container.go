@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -65,10 +64,12 @@ func copyFileToContainer(ctx context.Context, client *client.Client, containerID
 		return err
 	}
 
-	// Now send the tar archive to CopyToContainer
-	err = client.CopyToContainer(ctx, containerID, dstPath, &buf, types.CopyToContainerOptions{
+	opts := container.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: false,
-	})
+		// CopyUIDGID: true,
+	}
+
+	err = client.CopyToContainer(ctx, containerID, dstPath, &buf, opts)
 	if err != nil {
 		slog.Error("Failed to copy script to container", slog.Any("error", err))
 		return err
