@@ -1,0 +1,11 @@
+meta {
+  name: Get workers
+  type: http
+  seq: 6
+}
+
+get {
+  url: http://{{hostname}}/workers
+  body: none
+  auth: inherit
+}

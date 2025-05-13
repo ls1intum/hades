@@ -1,0 +1,11 @@
+meta {
+  name: Get build jobs
+  type: http
+  seq: 5
+}
+
+get {
+  url: http://{{hostname}}/builds
+  body: none
+  auth: inherit
+}
