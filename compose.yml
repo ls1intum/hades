@@ -13,11 +13,10 @@ services:
     networks:
       - hades
     depends_on:
-      redis:
+      nats:
         condition: service_healthy
     environment:
-      - REDIS_ADDR=redis:6379
-      - REDIS_PWD
+      - NATS_URL=nats://nats:4222
 
   hadesScheduler:
     image: ghcr.io/ls1intum/hades/hades-scheduler
@@ -31,36 +30,25 @@ services:
     networks:
       - hades
     depends_on:
-      redis:
+      nats:
         condition: service_healthy
     environment:
-      - REDIS_ADDR=redis:6379
-      - REDIS_PWD
+      - NATS_URL=nats://nats:4222
       - HADES_EXECUTOR=docker
 
-  redis:
-    image: redis:7.2
-    ports:
-      - "6379:6379"
+  nats:
+    image: nats:latest
+    command: ["-js", "-m", "8222"]
     networks:
       - hades
-    environment:
-      - REDIS_PWD
+    ports:
+      - "4222:4222"
+      - "8222:8222"
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8222/healthz"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
-  
-  fluentbit:
-    container_name: fluentbit
-    image: fluent/fluent-bit
-    networks:
-      - hades
-    ports:
-      - "24224:24224"
-    command: /fluent-bit/bin/fluent-bit -i forward -o stdout -p format=json_lines -f 1
+      retries: 3
 
 networks:
   hades:
