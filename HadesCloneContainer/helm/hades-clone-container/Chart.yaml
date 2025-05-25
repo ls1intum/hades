@@ -1,6 +1,6 @@
 apiVersion: v2
 name: hades-clone-container
-description: A Helm chart for Kubernetes
+description: A Helm chart for deploying the Hades Clone Container application.
 
 # A chart can be either an 'application' or a 'library' chart.
 #
