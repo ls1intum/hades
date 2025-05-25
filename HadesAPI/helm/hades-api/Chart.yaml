@@ -1,6 +1,6 @@
 apiVersion: v2
 name: hades-api
-description: A Helm chart for Kubernetes
+description: Helm chart used to deploy the Hades API service.
 
 # A chart can be either an 'application' or a 'library' chart.
 #

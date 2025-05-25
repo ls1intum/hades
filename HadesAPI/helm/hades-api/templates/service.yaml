@@ -1,15 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "hades-api.fullname" . }}
+  name: {{ .Chart.Name }}
   labels:
-    {{- include "hades-api.labels" . | nindent 4 }}
+    app: {{ .Chart.Name }}
 spec:
   type: {{ .Values.service.type }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
-      protocol: TCP
-      name: http
   selector:
-    {{- include "hades-api.selectorLabels" . | nindent 4 }}
+    app: {{ .Chart.Name }}
+  ports:
+    - port: 80
+      targetPort: {{ .Values.service.port }}
