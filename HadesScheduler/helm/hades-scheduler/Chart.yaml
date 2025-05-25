@@ -1,6 +1,6 @@
 apiVersion: v2
 name: hades-scheduler
-description: A Helm chart for Kubernetes
+description: Helms for Hades Scheduler
 
 # A chart can be either an 'application' or a 'library' chart.
 #
