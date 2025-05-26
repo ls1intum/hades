@@ -2,19 +2,19 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 
-	"github.com/hibiken/asynq"
 	"github.com/ls1intum/hades/hadesScheduler/docker"
 	"github.com/ls1intum/hades/hadesScheduler/k8s"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
+	"github.com/nats-io/nats.go"
 
 	"log/slog"
 )
 
-var AsynqServer *asynq.Server
+var NatsConnection *nats.Conn
+var NatsJetStream nats.JetStreamContext
 
 type JobScheduler interface {
 	ScheduleJob(ctx context.Context, job payload.QueuePayload) error
@@ -24,8 +24,10 @@ type HadesSchedulerConfig struct {
 	Concurrency       uint   `env:"CONCURRENCY" envDefault:"1"`
 	FluentdAddr       string `env:"FLUENTD_ADDR" envDefault:""`
 	FluentdMaxRetries uint   `env:"FLUENTD_MAX_RETRIES" envDefault:"3"`
-	RedisConfig       utils.RedisConfig
+	NatsConfig        utils.NatsConfig
 }
+
+var HadesConsumer *utils.HadesConsumer
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
@@ -40,7 +42,20 @@ func main() {
 	utils.LoadConfig(&executorCfg)
 	slog.Debug("Executor config: ", "config", executorCfg)
 
-	AsynqServer = utils.SetupQueueServer(cfg.RedisConfig.Addr, cfg.RedisConfig.Pwd, cfg.RedisConfig.TLS_Enabled, int(cfg.Concurrency))
+	// Set up NATS connection
+	var err error
+	NatsConnection, err = utils.SetupNatsConnection(cfg.NatsConfig)
+	if err != nil {
+		slog.Error("Failed to connect to NATS", "error", err)
+		os.Exit(1)
+	}
+	defer NatsConnection.Close()
+
+	HadesConsumer, err = utils.NewHadesConsumer(NatsConnection, cfg.Concurrency)
+	if err != nil {
+		slog.Error("Failed to create Hades consumer", "error", err)
+		os.Exit(1)
+	}
 
 	var scheduler JobScheduler
 	switch executorCfg.Executor {
@@ -52,21 +67,18 @@ func main() {
 		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries)
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
+		os.Exit(1)
 	}
 
-	AsynqServer.Run(asynq.HandlerFunc(func(ctx context.Context, t *asynq.Task) error {
-		var job payload.QueuePayload
-		if err := json.Unmarshal(t.Payload(), &job); err != nil {
-			slog.Error("Failed to unmarshal task payload", slog.Any("error", err))
-			return err
-		}
-		slog.Debug("Received job ", "id", job.ID.String())
+	ctx := context.Background()
+	HadesConsumer.DequeueJob(ctx, func(payload payload.QueuePayload) {
+		slog.Info("Received job", "id", payload.ID.String())
+		slog.Debug("Job payload", "payload", payload)
 
-		if err := scheduler.ScheduleJob(ctx, job); err != nil {
-			slog.Error("Failed to schedule job", slog.Any("error", err))
-			return err
+		if err := scheduler.ScheduleJob(ctx, payload); err != nil {
+			slog.Error("Failed to schedule job", "error", err, "id", payload.ID.String())
+			return
 		}
-
-		return nil
-	}))
+		slog.Info("Successfully scheduled job", "id", payload.ID.String())
+	})
 }
