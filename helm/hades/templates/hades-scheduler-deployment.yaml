@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "hades-scheduler"
+  namespace: {{.Values.namespace.name}}
+spec:
+  replicas: {{ .Values.hadesApi.replicaCount }}
+  selector:
+    matchLabels:
+      app: hades-scheduler-selector
+  template:
+    metadata:
+      labels:
+        app: hades-scheduler-selector
+    spec:
+      containers:
+        - name: "hades-scheduler"
+          image: "{{ .Values.hadesScheduler.image.repository }}:{{ .Values.hadesScheduler.image.tag }}"
+          imagePullPolicy: {{ .Values.hadesScheduler.image.pullPolicy }}
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+          ports:
+            - containerPort: {{ .Values.hadesScheduler.service.targetPort }}

@@ -1,0 +1,34 @@
+# This file contains the default values for the Canteen App Helm chart.
+
+namespace:
+  name: "hades"
+  create: false
+
+hadesApi:
+  image:
+    repository: ghcr.io/ls1intum/hades/hades-api
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  replicaCount: 1
+
+hadesScheduler:
+  image:
+    repository: ghcr.io/ls1intum/hades/hades-scheduler
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  replicaCount: 1
+
+ingress:
+  enabled: true
+  className: "nginx"
+  tls: true
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"

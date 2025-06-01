@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "hades-api"
+  namespace: {{.Values.namespace.name}}
+spec:
+  replicas: {{ .Values.hadesApi.replicaCount }}
+  selector:
+    matchLabels:
+      app: hades-api-selector
+  template:
+    metadata:
+      labels:
+        app: hades-api-selector
+    spec:
+      containers:
+        - name: "hades-api"
+          image: "{{ .Values.hadesApi.image.repository }}:{{ .Values.hadesApi.image.tag }}"
+          imagePullPolicy: {{ .Values.hadesApi.image.pullPolicy }}
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+          ports:
+            - containerPort: {{ .Values.hadesApi.service.targetPort }}

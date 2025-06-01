@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: {{.Values.namespace.name}}
+data:
+  api_url: "https://hades.k8s.aet.cit.tum.de/api"

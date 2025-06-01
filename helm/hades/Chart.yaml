@@ -1,6 +1,6 @@
 apiVersion: v2
-name: hades-scheduler
-description: Helms for Hades Scheduler
+name: hades
+description: Hades is a scalable CI/CD System.
 
 # A chart can be either an 'application' or a 'library' chart.
 #
