@@ -47,9 +47,11 @@ func main() {
 	case "k8s":
 		slog.Info("Started HadesScheduler in Kubernetes mode")
 		scheduler = k8s.NewK8sScheduler()
+
 	case "docker":
 		slog.Info("Started HadesScheduler in Docker mode")
-		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries)
+		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries).SetCleanupSharedVolumes(executorCfg.CleanupSharedVolumes)
+
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
 	}

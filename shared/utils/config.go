@@ -18,7 +18,8 @@ type RedisConfig struct {
 type ExecutorConfig struct {
 	// Executor is the executor to use for running the jobs (default: docker)
 	// Possible values: docker, k8s
-	Executor string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
+	Executor             string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
+	CleanupSharedVolumes bool   `env:"CLEANUP" envDefault:"false"`
 }
 
 func LoadConfig(cfg interface{}) {
