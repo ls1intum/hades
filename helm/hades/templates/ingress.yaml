@@ -1,0 +1,42 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: "hades-ingress"
+  namespace: "{{ .Values.namespace.name }}"
+  {{- $annotations := .Values.ingress.annotations | default dict }}
+  {{- if $annotations }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          # Hades REST API
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "hades-api.fullname" . }}
+                port:
+                  number: {{ .Values.hadesApi.service.port }}
+
+          # Hades Scheduler (可按需换成 /scheduler 或 /api/scheduler)
+          - path: /scheduler
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "hades-scheduler.fullname" . }}
+                port:
+                  number: {{ .Values.hadesScheduler.service.port }}
+{{- end }}

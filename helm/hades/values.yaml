@@ -29,6 +29,12 @@ hadesScheduler:
 ingress:
   enabled: true
   className: "nginx"
-  tls: true
+
+  host: hades.student.k8s.aet.cit.tum.de
+
+  tls:
+    enabled: true
+    secretName: hades-tls
+
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
