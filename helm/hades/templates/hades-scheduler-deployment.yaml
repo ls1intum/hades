@@ -26,8 +26,15 @@ spec:
               memory: "256Mi"
           ports:
             - containerPort: {{ .Values.hadesScheduler.service.targetPort }}
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
           env:
             - name: REDIS_ADDR
               value: {{ .Values.redis.host }}:{{ .Values.redis.port }}
             - name: HADES_EXECUTOR
               value: "docker"
+      volumes:
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
