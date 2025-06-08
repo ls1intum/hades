@@ -1,5 +1,3 @@
-# This file contains the default values for the Canteen App Helm chart.
-
 namespace:
   name: "hades"
   create: false
@@ -25,6 +23,9 @@ hadesScheduler:
     port: 8080
     targetPort: 8080
   replicaCount: 1
+  env:
+    - name: HADES_EXECUTOR
+      value: docker
 
 ingress:
   enabled: true
@@ -38,3 +39,10 @@ ingress:
 
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  host: hades-redis-master
+  port: 6379

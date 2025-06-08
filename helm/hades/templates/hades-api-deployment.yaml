@@ -26,3 +26,6 @@ spec:
               memory: "256Mi"
           ports:
             - containerPort: {{ .Values.hadesApi.service.targetPort }}
+          env:
+            - name: REDIS_ADDR
+              value: {{ .Values.redis.host }}:{{ .Values.redis.port }}

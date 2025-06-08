@@ -4,7 +4,7 @@ metadata:
   name: "hades-scheduler"
   namespace: {{.Values.namespace.name}}
 spec:
-  replicas: {{ .Values.hadesApi.replicaCount }}
+  replicas: {{ .Values.hadesScheduler.replicaCount }}
   selector:
     matchLabels:
       app: hades-scheduler-selector
@@ -26,3 +26,8 @@ spec:
               memory: "256Mi"
           ports:
             - containerPort: {{ .Values.hadesScheduler.service.targetPort }}
+          env:
+            - name: REDIS_ADDR
+              value: {{ .Values.redis.host }}:{{ .Values.redis.port }}
+            - name: HADES_EXECUTOR
+              value: "docker"
