@@ -30,13 +30,4 @@ spec:
                 name: "hades-api-service"
                 port:
                   number: {{ .Values.hadesApi.service.port }}
-
-          # Hades Scheduler
-          - path: /scheduler
-            pathType: Prefix
-            backend:
-              service:
-                name: "hades-scheduler-service"
-                port:
-                  number: {{ .Values.hadesScheduler.service.port }}
 {{- end }}

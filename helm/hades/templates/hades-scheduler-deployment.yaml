@@ -19,22 +19,15 @@ spec:
           imagePullPolicy: {{ .Values.hadesScheduler.image.pullPolicy }}
           resources:
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: {{ .Values.hadesScheduler.resources.limits.cpu | quote }}
+              memory: {{ .Values.hadesScheduler.resources.limits.memory | quote }}
             requests:
-              cpu: "200m"
-              memory: "256Mi"
+              cpu: {{ .Values.hadesScheduler.resources.requests.cpu | quote }}
+              memory: {{ .Values.hadesScheduler.resources.requests.memory | quote }}
           ports:
             - containerPort: {{ .Values.hadesScheduler.service.targetPort }}
-          volumeMounts:
-            - name: docker-sock
-              mountPath: /var/run/docker.sock
           env:
             - name: REDIS_ADDR
-              value: {{ .Values.redis.host }}:{{ .Values.redis.port }}
+              value: "{{ .Values.redis.host }}:{{ .Values.redis.port }}"
             - name: HADES_EXECUTOR
-              value: "docker"
-      volumes:
-        - name: docker-sock
-          hostPath:
-            path: /var/run/docker.sock
+              value: "k8s"
