@@ -39,7 +39,7 @@ hadesScheduler:
       memory: "256Mi"
   env:
     - name: HADES_EXECUTOR
-      value: docker
+      value: k8s
 
 ingress:
   enabled: true
