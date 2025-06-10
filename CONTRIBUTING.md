@@ -39,7 +39,7 @@ We use GitHub to host code, to track issues and feature requests, as well as acc
 
 ### Our Pledge
 
-In the interest of fostering an open and welcoming environment, we pledge to making participation in our project and our community a harassment-free experience for everyone.
+In the interest of fostering an open and welcoming environment, we pledge to make participation in our project and our community a harassment-free experience for everyone.
 
 ### Our Standards
 
