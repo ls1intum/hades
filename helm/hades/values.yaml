@@ -37,9 +37,7 @@ hadesScheduler:
     requests:
       cpu: "200m"
       memory: "256Mi"
-  env:
-    - name: HADES_EXECUTOR
-      value: k8s
+  executor: "k8s"
 
 rbac:
   serviceAccountName: hades-scheduler
