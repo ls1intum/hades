@@ -52,6 +52,7 @@ func NewK8sScheduler() Scheduler {
 	// TODO: Check cluster connection and print cluster nodes to log
 
 	// Add the namespace to the scheduler
+	// TODO: Why do we want to create the namespace here? Shouldn't it be created by the user before starting the scheduler?
 	slog.Info("Creating namespace in Kubernetes")
 	_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
 	if err != nil {
