@@ -41,6 +41,12 @@ hadesScheduler:
     - name: HADES_EXECUTOR
       value: k8s
 
+rbac:
+  serviceAccountName: hades-scheduler
+  role:
+    name: hades-scheduler-role
+
+
 ingress:
   enabled: true
   className: "nginx"

@@ -31,3 +31,7 @@ spec:
               value: "{{ .Values.redis.host }}:{{ .Values.redis.port }}"
             - name: HADES_EXECUTOR
               value: "k8s"
+            - name: K8S_CONFIG_MODE
+              value: "serviceaccount"
+            - name: K8S_NAMESPACE
+              value: {{ .Values.namespace.name }}

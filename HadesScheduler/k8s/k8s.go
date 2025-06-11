@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"k8s.io/client-go/rest"
 
 	"log/slog"
 
@@ -78,11 +79,22 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 	case "serviceaccount":
 		slog.Info("Using service account for Kubernetes access")
 
-		var K8sConfigSvc K8sConfigServiceaccount
-		utils.LoadConfig(&K8sConfigSvc)
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			slog.Error("Failed to load in-cluster config", "error", err)
+			return Scheduler{}
+		}
 
-		slog.Warn("Service account mode not yet implemented")
-		return Scheduler{}
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			slog.Error("Failed to create k8s client", "error", err)
+			return Scheduler{}
+		}
+
+		return Scheduler{
+			k8sClient: clientset,
+			namespace: k8sCfg.K8sNamespace,
+		}
 
 	default:
 		slog.Error("Invalid Kubernetes config mode specified", "config_mode", k8sCfg.ConfigMode)
