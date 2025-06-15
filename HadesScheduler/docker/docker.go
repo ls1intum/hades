@@ -14,6 +14,7 @@ import (
 	"github.com/ls1intum/hades/hadesScheduler/fluentd"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
+	"github.com/nats-io/nats.go"
 	slogfluentd "github.com/samber/slog-fluentd/v2"
 	"golang.org/x/exp/maps"
 )
@@ -39,6 +40,7 @@ type Scheduler struct {
 	cli *client.Client
 	DockerProps
 	fluentd.FluentdOptions
+	nc *nats.Conn // NATS connection for publishing logs
 }
 
 type DockerJob struct {
@@ -53,6 +55,7 @@ type DockerStep struct {
 	logger *slog.Logger
 	DockerProps
 	payload.Step
+	nc *nats.Conn
 }
 
 type jobIDContextKey string
@@ -85,6 +88,15 @@ func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler 
 			Addr:     addr,
 			MaxRetry: max_retries,
 		}
+	}
+	return d
+}
+
+func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
+	if nc != nil {
+		d.nc = nc
+	} else {
+		slog.Warn("NATS connection is nil, logs will not be published to NATS")
 	}
 	return d
 }
@@ -136,7 +148,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		DockerProps:  jobDockerConfig,
 		QueuePayload: job,
 	}
-	err := docker_job.execute(ctx)
+	err := docker_job.execute(ctx, d.nc)
 	if err != nil {
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
 		return err
@@ -155,7 +167,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 	return nil
 }
 
-func (d DockerJob) execute(ctx context.Context) error {
+func (d DockerJob) execute(ctx context.Context, nc *nats.Conn) error {
 	for _, step := range d.Steps {
 		d.logger.Info("Executing step", slog.Any("step", step))
 
@@ -170,6 +182,7 @@ func (d DockerJob) execute(ctx context.Context) error {
 			logger:      d.logger,
 			DockerProps: d.DockerProps,
 			Step:        step,
+			nc:          nc,
 		}
 
 		ctx := context.WithValue(ctx, jobIDContextKey("job_id"), d.ID.String())
@@ -267,5 +280,16 @@ func (s DockerStep) execute(ctx context.Context) error {
 	}
 
 	s.logger.Debug("Container completed", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
+
+	// Write the container logs to NATS
+	err = writeContainerLogsToNATS(ctx, s.cli, s.nc, resp.ID, job_id)
+
+	if err != nil {
+		s.logger.Error("Failed to write container logs", slog.Any("error", err), slog.Any("container_id", resp.ID))
+		return err
+	} else {
+		s.logger.Debug("Container logs written", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
+	}
+
 	return nil
 }

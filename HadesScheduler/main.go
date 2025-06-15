@@ -62,9 +62,10 @@ func main() {
 	case "k8s":
 		slog.Info("Started HadesScheduler in Kubernetes mode")
 		scheduler = k8s.NewK8sScheduler()
+		//TODO: Set up NATS logging for Kubernetes
 	case "docker":
 		slog.Info("Started HadesScheduler in Docker mode")
-		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries)
+		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries).SetNatsConnection(NatsConnection)
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
 		os.Exit(1)
