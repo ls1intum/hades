@@ -2,9 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Start Redis Container",
+            "label": "Start NATS Container",
             "type": "shell",
-            "command": "docker compose up -d redis",
+            "command": "docker compose up -d nats",
             "problemMatcher": []
         }
     ]

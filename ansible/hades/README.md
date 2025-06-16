@@ -1,7 +1,7 @@
 Hades CI
 =========
 
-Currently this role deploys redis on the same host as the hades API. 
+Currently this role deploys NATS on the same host as the hades API for message queuing. 
 
 
 Requirements
@@ -32,8 +32,9 @@ Example Playbook
       vars: 
         hades_version: "latest"
         hades_node_role: "scheduler"
-        hades_redis_host: "redis.hades.example"
-        hades_redis_password: "redis_password"
+        hades_nats_url: "nats://nats.hades.example:4222"
+        hades_nats_username: "hades_user"
+        hades_nats_password: "nats_password"
 
 
 - name: Setup hades api 
@@ -45,5 +46,7 @@ Example Playbook
         hades_node_role: "api"
         hades_api_certificate_fullchain_path: "/var/lib/cert/cert.fullchain.pem"
         hades_api_certificate_key_path: "/var/lib/cert/cert.privkey.pem"
-        hades_redis_password: "redis_password"
+        hades_nats_url: "nats://nats.hades.example:4222"
+        hades_nats_username: "hades_user"
+        hades_nats_password: "nats_password"
 ```
