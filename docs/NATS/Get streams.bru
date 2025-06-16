@@ -1,0 +1,16 @@
+meta {
+  name: Get streams
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://localhost:8222/jsz?streams=true&consumers=true
+  body: none
+  auth: inherit
+}
+
+params:query {
+  streams: true
+  consumers: true
+}

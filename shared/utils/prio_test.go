@@ -9,16 +9,16 @@ import (
 func TestPrioFromInt(t *testing.T) {
 	tests := []struct {
 		priority int
-		expected string
+		expected Priority
 	}{
-		{10, "critical"},
-		{5, "critical"},
-		{4, "high"},
-		{3, "normal"},
-		{2, "low"},
-		{1, "minimal"},
-		{0, "minimal"},
-		{-1, "minimal"},
+		{10, HighPriority},
+		{5, HighPriority},
+		{4, HighPriority},
+		{3, HighPriority},
+		{2, MediumPriority},
+		{1, LowPriority},
+		{0, LowPriority},
+		{-1, LowPriority},
 	}
 
 	for _, test := range tests {

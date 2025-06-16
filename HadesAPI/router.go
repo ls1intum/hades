@@ -1,12 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hibiken/asynq"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	log "github.com/sirupsen/logrus"
@@ -58,26 +55,20 @@ func AddBuildToQueue(c *gin.Context) {
 
 	payload.QueuePayload.ID = utils.GenerateUUID()
 	log.Debug("Received build request ", payload)
-	json_payload, err := json.Marshal(payload.QueuePayload)
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	task := asynq.NewTask(payload.Name, json_payload)
-	queuePriority := utils.PrioFromInt(payload.Priority)
-	info, err := AsynqClient.Enqueue(
-		task,
-		asynq.Queue(queuePriority),
-		asynq.Retention(time.Duration(cfg.RetentionTime)*time.Minute), // Keep the result for 30 minutes
-		asynq.Timeout(time.Duration(cfg.Timeout)*time.Minute),         // Timeout for each queued task
-		asynq.MaxRetry(int(cfg.MaxRetries)),                           // Retry times
-	)
+	queuePrio := utils.PrioFromInt(payload.Priority)
+
+	err := HadesProducer.EnqueueJobWithPriority(c.Request.Context(), payload.QueuePayload, queuePrio)
 	if err != nil {
-		log.WithError(err).Error("Failed to enqueue build")
-		c.String(http.StatusInternalServerError, "Failed to enqueue build")
+		log.WithError(err).Error("Failed to enqueue job")
+		c.String(http.StatusInternalServerError, "Failed to enqueue job")
 		return
 	}
-	log.Printf(" [*] Successfully enqueued job: %+v", info.ID)
+
+	// Get the priority level for subject routing
+	// queuePriority := utils.PrioFromInt(payload.Priority)
+
+	log.Printf("Successfully enqueued job: %s", payload.QueuePayload.ID.String())
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Successfully enqueued job",
 		"job_id":  payload.QueuePayload.ID.String(),
