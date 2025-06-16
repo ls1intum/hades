@@ -52,7 +52,7 @@ func (suite *APISuite) SetupSuite() {
 		log.Fatalf("Could not start NATS: %s", err)
 	}
 
-	endpoint, err := suite.natsC.Endpoint(ctx, "4222/tcp")
+	endpoint, err := suite.natsC.Endpoint(ctx, "")
 	log.Infof("NATS endpoint: %s", endpoint)
 	if err != nil {
 		log.Fatalf("Could not get NATS endpoint: %s", err)
