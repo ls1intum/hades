@@ -22,7 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const NATS_IMAGE = "nats:latest"
+const NATS_IMAGE = "nats:2.11.4"
 
 type APISuite struct {
 	suite.Suite
@@ -52,7 +52,7 @@ func (suite *APISuite) SetupSuite() {
 		log.Fatalf("Could not start NATS: %s", err)
 	}
 
-	endpoint, err := suite.natsC.Endpoint(ctx, "")
+	endpoint, err := suite.natsC.Endpoint(ctx, "4222/tcp")
 	log.Infof("NATS endpoint: %s", endpoint)
 	if err != nil {
 		log.Fatalf("Could not get NATS endpoint: %s", err)

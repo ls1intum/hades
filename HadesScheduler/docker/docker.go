@@ -151,7 +151,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		if err == nil {
 			job_logger.Info(msg.Name+" still exists after deletion attempt", slog.Any("volume", msg))
 		} else {
-			job_logger.Warn("Volume deleted deleted.")
+			job_logger.Warn("Volume deleted.")
 		}
 	}
 
