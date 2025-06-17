@@ -31,7 +31,7 @@ type K8sConfig struct {
 // K8sConfigKubeconfig is used as configuration if used with a kubeconfig file
 type K8sConfigKubeconfig struct {
 	K8sConfig
-	kubeconfig string `env:"KUBECONFIG"`
+	Kubeconfig string `env:"KUBECONFIG"`
 }
 
 // K8sConfigServiceaccount is used as configuration if used with a service account
@@ -56,13 +56,6 @@ func NewK8sScheduler() (Scheduler, error) {
 
 	// TODO: Check cluster connection and print cluster nodes to log
 
-	// Add the namespace to the scheduler
-	// TODO: Why do we want to create the namespace here? Shouldn't it be created by the user before starting the scheduler?
-	slog.Info("Creating namespace in Kubernetes")
-
-	if _, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace); err != nil {
-		slog.With("error", err).Info("Failed to create namespace in Kubernetes")
-	}
 	return scheduler, nil
 }
 
