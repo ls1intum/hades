@@ -21,10 +21,10 @@ func initializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
 	var kubeConfig *rest.Config
 
 	// Check if kubeconfig is explicitly set
-	if k8sCfg.kubeconfig != "" {
-		slog.Info("Using explicit kubeconfig", "config", k8sCfg.kubeconfig)
+	if k8sCfg.Kubeconfig != "" {
+		slog.Info("Using explicit kubeconfig", "config", k8sCfg.Kubeconfig)
 		var err error
-		kubeConfig, err = clientcmd.BuildConfigFromFlags("", k8sCfg.kubeconfig)
+		kubeConfig, err = clientcmd.BuildConfigFromFlags("", k8sCfg.Kubeconfig)
 		if err != nil {
 			slog.With("error", err).Error("Error creating Kubernetes clientset")
 		}
