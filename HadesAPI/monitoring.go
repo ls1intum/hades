@@ -15,11 +15,16 @@ func SafePayloadFormatter(bytes []byte) string {
 		return ""
 	}
 
+	job.Metadata = make(map[string]string)
 	// Remove sensitive metadata from job steps
 	for i := range job.Steps {
 		job.Steps[i].Metadata = make(map[string]string)
 	}
 
-	json_tmp, _ := json.Marshal(job)
-	return string(json_tmp)
+	jsonTmp, err := json.Marshal(job)
+	if err != nil {
+		log.WithError(err).Error("Failed to marshal sanitized payload")
+		return ""
+	}
+	return string(jsonTmp)
 }

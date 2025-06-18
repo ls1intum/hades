@@ -22,7 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const NATS_IMAGE = "nats:latest"
+const NATS_IMAGE = "nats:2.11.4"
 
 type APISuite struct {
 	suite.Suite
