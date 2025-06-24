@@ -1,11 +1,11 @@
 namespace:
-  name: "hades"
+  name: "hades-nats-dev"
   create: false
 
 hadesApi:
   image:
     repository: ghcr.io/ls1intum/hades/hades-api
-    tag: latest
+    tag: pr-225
     pullPolicy: Always
   service:
     type: ClusterIP
@@ -23,7 +23,7 @@ hadesApi:
 hadesScheduler:
   image:
     repository: ghcr.io/ls1intum/hades/hades-scheduler
-    tag: latest
+    tag: pr-225
     pullPolicy: Always
   service:
     type: ClusterIP
@@ -44,9 +44,8 @@ rbac:
   role:
     name: hades-scheduler-role
 
-
 ingress:
-  enabled: true
+  enabled: false
   className: "nginx"
 
   host: hades.student.k8s.aet.cit.tum.de
@@ -58,9 +57,19 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 
-redis:
-  enabled: true
-  auth:
-    enabled: false
-  host: hades-redis-master
-  port: 6379
+nats:
+  config:
+    jetstream:
+      enabled: true
+      memoryStore:
+        enabled: true
+        maxSize: 1Gi
+      # fileStore:
+      #   enabled: true
+      #   dir: /data
+      #   pvc:
+      #     enabled: true
+      #     size: 10Gi
+      #   maxSize: 10Gi
+  host: "nats://hades-nats-dev"
+  port: 4222

@@ -28,8 +28,8 @@ spec:
           ports:
             - containerPort: {{ .Values.hadesScheduler.service.targetPort }}
           env:
-            - name: REDIS_ADDR
-              value: "{{ .Values.redis.host }}:{{ .Values.redis.port }}"
+            - name: NATS_URL
+              value: "{{ .Values.nats.host }}:{{ .Values.nats.port }}"
             - name: HADES_EXECUTOR
               value: {{ .Values.hadesScheduler.executor }}
             - name: K8S_CONFIG_MODE

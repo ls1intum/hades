@@ -27,5 +27,5 @@ spec:
           ports:
             - containerPort: {{ .Values.hadesApi.service.targetPort }}
           env:
-            - name: REDIS_ADDR
-              value: "{{ .Values.redis.host }}:{{ .Values.redis.port }}"
+            - name: NATS_URL
+              value: "{{ .Values.nats.host }}:{{ .Values.nats.port }}"
