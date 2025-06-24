@@ -45,7 +45,7 @@ rbac:
     name: hades-scheduler-role
 
 ingress:
-  enabled: false
+  enabled: true
   className: "nginx"
 
   host: hades.student.k8s.aet.cit.tum.de
