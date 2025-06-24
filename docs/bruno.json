@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "name": "HadesCI",
+  "name": "HadesCI NATS",
   "type": "collection",
   "ignore": [
     "node_modules",
