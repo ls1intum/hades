@@ -9,7 +9,6 @@ replace github.com/ls1intum/hades/shared => ../shared
 require (
 	github.com/docker/docker v28.1.1+incompatible
 	github.com/fluent/fluent-logger-golang v1.9.0
-	github.com/hibiken/asynq v0.25.1
 	github.com/ls1intum/hades/shared v0.0.0-20241212135056-89dffd2392b1
 	github.com/nats-io/nats.go v1.42.0
 	github.com/samber/slog-fluentd/v2 v2.5.2
