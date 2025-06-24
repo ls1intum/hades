@@ -5,7 +5,7 @@ namespace:
 hadesApi:
   image:
     repository: ghcr.io/ls1intum/hades/hades-api
-    tag: pr-225
+    tag: latest
     pullPolicy: Always
   service:
     type: ClusterIP
@@ -23,7 +23,7 @@ hadesApi:
 hadesScheduler:
   image:
     repository: ghcr.io/ls1intum/hades/hades-scheduler
-    tag: pr-225
+    tag: latest
     pullPolicy: Always
   service:
     type: ClusterIP
