@@ -68,7 +68,7 @@ func AddBuildToQueue(c *gin.Context) {
 	// Get the priority level for subject routing
 	// queuePriority := utils.PrioFromInt(payload.Priority)
 
-	log.Printf(" [*] Successfully enqueued job: %s", payload.QueuePayload.ID.String())
+	log.Printf("Successfully enqueued job: %s", payload.QueuePayload.ID.String())
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Successfully enqueued job",
 		"job_id":  payload.QueuePayload.ID.String(),

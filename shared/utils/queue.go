@@ -48,7 +48,10 @@ func SetupNatsConnection(config NatsConfig) (*nats.Conn, error) {
 
 	// Add TLS if enabled
 	if config.TLS {
-		opts = append(opts, nats.Secure(&tls.Config{}))
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12, // Ensure TLS 1.2 or higher
+		}
+		opts = append(opts, nats.Secure(tlsConfig))
 	}
 
 	// Connect to NATS
@@ -160,10 +163,14 @@ func (hp HadesProducer) EnqueueJobWithPriority(ctx context.Context, queuePayloud
 	bytesPayload, err := json.Marshal(queuePayloud)
 	if err != nil {
 		slog.Error("Failed to marshal payload", "error", err)
+		return err
 	}
 	_, err = hp.js.PublishAsync(PrioritySubject(priority), queuePayloud.ID[:], jetstream.WithMsgID(queuePayloud.ID.String()))
+	if err != nil {
+		return err
+	}
 
-	hp.kv.Put(ctx, queuePayloud.ID.String(), bytesPayload)
+	_, err = hp.kv.Put(ctx, queuePayloud.ID.String(), bytesPayload)
 	return err
 }
 

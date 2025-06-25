@@ -11,8 +11,10 @@ services:
     networks:
       - hades
     environment:
-      - REDIS_ADDR={{ hades_redis_host }}:{{ hades_redis_port }}
-      - REDIS_PASSWORD
+      - NATS_URL={{ hades_nats_url }}
+      - NATS_USERNAME={{ hades_nats_username }}
+      - NATS_PASSWORD={{ hades_nats_password }}
+      - NATS_TLS_ENABLED={{ hades_nats_tls_enabled }}
       - HADES_EXECUTOR={{ hades_executor }}
       - CONCURRENCY={{ hades_scheduler_concurrency }}
       - HADES_DEBUG={{ hades_scheduler_debug }}
