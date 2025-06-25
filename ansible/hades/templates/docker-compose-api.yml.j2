@@ -8,25 +8,27 @@ services:
     networks:
       - hades
     depends_on:
-      redis:
+      nats:
         condition: service_healthy
     environment:
-      - REDIS_ADDR=redis:{{ hades_redis_port }}
-      - REDIS_PASSWORD
+      - NATS_URL={{ hades_nats_url }}
+      - NATS_USERNAME={{ hades_nats_username }}
+      - NATS_PASSWORD={{ hades_nats_password }}
+      - NATS_TLS_ENABLED={{ hades_nats_tls_enabled }}
       - HADES_DEBUG={{ hades_api_debug }}
       - AUTH_KEY
 
 
-  redis:
-    image: redis:{{ hades_redis_version }}
+  nats:
+    image: nats:latest
+    command: ["-js", "-m", "8222"]
     ports:
-      - "{{ hades_redis_port }}:6379"
+      - "4222:4222"
+      - "8222:8222"
     networks:
       - hades
-    environment:
-      - REDIS_PASSWORD
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8222/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5

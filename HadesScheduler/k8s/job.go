@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/ls1intum/hades/shared/payload"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -36,33 +37,60 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 	slog.Debug("Successfully created buildscript ConfigMap", "name", cm.Name)
 
 	slog.Debug("Assembling PodSpec")
-	jobPodSpec := corev1.Pod{
+	podSpec := corev1.PodSpec{
+		InitContainers: k8sJob.containerSpec(),
+		Containers: []corev1.Container{{
+			Name:    "dummy",
+			Image:   "busybox",
+			Command: []string{"sh", "-c", "echo 'build completed'"},
+		}},
+		Volumes:       k8sJob.volumeSpec(*configMap),
+		RestartPolicy: corev1.RestartPolicyNever,
+	}
 
+	slog.Debug("PodSpec", "spec", podSpec)
+
+	ttlSeconds := int32(300) // after 5 minutes the job will be deleted
+	backoff := int32(0)      // no retries on failure
+
+	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      k8sJob.ID.String(),
 			Namespace: k8sJob.namespace,
 		},
-
-		Spec: corev1.PodSpec{
-			InitContainers: k8sJob.containerSpec(), // each step is represented by a init container to ensure that the build script is executed in the correct order
-			Containers: []corev1.Container{ // dummy container to signal the end of the build - this is a temporary solution as we need to have a container defined in the pod spec
-				{
-					Name:    "dummy",
-					Image:   "busybox",
-					Command: []string{"sh", "-c", "echo 'build completed'"},
+		Spec: batchv1.JobSpec{
+			TTLSecondsAfterFinished: &ttlSeconds,
+			BackoffLimit:            &backoff,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"job-id": k8sJob.ID.String()},
 				},
+				Spec: podSpec,
 			},
-			Volumes:       k8sJob.volumeSpec(*configMap),
-			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
-	slog.Debug("PodSpec", "spec", jobPodSpec)
 
-	slog.Info("Apply PodSpec to Kubernetes")
-	_, err = k8sJob.k8sClient.CoreV1().Pods(k8sJob.namespace).Create(ctx, &jobPodSpec, metav1.CreateOptions{})
+	slog.Info("Apply Job to Kubernetes")
+	_, err = k8sJob.k8sClient.BatchV1().
+		Jobs(k8sJob.namespace).
+		Create(ctx, &job, metav1.CreateOptions{})
 	if err != nil {
-		slog.With("error", err).Error("Failed to create Pod")
+		slog.With("error", err).Error("Failed to create Job")
 		return err
+	}
+
+	cm.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "batch/v1",
+		Kind:       "Job",
+		Name:       job.Name,
+		UID:        job.UID,
+	}}
+
+	_, patchErr := k8sJob.k8sClient.CoreV1().
+		ConfigMaps(k8sJob.namespace).
+		Update(ctx, cm, metav1.UpdateOptions{})
+	if patchErr != nil {
+		slog.Error("failed to set CM ownerRef", slog.Any("error", patchErr))
 	}
 
 	return nil

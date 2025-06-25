@@ -13,6 +13,12 @@ post {
 body:json {
   {
     "name": "Example Job",
+    "volumes": [
+      {
+        "name": "shared",
+        "emptyDir": {}
+      }
+    ],
     "metadata": {
       "GLOBAL": "test"
     },
@@ -23,6 +29,10 @@ body:json {
         "id": 1, // mandatory to declare the order of execution
         "name": "Clone",
         "image": "ghcr.io/ls1intum/hades/hades-clone-container:latest", // mandatory
+        "volumeMounts": [
+          { "name": "shared", "mountPath": "/shared" }
+        ],
+        "workingDir": "/shared",
         "metadata": {
           "REPOSITORY_DIR": "/shared",
           "HADES_TEST_USERNAME": "{{user}}",

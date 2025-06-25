@@ -33,6 +33,7 @@ type DockerProps struct {
 	memory_limit         string
 	volumeName           string
 	containerLogsOptions container.LogConfig
+	cleanupSharedVolumes bool
 }
 
 type Scheduler struct {
@@ -89,6 +90,16 @@ func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler 
 	return d
 }
 
+// Cleanup deletes shared volume after build
+func (d *Scheduler) SetCleanupSharedVolumes(cleanup bool) *Scheduler {
+	if cleanup {
+		slog.Warn("CLEANUP AFTER BUILD ENABLED")
+	}
+
+	d.DockerProps.cleanupSharedVolumes = cleanup
+	return d
+}
+
 func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	// Create a custom logger only for this job when fluentd is enabled
 	var job_logger *slog.Logger
@@ -126,6 +137,24 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		return err
 	}
 
+	// If cleanup is enabled, delete the shared volume after build
+	if d.DockerProps.cleanupSharedVolumes {
+		// give Docker a beat to fully unmount
+		time.Sleep(1 * time.Second)
+		if err := deleteSharedVolume(ctx, d.cli, volumeName); err != nil {
+			job_logger.Error("Failed to delete shared volume after build", slog.Any("error", err), slog.String("volume", volumeName))
+		} else {
+			job_logger.Info("Shared volume deleted after build", slog.String("volume", volumeName))
+		}
+
+		msg, err := d.cli.VolumeInspect(ctx, volumeName)
+		if err == nil {
+			job_logger.Info(msg.Name+" still exists after deletion attempt", slog.Any("volume", msg))
+		} else {
+			job_logger.Warn("Volume deleted.")
+		}
+	}
+
 	// Add created volume to the job's docker config
 	jobDockerConfig := d.DockerProps
 	jobDockerConfig.volumeName = volumeName
@@ -139,8 +168,11 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 	err := docker_job.execute(ctx)
 	if err != nil {
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
+		job_logger.Debug("Failed to execute job", slog.Any("error", err))
 		return err
 	}
+
+	job_logger.Debug("Job executed successfully", slog.Any("job_id", job.ID))
 
 	// Delete the shared volume after the job is done
 	defer func() {

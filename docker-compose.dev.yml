@@ -4,13 +4,11 @@ version: '3.7'
 services:
   hadesAPI:
     environment:
-      - REDIS_ADDR=redis:6379
-      - REDIS_PWD
+      - NATS_URL=nats://nats:4222
       - DEBUG=true
   hadesScheduler:
     environment:
-      - REDIS_ADDR=redis:6379
-      - REDIS_PWD
+      - NATS_URL=nats://nats:4222
       - HADES_EXECUTOR=docker
       - DOCKER_CONTAINER_AUTOREMOVE=false
       - DEBUG=true
