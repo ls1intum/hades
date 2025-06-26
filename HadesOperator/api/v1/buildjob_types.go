@@ -17,25 +17,73 @@ limitations under the License.
 package v1
 
 import (
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// BuildJobSpec defines the desired state of BuildJob.
 type BuildJobSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// +kubebuilder:validation:Minimum=0
+	// Priority (1 = highest). Scheduler may use this to decide job queueing order.
+	Priority int32 `json:"priority,omitempty"`
 
-	// Foo is an example field of BuildJob. Edit buildjob_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Job name, useful for debugging
+	Name string `json:"name"`
+
+	// Additional metadata (e.g., course ID, submitter, language, etc.)
+	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// Build steps to be executed sequentially
+	// +kubebuilder:validation:MinItems=1
+	Steps []BuildStep `json:"steps"`
+
+	// (Optional) Timeout for the whole job; if exceeded, the job is marked as failed
+	// +kubebuilder:validation:Minimum=1
+	TimeoutSeconds *int64 `json:"timeoutSeconds,omitempty"`
+
+	// (Optional) Number of times to retry the job on failure
+	// +kubebuilder:validation:Minimum=0
+	MaxRetries *int32 `json:"maxRetries,omitempty"`
 }
 
-// BuildJobStatus defines the observed state of BuildJob.
+type BuildStep struct {
+	// Step ID (must be unique and start from 1)
+	// +kubebuilder:validation:Minimum=1
+	ID int32 `json:"id"`
+
+	// Step name
+	Name string `json:"name,omitempty"`
+
+	// Execution image (required)
+	// +kubebuilder:validation:MinLength=1
+	Image string `json:"image"`
+
+	// Script or command to run inside the container
+	Script string `json:"script,omitempty"`
+
+	// Additional metadata like environment variables, credentials, etc.
+	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// Resource limits (if empty, defaults will be used from LimitRange/Quota)
+	CPULimit    *resource.Quantity `json:"cpuLimit,omitempty"`
+	MemoryLimit *resource.Quantity `json:"memoryLimit,omitempty"`
+}
+
 type BuildJobStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Pending | Running | Succeeded | Failed
+	Phase   string `json:"phase,omitempty"`
+	Message string `json:"message,omitempty"`
+
+	// Name of the Pod/Job created by the Operator, helpful for troubleshooting
+	PodName string `json:"podName,omitempty"`
+
+	StartTime      *metav1.Time `json:"startTime,omitempty"`
+	CompletionTime *metav1.Time `json:"completionTime,omitempty"`
+
+	// ID of the currently executing step
+	CurrentStep *int32 `json:"currentStep,omitempty"`
+
+	// Number of retry attempts so far
+	RetryCount int32 `json:"retryCount,omitempty"`
 }
 
 // +kubebuilder:object:root=true
