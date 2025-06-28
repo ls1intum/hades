@@ -71,11 +71,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	err := r.Get(ctx, client.ObjectKey{Namespace: bj.Namespace, Name: jobName}, &existingJob)
 	if err == nil {
 		// Job already exists (maybe previously created, but CR status hasn't been updated yet); set Phase to Running
-		bj.Status.Phase = "Running"
-		now := metav1.NewTime(time.Now())
-		bj.Status.StartTime = &now
-		bj.Status.PodName = jobName
-		_ = r.Status().Update(ctx, &bj) // Ignore failure; next reconciliation will retry
+		r.setStatusRunning(ctx, &bj, jobName)
 		return ctrl.Result{}, nil
 	}
 	if !apierrors.IsNotFound(err) {
@@ -106,16 +102,21 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 3.5 Update CR Status → Running
+	r.setStatusRunning(ctx, &bj, jobName)
+
+	return ctrl.Result{}, nil // Do not requeue; later Job status changes will re-trigger reconciliation
+}
+
+func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, bj *buildv1.BuildJob, jobName string) {
 	bj.Status.Phase = "Running"
 	now := metav1.NewTime(time.Now())
 	bj.Status.StartTime = &now
 	bj.Status.PodName = jobName
-	if err := r.Status().Update(ctx, &bj); err != nil {
-		log.Error(err, "update status failed")
-		// Do not return error; next reconciliation can still enter the existing branch
-	}
 
-	return ctrl.Result{}, nil // Do not requeue; later Job status changes will re-trigger reconciliation
+	if err := r.Status().Update(ctx, bj); err != nil {
+		log := log.FromContext(ctx)
+		log.Error(err, "failed to update BuildJob status to Running")
+	}
 }
 
 // buildScriptConfigMap writes each step's script into the ConfigMap as key=<step-id>.sh
