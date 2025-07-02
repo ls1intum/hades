@@ -79,29 +79,23 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// ----------------------------- 3. First-time creation -----------------------------
-	// 3.1 Create ConfigMap (e.g., for build scripts)
-	cm := buildScriptConfigMap(&bj, jobName)
-	if err := r.Create(ctx, cm); err != nil && !apierrors.IsAlreadyExists(err) {
-		log.Error(err, "cannot create ConfigMap")
-		return ctrl.Result{}, err
-	}
 
-	// 3.2 Create Kubernetes Job (initContainers = bj.Spec.Steps)
-	k8sJob := buildK8sJob(&bj, cm.Name, jobName)
+	// 3.1 Create Kubernetes Job (initContainers = bj.Spec.Steps)
+	k8sJob := buildK8sJob(&bj, jobName)
 
-	// 3.3 Set OwnerReference (automatically delete ConfigMap when Job is deleted)
+	// 3.2 Set OwnerReference (automatically delete ConfigMap when Job is deleted)
 	if err := controllerutil.SetControllerReference(&bj, k8sJob, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// 3.4 Create Job in Kubernetes as Pod
+	// 3.3 Create Job in Kubernetes as Pod
 	log.Info("Creating Job for BuildJob", "job", k8sJob.Name)
 	if err := r.Create(ctx, k8sJob); err != nil {
 		log.Error(err, "cannot create Job")
 		return ctrl.Result{}, err
 	}
 
-	// 3.5 Update CR Status → Running
+	// 3.4 Update CR Status → Running
 	r.setStatusRunning(ctx, &bj, jobName)
 
 	return ctrl.Result{}, nil // Do not requeue; later Job status changes will re-trigger reconciliation
@@ -119,50 +113,54 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, bj *buildv1.B
 	}
 }
 
-// buildScriptConfigMap writes each step's script into the ConfigMap as key=<step-id>.sh
-func buildScriptConfigMap(bj *buildv1.BuildJob, jobName string) *corev1.ConfigMap {
-	data := make(map[string]string)
-	for _, s := range bj.Spec.Steps {
-		data[fmt.Sprintf("%d.sh", s.ID)] = s.Script
-	}
-	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName + "-scripts",
-			Namespace: bj.Namespace,
-		},
-		Data: data,
-	}
-}
-
 // buildK8sJob creates a one-time Job with InitContainers that execute each Step in order
-func buildK8sJob(bj *buildv1.BuildJob, cmName, jobName string) *batchv1.Job {
+func buildK8sJob(bj *buildv1.BuildJob, jobName string) *batchv1.Job {
+	sharedVolName := "shared"
+	sharedMount := corev1.VolumeMount{Name: sharedVolName, MountPath: "/shared"}
+
 	var initCtrs []corev1.Container
 	for _, s := range bj.Spec.Steps {
-		initCtrs = append(initCtrs, corev1.Container{
-			Name:    fmt.Sprintf("step-%d", s.ID),
-			Image:   s.Image,
-			Command: []string{"/bin/sh", "-c"},
-			Args:    []string{fmt.Sprintf("chmod +x /scripts/%d.sh && /scripts/%d.sh", s.ID, s.ID)},
-			VolumeMounts: []corev1.VolumeMount{{
-				Name:      "scripts",
-				MountPath: "/scripts",
-			}},
-		})
+		c := corev1.Container{
+			Name:         fmt.Sprintf("step-%d", s.ID),
+			Image:        s.Image,
+			Env:          envFromMeta(s.Metadata), // Convert metadata to environment variables
+			VolumeMounts: []corev1.VolumeMount{sharedMount},
+		}
+
+		if s.Script != "" {
+			c.Command = []string{"/bin/sh", "-c"}
+			c.Args = []string{s.Script}
+		}
+
+		// Set resource limits if specified
+		if s.CPULimit != nil || s.MemoryLimit != nil {
+			c.Resources.Limits = corev1.ResourceList{}
+			if s.CPULimit != nil {
+				c.Resources.Limits[corev1.ResourceCPU] = *s.CPULimit
+			}
+			if s.MemoryLimit != nil {
+				c.Resources.Limits[corev1.ResourceMemory] = *s.MemoryLimit
+			}
+		}
+
+		initCtrs = append(initCtrs, c)
+	}
+
+	// Add a dummy container that runs after all init containers have finished
+	dummy := corev1.Container{
+		Name:         "buildjob-finalizer",
+		Image:        "busybox",
+		Command:      []string{"sh", "-c", "echo build finished"},
+		VolumeMounts: []corev1.VolumeMount{sharedMount},
 	}
 
 	podSpec := corev1.PodSpec{
 		InitContainers: initCtrs,
-		Containers: []corev1.Container{{
-			Name:    "BuildJobFinalizer",
-			Image:   "busybox",
-			Command: []string{"sh", "-c", "echo build finished"},
-		}},
+		Containers:     []corev1.Container{dummy},
 		Volumes: []corev1.Volume{{
-			Name: "scripts",
+			Name: sharedVolName,
 			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: cmName},
-				},
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		}},
 		RestartPolicy: corev1.RestartPolicyNever,
@@ -185,6 +183,14 @@ func buildK8sJob(bj *buildv1.BuildJob, cmName, jobName string) *batchv1.Job {
 			},
 		},
 	}
+}
+
+func envFromMeta(m map[string]string) []corev1.EnvVar {
+	var envs []corev1.EnvVar
+	for k, v := range m {
+		envs = append(envs, corev1.EnvVar{Name: k, Value: v})
+	}
+	return envs
 }
 
 // SetupWithManager sets up the controller with the Manager.
