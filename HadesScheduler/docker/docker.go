@@ -21,7 +21,7 @@ import (
 
 type DockerEnvConfig struct {
 	DockerHost           string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
-	ContainerAutoremove  bool   `env:"DOCKER_CONTAINER_AUTOREMOVE" envDefault:"true"`
+	ContainerAutoremove  bool   `env:"DOCKER_CONTAINER_AUTOREMOVE" envDefault:"false"`
 	DockerScriptExecutor string `env:"DOCKER_SCRIPT_EXECUTOR" envDefault:"/bin/bash -c"`
 	CPU_limit            uint   `env:"DOCKER_CPU_LIMIT"`    // Number of CPUs - e.g. '6'
 	MEMORY_limit         string `env:"DOCKER_MEMORY_LIMIT"` // RAM usage in g or m  - e.g. '4g'
@@ -34,7 +34,6 @@ type DockerProps struct {
 	memory_limit         string
 	volumeName           string
 	containerLogsOptions container.LogConfig
-	cleanupSharedVolumes bool
 }
 
 type Scheduler struct {
@@ -99,16 +98,6 @@ func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 	} else {
 		slog.Warn("NATS connection is nil, logs will not be published to NATS")
 	}
-  return d
-}
-  
-// Cleanup deletes shared volume after build
-func (d *Scheduler) SetCleanupSharedVolumes(cleanup bool) *Scheduler {
-	if cleanup {
-		slog.Warn("CLEANUP AFTER BUILD ENABLED")
-	}
-
-	d.DockerProps.cleanupSharedVolumes = cleanup
 	return d
 }
 
@@ -149,24 +138,6 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		return err
 	}
 
-	// If cleanup is enabled, delete the shared volume after build
-	if d.DockerProps.cleanupSharedVolumes {
-		// give Docker a beat to fully unmount
-		time.Sleep(1 * time.Second)
-		if err := deleteSharedVolume(ctx, d.cli, volumeName); err != nil {
-			job_logger.Error("Failed to delete shared volume after build", slog.Any("error", err), slog.String("volume", volumeName))
-		} else {
-			job_logger.Info("Shared volume deleted after build", slog.String("volume", volumeName))
-		}
-
-		msg, err := d.cli.VolumeInspect(ctx, volumeName)
-		if err == nil {
-			job_logger.Info(msg.Name+" still exists after deletion attempt", slog.Any("volume", msg))
-		} else {
-			job_logger.Warn("Volume deleted.")
-		}
-	}
-
 	// Add created volume to the job's docker config
 	jobDockerConfig := d.DockerProps
 	jobDockerConfig.volumeName = volumeName
@@ -180,7 +151,6 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 	err := docker_job.execute(ctx, d.nc)
 	if err != nil {
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
-		job_logger.Debug("Failed to execute job", slog.Any("error", err))
 		return err
 	}
 
@@ -321,6 +291,10 @@ func (s DockerStep) execute(ctx context.Context) error {
 		return err
 	} else {
 		s.logger.Debug("Container logs written", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
+	}
+
+	if err := s.removeContainer(ctx, resp.ID); err != nil {
+		s.logger.Error("Failed to cleanup container", slog.Any("error", err), slog.Any("container_id", resp.ID))
 	}
 
 	return nil

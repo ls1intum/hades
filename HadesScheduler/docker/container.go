@@ -155,6 +155,18 @@ func publishLogsToNATS(nc *nats.Conn, buildJobLog Log) error {
 	return nil
 }
 
+func (s *DockerStep) removeContainer(ctx context.Context, containerID string) error {
+	if err := s.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
+		Force:         true, // Kill if running, then remove
+		RemoveVolumes: true, // Clean up any volumes
+	}); err != nil {
+		return fmt.Errorf("failed to cleanup container %s: %w", containerID, err)
+	}
+
+	slog.Info("Container cleanup done", slog.String("container_id", containerID))
+	return nil
+}
+
 func copyFileToContainer(ctx context.Context, client *client.Client, containerID, srcPath, dstPath string) error {
 	scriptFile, err := os.Open(srcPath)
 	if err != nil {
