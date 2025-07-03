@@ -26,12 +26,15 @@ const (
 )
 
 type LogEntry struct {
-	JobID       string    `json:"job_id"`
-	ContainerID string    `json:"container_id"`
-	Timestamp   time.Time `json:"timestamp"`
-	Message     string    `json:"message"`
-	Stream      string    `json:"stream"`
-	Level       string    `json:"level,omitempty"`
+	Timestamp    time.Time `json:"timestamp"`
+	Message      string    `json:"message"`
+	OutputStream string    `json:"output_stream"`
+}
+
+type Log struct {
+	JobID       string     `json:"job_id"`
+	ContainerID string     `json:"container_id"`
+	Logs        []LogEntry `json:"logs"`
 }
 
 // retrieves and demultiplexes container logs
@@ -55,8 +58,11 @@ func getContainerLogs(ctx context.Context, client *client.Client, containerID st
 }
 
 // converts raw log streams into structured log entries
-func parseContainerLogs(stdout, stderr *bytes.Buffer, jobID, containerID string) ([]LogEntry, error) {
-	var entries []LogEntry
+func parseContainerLogs(stdout, stderr *bytes.Buffer, jobID, containerID string) (Log, error) {
+	var buildJobLog Log
+
+	buildJobLog.JobID = jobID
+	buildJobLog.ContainerID = containerID
 
 	// Process stdout and stderr
 	for _, stream := range []struct {
@@ -66,21 +72,21 @@ func parseContainerLogs(stdout, stderr *bytes.Buffer, jobID, containerID string)
 		{buf: stdout, streamType: StreamStdout},
 		{buf: stderr, streamType: StreamStderr},
 	} {
-		if err := processStream(stream.buf, stream.streamType, jobID, containerID, &entries); err != nil {
-			return nil, fmt.Errorf("processing %s: %w", stream.streamType, err)
+		if err := processStream(stream.buf, stream.streamType, &buildJobLog.Logs); err != nil {
+			return buildJobLog, fmt.Errorf("processing %s: %w", stream.streamType, err)
 		}
 	}
 
 	slog.Debug("Parsed container logs",
 		slog.String("container_id", containerID),
 		slog.String("job_id", jobID),
-		slog.Int("entries_count", len(entries)))
+		slog.Int("entries_count", len(buildJobLog.Logs)))
 
-	return entries, nil
+	return buildJobLog, nil
 }
 
 // handles a single log stream (stdout or stderr)
-func processStream(buf *bytes.Buffer, streamType, jobID, containerID string, entries *[]LogEntry) error {
+func processStream(buf *bytes.Buffer, streamType string, entries *[]LogEntry) error {
 	scanner := bufio.NewScanner(buf)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -88,14 +94,14 @@ func processStream(buf *bytes.Buffer, streamType, jobID, containerID string, ent
 			continue
 		}
 
-		entry := parseLogLine(line, jobID, containerID, streamType)
+		entry := parseLogLine(line, streamType)
 		*entries = append(*entries, entry)
 	}
 	return scanner.Err()
 }
 
 // parses a single log line into a structured LogEntry
-func parseLogLine(line, jobID, containerID, stream string) LogEntry {
+func parseLogLine(line, stream string) LogEntry {
 	timestamp := time.Now()
 	message := line
 
@@ -108,39 +114,12 @@ func parseLogLine(line, jobID, containerID, stream string) LogEntry {
 	}
 
 	entry := LogEntry{
-		JobID:       jobID,
-		ContainerID: containerID,
-		Timestamp:   timestamp,
-		Message:     message,
-		Stream:      stream,
-	}
-
-	if level := extractLogLevel(message); level != "" {
-		entry.Level = level
+		Timestamp:    timestamp,
+		Message:      message,
+		OutputStream: stream,
 	}
 
 	return entry
-}
-
-// determines the log level from the message content
-func extractLogLevel(message string) string {
-	message = strings.ToLower(message)
-	for _, level := range []struct {
-		level    string
-		keywords []string
-	}{
-		{"error", []string{"level=error", "error"}},
-		{"warn", []string{"level=warn", "warning"}},
-		{"info", []string{"level=info", "info"}},
-		{"debug", []string{"level=debug", "debug"}},
-	} {
-		for _, keyword := range level.keywords {
-			if strings.Contains(message, keyword) {
-				return level.level
-			}
-		}
-	}
-	return ""
 }
 
 // writeContainerLogsToNATS sends container logs to NATS
@@ -150,32 +129,27 @@ func writeContainerLogsToNATS(ctx context.Context, client *client.Client, nc *na
 		return fmt.Errorf("getting container logs: %w", err)
 	}
 
-	entries, err := parseContainerLogs(stdout, stderr, jobID, containerID)
+	buildJobLog, err := parseContainerLogs(stdout, stderr, jobID, containerID)
 	if err != nil {
 		return fmt.Errorf("parsing container logs: %w", err)
 	}
 
-	return publishLogsToNATS(nc, jobID, entries)
+	return publishLogsToNATS(nc, buildJobLog)
 }
 
 // publishLogsToNATS publishes log entries to NATS
-func publishLogsToNATS(nc *nats.Conn, jobID string, entries []LogEntry) error {
-	subject := fmt.Sprintf(LogSubjectFormat, jobID)
+func publishLogsToNATS(nc *nats.Conn, buildJobLog Log) error {
+	subject := fmt.Sprintf(LogSubjectFormat, buildJobLog.JobID)
 
-	for _, entry := range entries {
-		data, err := json.Marshal(entry)
-		if err != nil {
-			slog.Error("Failed to marshal log entry",
-				slog.String("job_id", jobID),
-				slog.Any("error", err))
-			continue
-		}
+	data, err := json.Marshal(buildJobLog)
+	if err != nil {
+		slog.Error("Failed to marshal log", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
+		return fmt.Errorf("marshalling log: %w", err)
+	}
 
-		if err := nc.Publish(subject, data); err != nil {
-			slog.Error("Failed to publish log to NATS",
-				slog.String("job_id", jobID),
-				slog.Any("error", err))
-		}
+	if err := nc.Publish(subject, data); err != nil {
+		slog.Error("Failed to publish log to NATS", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
+		return fmt.Errorf("publishing log to NATS: %w", err)
 	}
 
 	return nil
