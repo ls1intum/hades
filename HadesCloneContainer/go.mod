@@ -1,6 +1,6 @@
 module github.com/ls1intum/hades/hadesCloneContainer
 
-go 1.23.0
+go 1.24.0
 
 toolchain go1.24.1
 
