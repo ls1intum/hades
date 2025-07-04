@@ -284,7 +284,7 @@ func (s DockerStep) execute(ctx context.Context) error {
 	s.logger.Debug("Container completed", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
 
 	// Write the container logs to NATS
-	err = writeContainerLogsToNATS(ctx, s.cli, s.nc, resp.ID, job_id)
+	err = processContainerLogs(ctx, s.cli, s.nc, resp.ID, job_id)
 
 	if err != nil {
 		s.logger.Error("Failed to write container logs", slog.Any("error", err), slog.Any("container_id", resp.ID))
