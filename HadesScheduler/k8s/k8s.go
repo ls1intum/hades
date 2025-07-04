@@ -7,6 +7,7 @@ import (
 
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
+	"github.com/nats-io/nats.go"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -14,6 +15,7 @@ type Scheduler struct {
 	// TODO: This may be problematic - We need to clarify how to access the cluster with the service account and find a solution that is compatible with both modes
 	k8sClient *kubernetes.Clientset
 	namespace string
+	nc        *nats.Conn // NATS connection for publishing logs
 }
 
 type K8sConfig struct {
@@ -90,6 +92,15 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 	}
 }
 
+func (k Scheduler) SetNatsConnection(nc *nats.Conn) Scheduler {
+	if nc != nil {
+		k.nc = nc
+	} else {
+		slog.Warn("NATS connection is nil, logs will not be published to NATS")
+	}
+	return k
+}
+
 func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	slog.Debug("Scheduling job in Kubernetes")
 	k8sJob := K8sJob{
@@ -97,6 +108,7 @@ func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		k8sClient:        k.k8sClient,
 		namespace:        k.namespace,
 		sharedVolumeName: "shared",
+		nc:               k.nc,
 	}
 	return k8sJob.execute(ctx)
 }
