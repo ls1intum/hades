@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -83,7 +84,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// 3.1 Create Kubernetes Job (initContainers = bj.Spec.Steps)
 	k8sJob := buildK8sJob(&bj, jobName)
 
-	// 3.2 Set OwnerReference (automatically delete ConfigMap when Job is deleted)
+	// 3.2 Set OwnerReference
 	if err := controllerutil.SetControllerReference(&bj, k8sJob, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -127,7 +128,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string) *batchv1.Job {
 			VolumeMounts: []corev1.VolumeMount{sharedMount},
 		}
 
-		if s.Script != "" {
+		if strings.TrimSpace(s.Script) != "" {
 			c.Command = []string{"/bin/sh", "-c"}
 			c.Args = []string{s.Script}
 		}
