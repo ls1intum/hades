@@ -61,7 +61,7 @@ func main() {
 	switch executorCfg.Executor {
 	case "k8s":
 		slog.Info("Started HadesScheduler in Kubernetes mode")
-		scheduler = k8s.NewK8sScheduler().SetNatsConnection(NatsConnection)
+		scheduler = k8s.NewK8sScheduler()
 	case "docker":
 		slog.Info("Started HadesScheduler in Docker mode")
 		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries).SetNatsConnection(NatsConnection)
