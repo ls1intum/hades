@@ -13,6 +13,7 @@ import (
 	"github.com/ls1intum/hades/shared/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
@@ -21,12 +22,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const REDIS_IMAGE = "redis:7.2"
+const NATS_IMAGE = "nats:2.11.4"
 
 type APISuite struct {
 	suite.Suite
-	router *gin.Engine
-	redisC testcontainers.Container
+	router         *gin.Engine
+	natsC          testcontainers.Container
+	natsConnection *nats.Conn
+	hadesProducer  *utils.HadesProducer
 }
 
 func (suite *APISuite) SetupSuite() {
@@ -35,34 +38,58 @@ func (suite *APISuite) SetupSuite() {
 
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
-		Image:        REDIS_IMAGE,
-		ExposedPorts: []string{"6379/tcp"},
-		WaitingFor:   wait.ForLog("Ready to accept connections"),
+		Image:        NATS_IMAGE,
+		ExposedPorts: []string{"4222/tcp", "8222/tcp"},
+		Cmd:          []string{"-js", "-m", "8222"},
+		WaitingFor:   wait.ForHTTP("/healthz").WithPort("8222/tcp"),
 	}
 	var err error
-	suite.redisC, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+	suite.natsC, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
 	})
 	if err != nil {
-		log.Fatalf("Could not start redis: %s", err)
+		log.Fatalf("Could not start NATS: %s", err)
 	}
 
-	endpoint, err := suite.redisC.Endpoint(ctx, "")
-	log.Infof("Redis endpoint: %s", endpoint)
+	endpoint, err := suite.natsC.Endpoint(ctx, "")
+	log.Infof("NATS endpoint: %s", endpoint)
 	if err != nil {
-		log.Fatalf("Could not get redis endpoint: %s", err)
+		log.Fatalf("Could not get NATS endpoint: %s", err)
 	}
-	AsynqClient = utils.SetupQueueClient(endpoint, "", false)
-	if AsynqClient == nil {
-		log.Fatalf("Could not connect queue to redis")
+
+	// Setup NATS connection
+	natsConfig := utils.NatsConfig{
+		URL:      "nats://" + endpoint,
+		Username: "",
+		Password: "",
 	}
+
+	suite.natsConnection, err = utils.SetupNatsConnection(natsConfig)
+	if err != nil {
+		log.Fatalf("Failed to connect to NATS: %v", err)
+	}
+
+	// Create producer for tests
+	suite.hadesProducer, err = utils.NewHadesProducer(suite.natsConnection)
+	if err != nil {
+		log.Fatalf("Failed to create HadesProducer: %v", err)
+	}
+
+	// Set the global HadesProducer for tests
+	HadesProducer = suite.hadesProducer
 }
 
 func (suite *APISuite) TearDownSuite() {
+	// Close NATS connection
+	if suite.natsConnection != nil {
+		suite.natsConnection.Close()
+	}
+
+	// Stop NATS container
 	ctx := context.Background()
-	if err := suite.redisC.Terminate(ctx); err != nil {
-		log.Fatalf("Could not stop redis: %s", err)
+	if err := suite.natsC.Terminate(ctx); err != nil {
+		log.Fatalf("Could not stop NATS: %s", err)
 	}
 }
 
