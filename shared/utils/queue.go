@@ -239,21 +239,27 @@ func (hc HadesConsumer) DequeueJob(ctx context.Context, processing func(payload 
 					msg_id, err := uuid.FromBytes(msg.Data())
 					if err != nil {
 						slog.Error("Failed to parse message ID", "error", err, "data", string(msg.Data()))
-						msg.Nak() // Negative acknowledgment, message will be redelivered
+						if err := msg.Nak(); err != nil {
+							slog.Error("Failed to NAK message after parse error", "error", err, "subject", msg.Subject)
+						}
 						return
 					}
 
 					entry, err := hc.kv.Get(ctx, msg_id.String())
 					if err != nil {
 						slog.Error("Failed to get message from KeyValue store", "error", err, "id", msg_id.String())
-						msg.Nak() // Negative acknowledgment, message will be redelivered
+						if err := msg.Nak(); err != nil {
+							slog.Error("Failed to NAK message after KV store error", "error", err, "id", msg_id.String())
+						}
 						return
 					}
 					// Process the message
 					var job payload.QueuePayload
 					if err := json.Unmarshal(entry.Value(), &job); err != nil {
 						slog.Error("Failed to unmarshal message payload", "error", err, "data", string(msg.Data()))
-						msg.Nak() // Negative acknowledgment, message will be redelivered
+						if err := msg.Nak(); err != nil {
+							slog.Error("Failed to NAK message after unmarshal error", "error", err, "data", string(msg.Data()))
+						}
 						return
 					}
 

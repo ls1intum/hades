@@ -61,15 +61,12 @@ func main() {
 	switch executorCfg.Executor {
 	case "k8s":
 		slog.Info("Started HadesScheduler in Kubernetes mode")
-		var err error
-		scheduler, err = k8s.NewK8sScheduler()
-		if err != nil {
-			slog.Error("Failed to create K8sScheduler", slog.Any("error", err))
-			return
-		}
+		scheduler = k8s.NewK8sScheduler()
+
 	case "docker":
 		slog.Info("Started HadesScheduler in Docker mode")
 		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries).SetCleanupSharedVolumes(executorCfg.CleanupSharedVolumes)
+
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
 		os.Exit(1)
