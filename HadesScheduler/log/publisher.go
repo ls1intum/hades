@@ -10,9 +10,14 @@ import (
 
 // publish log entries to NATS
 func PublishLogsToNATS(nc *nats.Conn, buildJobLog Log) error {
-	subject := fmt.Sprintf(LogSubjectFormat, buildJobLog.JobID)
+	if nc == nil {
+		slog.Error("Skipping log publish: nil NATS connection", slog.String("job_id", buildJobLog.JobID))
+		return fmt.Errorf("nil NATS connection")
+	}
 
+	subject := fmt.Sprintf(LogSubjectFormat, buildJobLog.JobID)
 	data, err := json.Marshal(buildJobLog)
+
 	if err != nil {
 		slog.Error("Failed to marshal log", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
 		return fmt.Errorf("marshalling log: %w", err)

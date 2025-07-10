@@ -137,7 +137,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		job_logger.Error("Failed to create shared volume", slog.Any("error", err))
 		return err
 	}
-  
+
 	// Add created volume to the job's docker config
 	jobDockerConfig := d.DockerProps
 	jobDockerConfig.volumeName = volumeName
@@ -287,10 +287,10 @@ func (s DockerStep) execute(ctx context.Context) error {
 	err = processContainerLogs(ctx, s.cli, s.nc, resp.ID, job_id)
 
 	if err != nil {
-		s.logger.Error("Failed to write container logs", slog.Any("error", err), slog.Any("container_id", resp.ID))
+		s.logger.Error("Failed to write container logs to NATS", slog.Any("error", err), slog.Any("container_id", resp.ID))
 		return err
 	} else {
-		s.logger.Debug("Container logs written", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
+		s.logger.Debug("Container logs written to NATS", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
 	}
 
 	if err := s.removeContainer(ctx, resp.ID); err != nil {
