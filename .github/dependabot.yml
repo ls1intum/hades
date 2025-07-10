@@ -9,7 +9,6 @@ updates:
     directories: 
       - "/HadesAPI"
       - "/HadesScheduler"
-      - "/HadesCloneContainer"
       - "/shared"
     schedule:
       interval: "weekly"
