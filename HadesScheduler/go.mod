@@ -42,7 +42,6 @@ require (
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/ebitengine/purego v0.8.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/moby/go-archive v0.1.0 // indirect
 	github.com/moby/sys/atomicwriter v0.1.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
