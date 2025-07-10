@@ -2,9 +2,6 @@ package k8s
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"k8s.io/client-go/rest"
 
 	"log/slog"
 
@@ -31,7 +28,7 @@ type K8sConfig struct {
 // K8sConfigKubeconfig is used as configuration if used with a kubeconfig file
 type K8sConfigKubeconfig struct {
 	K8sConfig
-	Kubeconfig string `env:"KUBECONFIG"`
+	kubeconfig string `env:"KUBECONFIG"`
 }
 
 // K8sConfigServiceaccount is used as configuration if used with a service account
@@ -39,7 +36,7 @@ type K8sConfigServiceaccount struct {
 	K8sConfig
 }
 
-func NewK8sScheduler() (Scheduler, error) {
+func NewK8sScheduler() Scheduler {
 	slog.Debug("Initializing Kubernetes scheduler")
 
 	// Load the user provided Kubernetes configuration
@@ -49,18 +46,23 @@ func NewK8sScheduler() (Scheduler, error) {
 
 	// Initialize the Kubernetes scheduler
 	slog.Info("Initializing Kubernetes client")
-	scheduler, err := initializeClusterAccess(k8sCfg)
-	if err != nil {
-		return Scheduler{}, fmt.Errorf("initialize k8s access: %w", err)
-	}
+	scheduler := initializeClusterAccess(k8sCfg)
 
 	// TODO: Check cluster connection and print cluster nodes to log
 
-	return scheduler, nil
+	// Add the namespace to the scheduler
+	slog.Info("Creating namespace in Kubernetes")
+	_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
+	if err != nil {
+		// TODO: This may fail if the namespace already exists - we need to handle that case with a check
+		slog.With("error", err).Info("Failed to create namespace in Kubernetes")
+	}
+
+	return scheduler
 }
 
 // Create a Kubernetes clientset based on the provided configuration
-func initializeClusterAccess(k8sCfg K8sConfig) (Scheduler, error) {
+func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 	switch k8sCfg.ConfigMode {
 	case "kubeconfig":
 		slog.Info("Using kubeconfig for Kubernetes access")
@@ -68,29 +70,23 @@ func initializeClusterAccess(k8sCfg K8sConfig) (Scheduler, error) {
 		var K8sConfigKub K8sConfigKubeconfig
 		utils.LoadConfig(&K8sConfigKub)
 
-		client := initializeKubeconfig(K8sConfigKub)
-		if client == nil {
-			return Scheduler{}, errors.New("failed to build client from kubeconfig")
+		return Scheduler{
+			k8sClient: initializeKubeconfig(K8sConfigKub),
+			namespace: k8sCfg.K8sNamespace,
 		}
-		return Scheduler{k8sClient: client, namespace: k8sCfg.K8sNamespace}, nil
 
 	case "serviceaccount":
 		slog.Info("Using service account for Kubernetes access")
 
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			return Scheduler{}, fmt.Errorf("load in-cluster config: %w", err)
-		}
+		var K8sConfigSvc K8sConfigServiceaccount
+		utils.LoadConfig(&K8sConfigSvc)
 
-		clientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			return Scheduler{}, fmt.Errorf("create clientset: %w", err)
-		}
-
-		return Scheduler{k8sClient: clientset, namespace: k8sCfg.K8sNamespace}, nil
+		slog.Warn("Service account mode not yet implemented")
+		return Scheduler{}
 
 	default:
-		return Scheduler{}, fmt.Errorf("invalid config mode %q", k8sCfg.ConfigMode)
+		slog.Error("Invalid Kubernetes config mode specified", "config_mode", k8sCfg.ConfigMode)
+		return Scheduler{}
 	}
 }
 
