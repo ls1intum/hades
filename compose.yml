@@ -32,6 +32,8 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+      hadesAPI:
+        condition: service_started
     environment:
       - NATS_URL=nats://nats:4222
       - HADES_EXECUTOR=docker
@@ -45,7 +47,7 @@ services:
       - "4222:4222"
       - "8222:8222"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8222/healthz"]
+      test: ["CMD", "nats-server", "--health"]
       interval: 10s
       timeout: 5s
       retries: 3
