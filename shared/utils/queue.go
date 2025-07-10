@@ -165,8 +165,18 @@ func (hp HadesProducer) EnqueueJobWithPriority(ctx context.Context, queuePayloud
 		slog.Error("Failed to marshal payload", "error", err)
 		return err
 	}
-	_, err = hp.js.PublishAsync(PrioritySubject(priority), queuePayloud.ID[:], jetstream.WithMsgID(queuePayloud.ID.String()))
+	pubAckFuture, err := hp.js.PublishAsync(PrioritySubject(priority), queuePayloud.ID[:], jetstream.WithMsgID(queuePayloud.ID.String()))
 	if err != nil {
+		return err
+	}
+
+	// Wait (bounded) for the server ack
+	if _, err := pubAckFuture.Ok(); err != nil {
+		return err
+	}
+
+	// Wait (bounded) for the server ack
+	if _, err := pubAckFuture.Ok(); err != nil {
 		return err
 	}
 
