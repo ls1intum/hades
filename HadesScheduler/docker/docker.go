@@ -137,7 +137,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		job_logger.Error("Failed to create shared volume", slog.Any("error", err))
 		return err
 	}
-
+  
 	// Add created volume to the job's docker config
 	jobDockerConfig := d.DockerProps
 	jobDockerConfig.volumeName = volumeName
