@@ -12,8 +12,27 @@ updates:
       - "/shared"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+        versions: ["*-alpha", "*-beta"]
+    groups:
+      golang-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       # Check for updates to GitHub Actions every week
       interval: "weekly"
+    ignore:
+      - dependency-name: "*"
+        versions: ["*-alpha", "*-beta"]
+    groups:
+      github-actions:
+        patterns:
+          - "*"
