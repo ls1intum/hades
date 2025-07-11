@@ -105,8 +105,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
-	golang.org/x/time v0.9.0 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
+	golang.org/x/time v0.12.0 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 	k8s.io/api v0.34.0-alpha.2
 	k8s.io/apimachinery v0.34.0-alpha.2
 	k8s.io/client-go v0.34.0-alpha.2

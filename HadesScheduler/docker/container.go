@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -11,27 +12,54 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/nats-io/nats.go"
 )
 
-func writeContainerLogsToFile(ctx context.Context, client *client.Client, containerID string, logFilePath string) error {
-	out, err := os.Create(logFilePath)
+func processContainerLogs(ctx context.Context, client *client.Client, nc *nats.Conn, containerID, jobID string) error {
+	stdout, stderr, err := getContainerLogs(ctx, client, containerID)
 	if err != nil {
-		return err
+		return fmt.Errorf("getting container logs: %w", err)
 	}
-	defer out.Close()
 
+	buildJobLog, err := log.ParseContainerLogs(stdout, stderr, jobID, containerID)
+	if err != nil {
+		return fmt.Errorf("parsing container logs: %w", err)
+	}
+
+	return log.PublishLogsToNATS(nc, buildJobLog)
+}
+
+// retrieves and demultiplexes container logs
+func getContainerLogs(ctx context.Context, client *client.Client, containerID string) (*bytes.Buffer, *bytes.Buffer, error) {
 	logReader, err := client.ContainerLogs(ctx, containerID, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Timestamps: true,
 	})
 	if err != nil {
-		return err
+		return nil, nil, fmt.Errorf("getting container logs: %w", err)
 	}
 	defer logReader.Close()
 
-	_, err = stdcopy.StdCopy(out, out, logReader)
-	return err
+	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
+	if _, err := stdcopy.StdCopy(stdout, stderr, logReader); err != nil {
+		return nil, nil, fmt.Errorf("demultiplexing logs: %w", err)
+	}
+
+	return stdout, stderr, nil
+}
+
+func (s *DockerStep) removeContainer(ctx context.Context, containerID string) error {
+	if err := s.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
+		Force:         true, // Kill if running, then remove
+		RemoveVolumes: true, // Clean up any volumes
+	}); err != nil {
+		return fmt.Errorf("failed to cleanup container %s: %w", containerID, err)
+	}
+
+	slog.Info("Container cleanup done", slog.String("container_id", containerID))
+	return nil
 }
 
 func copyFileToContainer(ctx context.Context, client *client.Client, containerID, srcPath, dstPath string) error {
