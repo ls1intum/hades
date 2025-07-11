@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        directory: [ 'shared', 'HadesCloneContainer', 'HadesAPI' ]
+        directory: [ 'shared', 'HadesAPI' ]
 
     steps:
       - uses: actions/checkout@v4

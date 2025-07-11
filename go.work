@@ -4,7 +4,6 @@ toolchain go1.24.4
 
 use (
 	./HadesAPI
-	./HadesCloneContainer
 	./HadesScheduler
 	./shared
 )
