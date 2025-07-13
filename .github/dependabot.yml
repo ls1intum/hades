@@ -13,9 +13,8 @@ updates:
     schedule:
       interval: "weekly"
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-        versions: ["*-alpha", "*-beta"]
+      - dependency-name: "*-alpha*"
+      - dependency-name: "*-beta*"
     groups:
       golang-dependencies:
         patterns:
@@ -29,9 +28,6 @@ updates:
     schedule:
       # Check for updates to GitHub Actions every week
       interval: "weekly"
-    ignore:
-      - dependency-name: "*"
-        versions: ["*-alpha", "*-beta"]
     groups:
       github-actions:
         patterns:
