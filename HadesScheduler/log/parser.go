@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -75,12 +76,32 @@ func parseLogLine(line, stream string) LogEntry {
 	timestamp := time.Now()
 	message := line
 
-	parts := strings.SplitN(line, " ", 2)
-	if len(parts) == 2 {
-		if ts, err := time.Parse(time.RFC3339Nano, parts[0]); err == nil {
-			timestamp = ts
+	//if message contains the fields: parse, else take raw log as msg
+	var re = regexp.MustCompile(`time=".*level=.*msg="`)
+	var parts []string
+
+	if re.MatchString(message) {
+		//split into 3 sections: container timestamp, application timestamp, level + msg
+		//container timestamps wont be used.
+		parts = strings.SplitN(line, " ", 3)
+		//replace unsused container timestamp
+		parts[0] = strings.TrimSuffix(strings.TrimPrefix(parts[1], `time="`), `"`)
+		message = parts[2]
+
+	} else {
+		//split into 2 sections: container timestamp, raw log
+		//container timestamps will be used.
+		parts = strings.SplitN(line, " ", 2)
+
+		if len(parts) == 1 {
+			message = ""
+		} else {
 			message = parts[1]
 		}
+	}
+
+	if ts, err := time.Parse(time.RFC3339Nano, parts[0]); err == nil {
+		timestamp = ts
 	}
 
 	entry := LogEntry{
