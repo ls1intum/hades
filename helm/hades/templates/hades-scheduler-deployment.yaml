@@ -34,4 +34,4 @@ spec:
             - name: K8S_CONFIG_MODE
               value: "serviceaccount"
             - name: K8S_NAMESPACE
-              value: {{ .Values.namespace.name }}
+              value: {{ .Release.Namespace }}
