@@ -1,7 +1,3 @@
-namespace:
-  name: "hades-nats-dev"
-  create: false
-
 hadesApi:
   image:
     repository: ghcr.io/ls1intum/hades/hades-api
@@ -71,5 +67,5 @@ nats:
       #     enabled: true
       #     size: 10Gi
       #   maxSize: 10Gi
-  host: "nats://hades-nats-dev"
+  host: "hades-nats.hades.svc.cluster.local"
   port: 4222

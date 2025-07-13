@@ -2,11 +2,10 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: hades-scheduler-rolebinding
-  namespace: {{ .Values.namespace.name }}
 subjects:
   - kind: ServiceAccount
     name: {{ .Values.rbac.serviceAccountName }}
-    namespace: {{ .Values.namespace.name }}
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: Role
   name: {{ .Values.rbac.role.name}}

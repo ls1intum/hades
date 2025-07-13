@@ -2,7 +2,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: hades-scheduler-role
-  namespace: {{ .Values.namespace.name }}
 rules:
   - apiGroups: [""]
     resources: ["configmaps", "pods"]

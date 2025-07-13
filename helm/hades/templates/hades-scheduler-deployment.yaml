@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: "hades-scheduler"
-  namespace: {{.Values.namespace.name}}
 spec:
   replicas: {{ .Values.hadesScheduler.replicaCount }}
   selector:
@@ -29,7 +28,7 @@ spec:
             - containerPort: {{ .Values.hadesScheduler.service.targetPort }}
           env:
             - name: NATS_URL
-              value: "{{ .Values.nats.host }}:{{ .Values.nats.port }}"
+              value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
             - name: HADES_EXECUTOR
               value: {{ .Values.hadesScheduler.executor }}
             - name: K8S_CONFIG_MODE

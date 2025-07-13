@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: "hades-api"
-  namespace: {{.Values.namespace.name}}
 spec:
   replicas: {{ .Values.hadesApi.replicaCount }}
   selector:
@@ -28,4 +27,4 @@ spec:
             - containerPort: {{ .Values.hadesApi.service.targetPort }}
           env:
             - name: NATS_URL
-              value: "{{ .Values.nats.host }}:{{ .Values.nats.port }}"
+              value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
