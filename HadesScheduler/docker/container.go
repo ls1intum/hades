@@ -13,21 +13,23 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/ls1intum/hades/hadesScheduler/log"
-	"github.com/nats-io/nats.go"
 )
 
-func processContainerLogs(ctx context.Context, client *client.Client, nc *nats.Conn, containerID, jobID string) error {
+func processContainerLogs(ctx context.Context, client *client.Client, publisher log.Publisher, containerID, jobID string) error {
 	stdout, stderr, err := getContainerLogs(ctx, client, containerID)
 	if err != nil {
 		return fmt.Errorf("getting container logs: %w", err)
 	}
 
-	buildJobLog, err := log.ParseContainerLogs(stdout, stderr, jobID, containerID)
+	buildJobLog, err := log.ParseContainerLogs(stdout, stderr, containerID)
 	if err != nil {
 		return fmt.Errorf("parsing container logs: %w", err)
 	}
 
-	return log.PublishLogsToNATS(nc, buildJobLog)
+	buildJobLog.JobID = jobID
+	slog.Debug("Pased container logs was of", slog.String("jobID", jobID))
+
+	return publisher.PublishLogs(buildJobLog)
 }
 
 // retrieves and demultiplexes container logs

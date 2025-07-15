@@ -29,10 +29,9 @@ type Log struct {
 }
 
 // converts raw log streams into structured log entries
-func ParseContainerLogs(stdout, stderr *bytes.Buffer, jobID, containerID string) (Log, error) {
+func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (Log, error) {
 	var buildJobLog Log
 
-	buildJobLog.JobID = jobID
 	buildJobLog.ContainerID = containerID
 
 	// Process stdout and stderr
@@ -50,7 +49,6 @@ func ParseContainerLogs(stdout, stderr *bytes.Buffer, jobID, containerID string)
 
 	slog.Debug("Parsed container logs",
 		slog.String("container_id", containerID),
-		slog.String("job_id", jobID),
 		slog.Int("entries_count", len(buildJobLog.Logs)))
 
 	return buildJobLog, nil
