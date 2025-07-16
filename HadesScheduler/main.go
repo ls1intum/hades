@@ -62,10 +62,17 @@ func main() {
 	case "k8s":
 		slog.Info("Started HadesScheduler in Kubernetes mode")
 		scheduler = k8s.NewK8sScheduler()
+		//TODO: implement scheduler fail handling dito to docker scheduler
 
 	case "docker":
 		slog.Info("Started HadesScheduler in Docker mode")
-		scheduler = docker.NewDockerScheduler().SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries).SetNatsConnection(NatsConnection)
+
+		dockerScheduler, err := docker.NewDockerScheduler()
+		if err != nil {
+			slog.Error("Failed to create Docker scheduler", "error", err)
+			return
+		}
+		scheduler = dockerScheduler.SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries).SetNatsConnection(NatsConnection)
 
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
