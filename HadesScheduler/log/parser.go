@@ -31,7 +31,6 @@ type Log struct {
 // converts raw log streams into structured log entries
 func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (Log, error) {
 	var buildJobLog Log
-
 	buildJobLog.ContainerID = containerID
 
 	// Process stdout and stderr
@@ -71,24 +70,23 @@ func processStream(buf *bytes.Buffer, streamType string, entries *[]LogEntry) er
 
 // parses a single log line into a structured LogEntry
 func parseLogLine(line, stream string) LogEntry {
-	timestamp := time.Now()
+	var timestamp time.Time
 	message := line
 
-	//if message contains the fields: parse, else take raw log as msg
+	// Regex pattern matches structured logs with format: time="..." level="..." msg="..."
+	// This handles application logs that embed their own timestamps and levels
 	var re = regexp.MustCompile(`time=".*level=.*msg="`)
 	var parts []string
 
 	if re.MatchString(message) {
-		//split into 3 sections: container timestamp, application timestamp, level + msg
-		//container timestamps wont be used.
+		// Split into 3 sections: container timestamp, application timestamp, level + msg
+		// Container timestamps wont be used in favor of application timestamps
 		parts = strings.SplitN(line, " ", 3)
-		//replace unsused container timestamp
+		// replace unsused container timestamp
 		parts[0] = strings.TrimSuffix(strings.TrimPrefix(parts[1], `time="`), `"`)
 		message = parts[2]
-
 	} else {
-		//split into 2 sections: container timestamp, raw log
-		//container timestamps will be used.
+		// Handle simple container logs with just timestamp and message
 		parts = strings.SplitN(line, " ", 2)
 
 		if len(parts) == 1 {
@@ -100,6 +98,10 @@ func parseLogLine(line, stream string) LogEntry {
 
 	if ts, err := time.Parse(time.RFC3339Nano, parts[0]); err == nil {
 		timestamp = ts
+	} else {
+		// If timestamp parsing fails
+		timestamp = time.Now()
+		slog.Debug("time parse failed, using current time", slog.String("message:", message))
 	}
 
 	entry := LogEntry{
