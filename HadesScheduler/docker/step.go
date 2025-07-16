@@ -122,5 +122,11 @@ func (s DockerStep) execute(ctx context.Context) error {
 		s.logger.Error("Failed to cleanup container", slog.Any("error", err), slog.Any("container_id", resp.ID))
 	}
 
+	if !s.containerAutoremove {
+		if err := removeContainer(ctx, s.cli, resp.ID); err != nil {
+			s.logger.Error("Failed to cleanup container", slog.Any("error", err), slog.Any("container_id", resp.ID))
+		}
+	}
+
 	return nil
 }

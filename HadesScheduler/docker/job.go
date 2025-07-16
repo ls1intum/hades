@@ -38,8 +38,8 @@ func (d DockerJob) execute(ctx context.Context) error {
 			publisher:   d.publisher,
 		}
 
-		ctx := context.WithValue(ctx, jobIDContextKey("job_id"), d.ID.String())
-		err := docker_step.execute(ctx)
+		stepCtx := context.WithValue(ctx, jobIDContextKey("job_id"), d.ID.String())
+		err := docker_step.execute(stepCtx)
 		if err != nil {
 			d.logger.Error("Failed to execute step", slog.Any("error", err))
 			return err

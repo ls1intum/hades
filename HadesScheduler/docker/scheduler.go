@@ -42,7 +42,7 @@ type Scheduler struct {
 	publisher log.Publisher
 }
 
-func NewDockerScheduler() *Scheduler {
+func NewDockerScheduler() (*Scheduler, error) {
 	var dockerCfg DockerEnvConfig
 	utils.LoadConfig(&dockerCfg)
 	slog.Debug("Docker config", "config", dockerCfg)
@@ -61,7 +61,7 @@ func NewDockerScheduler() *Scheduler {
 			cpu_limit:           dockerCfg.CPU_limit,
 			memory_limit:        dockerCfg.MEMORY_limit,
 		},
-	}
+	}, nil
 }
 
 func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler {
