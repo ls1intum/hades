@@ -4,8 +4,7 @@ services:
 
   hadesScheduler:
     environment:
-      - REDIS_ADDR=redis:6379
-      - REDIS_PASSWORD
+      - NATS_URL=nats://nats:4222
       - KUBECONFIG=/root/.kube/config
       - HADES_EXECUTOR=k8s
     volumes:

@@ -30,5 +30,7 @@ func deleteSharedVolume(ctx context.Context, client *client.Client, name string)
 		return err
 	}
 
+	slog.Debug("Volume deleted", slog.Any("volume", name))
+
 	return nil
 }

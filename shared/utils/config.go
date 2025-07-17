@@ -9,16 +9,18 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type RedisConfig struct {
-	Addr        string `env:"REDIS_ADDR,notEmpty" envDefault:"localhost:6379"`
-	Pwd         string `env:"REDIS_PWD"`
-	TLS_Enabled bool   `env:"REDIS_TLS_ENABLED" envDefault:"false"`
+type NatsConfig struct {
+	URL      string `env:"NATS_URL,notEmpty" envDefault:"nats://localhost:4222"`
+	Username string `env:"NATS_USERNAME"`
+	Password string `env:"NATS_PASSWORD"`
+	TLS      bool   `env:"NATS_TLS_ENABLED" envDefault:"false"`
 }
 
 type ExecutorConfig struct {
 	// Executor is the executor to use for running the jobs (default: docker)
 	// Possible values: docker, k8s
-	Executor string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
+	Executor             string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
+	CleanupSharedVolumes bool   `env:"CLEANUP" envDefault:"false"`
 }
 
 func LoadConfig(cfg interface{}) {

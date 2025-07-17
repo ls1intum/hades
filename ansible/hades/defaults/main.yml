@@ -13,10 +13,10 @@ hades_api_host: "localhost"
 hades_api_certificate_fullchain_path: ""
 hades_api_certificate_key_path: ""
 
-hades_redis_host: "localhost"
-hades_redis_port: 6379
-hades_redis_password: ""
-hades_redis_version: "7.2"
+hades_nats_url: "nats://localhost:4222"
+hades_nats_username: ""
+hades_nats_password: ""
+hades_nats_tls_enabled: false
 
 hades_scheduler_concurrency: 1
 
