@@ -35,7 +35,10 @@ func (s DockerStep) execute(ctx context.Context) error {
 		envs = append(envs, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	job_id := ctx.Value(jobIDContextKey("job_id")).(string)
+	job_id, ok := ctx.Value(jobIDContextKey("job_id")).(string)
+	if !ok {
+		return fmt.Errorf("job_id not found in context")
+	}
 
 	// Add the job_id to the container envs
 	envs = append(envs, fmt.Sprintf("UUID=%s", job_id))

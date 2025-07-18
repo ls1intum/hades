@@ -30,7 +30,7 @@ func processContainerLogs(ctx context.Context, client *client.Client, publisher 
 	}
 
 	buildJobLog.JobID = jobID
-	slog.Debug("Pased container logs was of", slog.String("jobID", jobID))
+	slog.Debug("Parsed container logs was of", slog.String("jobID", jobID))
 
 	return publisher.PublishLogs(buildJobLog)
 }
@@ -114,12 +114,13 @@ func copyFileToContainer(ctx context.Context, client *client.Client, containerID
 	// Create a buffer to hold the tar archive
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
+	defer tw.Close()
+
 	// Read the script content
 	scriptContent, err := io.ReadAll(scriptFile)
 	if err != nil {
 		return err
 	}
-	defer tw.Close()
 
 	// Add the script content to the tar archive
 	tarHeader := &tar.Header{

@@ -141,7 +141,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 
 	// Delete the shared volume after the job is done
 	defer func() {
-		time.Sleep(1 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 		if err := deleteSharedVolume(ctx, d.cli, volumeName); err != nil {
 			job_logger.Error("Failed to delete shared volume", slog.Any("error", err))
 		}
