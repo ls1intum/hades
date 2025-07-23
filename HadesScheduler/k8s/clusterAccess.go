@@ -54,3 +54,18 @@ func initializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
 	return clientset
 
 }
+
+func initializeInCluster() *kubernetes.Clientset {
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		slog.Error("Failed to load in-cluster config", "error", err)
+		return nil
+	}
+
+	cs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		slog.Error("Failed to create in-cluster clientset", "error", err)
+		return nil
+	}
+	return cs
+}

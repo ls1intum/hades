@@ -1,0 +1,72 @@
+hadesApi:
+  image:
+    repository: ghcr.io/ls1intum/hades/hades-api
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+
+hadesScheduler:
+  image:
+    repository: ghcr.io/ls1intum/hades/hades-scheduler
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+  executor: "k8s"
+  configMode: "serviceaccount"
+
+rbac:
+  serviceAccountName: hades-scheduler
+  role:
+    name: hades-scheduler-role
+
+ingress:
+  enabled: true
+  className: "nginx"
+
+  host: hades.student.k8s.aet.cit.tum.de
+
+  tls:
+    enabled: true
+    secretName: hades-tls
+
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+nats:
+  config:
+    jetstream:
+      enabled: true
+      memoryStore:
+        enabled: true
+        maxSize: 1Gi
+      # fileStore:
+      #   enabled: true
+      #   dir: /data
+      #   pvc:
+      #     enabled: true
+      #     size: 10Gi
+      #   maxSize: 10Gi
+  host: "hades-nats.hades.svc.cluster.local"
+  port: 4222
