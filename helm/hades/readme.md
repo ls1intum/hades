@@ -43,16 +43,41 @@ The Scheduler operates in **`serviceaccount` mode** by default, using Kubernetes
 
 ## Quick Start
 
-```bash
-# 1. Create target namespace if the namespace does not exist
-kubectl create namespace hades
+1. Install the NATS sub-chart (if not already installed)
+    ```bash
+    helm repo add nats https://nats-io.github.io/k8s/helm/charts
+    helm dependency build ./helm/hades/
+    ```
 
-# 2. Install the chart using serviceaccount mode (default)
-helm upgrade --install hades ./helm/hades -n hades --create-namespace
+2. Adjust the values in `values.yaml` as needed. (e.g., the hostname)
 
-# 3. Tail the Scheduler logs to verify connectivity
-kubectl -n hades logs deploy/hades-scheduler -f
-```
+      ```bash
+      cat ./helm/hades/values.yaml
+      ```
+
+3. Install the chart using serviceaccount mode (default)
+    ```bash
+    helm upgrade --install hades ./helm/hades -n hades --create-namespace
+    ```
+   or if you prefer to use the `--set` flag to override values directly in the command line, you can do so like this:
+
+    ```bash
+    helm upgrade --install hades ./helm/hades -n hades --create-namespace \
+      --set ingress.host=hades.example.com \
+      --set tls.secretName=my-secrect
+    ```
+
+> In the above command:
+> 
+> The first "hades" is the Helm release name, i.e., the name Helm will use to track this deployment. You can change this to any name (e.g., hades-dev, ci-release). 
+> 
+>The second "hades" after -n is the Kubernetes namespace where the resources will be deployed. This namespace will be created automatically if it does not exist using --create-namespace
+
+4. Tail the Scheduler logs to verify connectivity
+    ```bash
+    kubectl -n hades logs deploy/hades-scheduler -f
+    ```
+> You maybe have to wait a few seconds until the NATS broker is set up.
 
 Expected healthy log lines:
 
