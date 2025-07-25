@@ -13,7 +13,7 @@ import (
 type LogAggregator interface {
 	AddLog(log buildlogs.Log)
 	FlushJobLogs(jobID string) error
-	GetJobLogs(jobID string) []buildlogs.LogEntry
+	GetJobLogs(jobID string) []buildlogs.Log
 	GetAllJobs() []string
 	MarkJobCompleted(jobID string)
 }
@@ -202,11 +202,14 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 //   - jobID: The unique identifier for the job whose logs to retrieve
 //
 // Returns:
-//   - []buildlogs.LogEntry: All log entries for the specified job, or empty slice if not found
-func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
+//   - []buildlogs.Log: All logs of each container for the specified job, or empty slice if not found
+//
+// func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
+func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
+
 	value, exists := la.logs.Load(jobID)
 	if !exists {
-		return []buildlogs.LogEntry{}
+		return []buildlogs.Log{}
 	}
 
 	v := value.(logsVersion)
@@ -218,12 +221,10 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 		totalEntries += len(log.Logs)
 	}
 
-	allLogEntries := make([]buildlogs.LogEntry, 0, totalEntries)
-	for _, log := range logs {
-		allLogEntries = append(allLogEntries, log.Logs...)
-	}
+	allLogs := make([]buildlogs.Log, 0, totalEntries)
+	allLogs = append(allLogs, logs...)
 
-	return allLogEntries
+	return allLogs
 }
 
 // GetAllJobs returns a slice containing all job IDs that currently have logs
