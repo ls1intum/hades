@@ -14,7 +14,7 @@ import (
 // workflow
 // 1. listen
 // 2. filter and batch logs (probably requires an input of some sort from whoever wants the logs)
-// 3. DTO Mapper
+// 3. map to DTO
 
 type LogEntry struct {
 	Timestamp    time.Time `json:"timestamp"`
@@ -30,7 +30,7 @@ type Log struct {
 
 func main() {
 	// Connect to NATS server
-	nc, err := nats.Connect(nats.DefaultURL) // or your NATS server URL
+	nc, err := nats.Connect(nats.DefaultURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to NATS: %v", err)
 	}
@@ -39,7 +39,6 @@ func main() {
 	log.Println("Connected to NATS server")
 
 	// Subscribe to all log messages (using wildcard)
-	// Adjust the subject pattern to match your LogSubjectFormat
 	sub, err := nc.Subscribe("logs.*", func(m *nats.Msg) {
 		var logMsg Log
 
@@ -50,7 +49,7 @@ func main() {
 		}
 
 		// Process the received log
-		log.Printf("Received log from job %s", logMsg.JobID)
+		log.Printf("Received log from job %s/n%s", logMsg.JobID, logMsg.Logs)
 
 		// You can add your own processing logic here
 		processLog(logMsg)
