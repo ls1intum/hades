@@ -8,13 +8,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
 )
 
-// workflow
-// 1. listen
-// 2. filter and batch logs (probably requires an input of some sort from whoever wants the logs)
-// 3. map to DTO
+type HadesAdapterConfig struct {
+	NatsConfig utils.NatsConfig
+	Topic      string
+}
 
 type LogEntry struct {
 	Timestamp    time.Time `json:"timestamp"`
@@ -28,9 +29,17 @@ type Log struct {
 	Logs        []LogEntry `json:"logs"`
 }
 
+// workflow
+// 1. listen
+// 2. filter and batch logs (probably requires an input of some sort from whoever wants the logs)
+// 3. map to DTO
+// 4. send to endpoint
+
 func main() {
+	var cfg HadesAdapterConfig
+
 	// Connect to NATS server
-	nc, err := nats.Connect(nats.DefaultURL)
+	nc, err := nats.Connect(cfg.NatsConfig.URL)
 	if err != nil {
 		log.Fatalf("Failed to connect to NATS: %v", err)
 	}
@@ -38,7 +47,7 @@ func main() {
 
 	log.Println("Connected to NATS server")
 
-	// Subscribe to all log messages (using wildcard)
+	// Subscribe to all log messages (using wildcard for now)
 	sub, err := nc.Subscribe("logs.*", func(m *nats.Msg) {
 		var logMsg Log
 
