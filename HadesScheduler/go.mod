@@ -8,10 +8,8 @@ replace github.com/ls1intum/hades/shared => ../shared
 
 require (
 	github.com/docker/docker v28.2.2+incompatible
-	github.com/fluent/fluent-logger-golang v1.10.0
 	github.com/ls1intum/hades/shared v0.0.0-20250610091423-ecd369d566e9
 	github.com/nats-io/nats.go v1.43.0
-	github.com/samber/slog-fluentd/v2 v2.5.2
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.37.0
 )
@@ -92,12 +90,8 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/samber/lo v1.51.0 // indirect
-	github.com/samber/slog-common v0.18.1 // indirect
 	github.com/testcontainers/testcontainers-go/modules/k3s v0.37.0
-	github.com/tinylib/msgp v1.3.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel v1.36.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.22.0 // indirect
