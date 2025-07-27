@@ -1,11 +1,9 @@
 name: Benchmark Hades
 
-#on:
-#  push:
-#    branches:
-#      - main
-
-on: [push]
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   benchmark:
@@ -18,7 +16,67 @@ jobs:
         env:
           BENCHMARK_URL: "https://hades-benchmarker.wei-tech.site/v1/benchmark/hades"
           COMMIT_HASH: ${{ github.sha }}
+          GH_USER: ${{ secrets.GH_USER }}
+          GH_PASSWORD: ${{ secrets.GH_TOKEN }}
         run: |
           echo "Triggering benchmark for commit $COMMIT_HASH"
-          curl -X POST "${BENCHMARK_URL}?count=10&commit_hash=${COMMIT_HASH}" \
-            -H "Content-Type: application/json"
+
+          cat <<EOF > payload.json
+          {
+            "name": "Benchmark Hades Job",
+            "metadata": {
+              "GLOBAL": "triggered-via-github-actions"
+            },
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "priority": 3,
+            "steps": [
+              {
+                "id": 1,
+                "name": "Report Starting Time",
+                "image": "ghcr.io/shuaiweiyu/hades-reporter:latest",
+                "metadata": {
+                  "ENDPOINT": "https://hades-benchmarker.wei-tech.site/v1/start_time"
+                }
+              },
+              {
+                "id": 2,
+                "name": "Clone",
+                "image": "ghcr.io/ls1intum/hades/hades-clone-container:latest",
+                "metadata": {
+                  "REPOSITORY_DIR": "/shared",
+                  "HADES_TEST_USERNAME": "${GH_USER}",
+                  "HADES_TEST_PASSWORD": "${GH_PASSWORD}",
+                  "HADES_TEST_URL": "https://github.com/Mtze/Artemis-Java-Test.git",
+                  "HADES_TEST_PATH": "./example",
+                  "HADES_TEST_ORDER": "1",
+                  "HADES_ASSIGNMENT_USERNAME": "${GH_USER}",
+                  "HADES_ASSIGNMENT_PASSWORD": "${GH_PASSWORD}",
+                  "HADES_ASSIGNMENT_URL": "https://github.com/Mtze/Artemis-Java-Solution.git",
+                  "HADES_ASSIGNMENT_PATH": "./example/assignment",
+                  "HADES_ASSIGNMENT_ORDER": "2"
+                }
+              },
+              {
+                "id": 3,
+                "name": "Execute",
+                "image": "ls1tum/artemis-maven-template:java17-18",
+                "script": "set -e && cd /shared/example && ./gradlew --status && ./gradlew clean test"
+              },
+              {
+                "id": 4,
+                "name": "Result",
+                "image": "ghcr.io/shuaiweiyu/hades-result-parser:latest",
+                "metadata": {
+                  "API_ENDPOINT": "https://hades-benchmarker.wei-tech.site/v1/result",
+                  "INGEST_DIR": "./shared/example",
+                  "HADES_TEST_PATH": "./example",
+                  "HADES_ASSIGNMENT_PATH": "./example/assignment"
+                }
+              }
+            ]
+          }
+          EOF
+  
+          curl -X POST "${BENCHMARK_URL}?count=1&commit_hash=${COMMIT_HASH}" \
+        -H "Content-Type: application/json" \
+          -d @payload.json
