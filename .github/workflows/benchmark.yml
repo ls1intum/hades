@@ -1,0 +1,24 @@
+name: Benchmark Hades
+
+#on:
+#  push:
+#    branches:
+#      - main
+
+on: [push]
+
+jobs:
+  benchmark:
+    name: Trigger Benchmark
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+
+    steps:
+      - name: Trigger Benchmark for commit
+        env:
+          BENCHMARK_URL: "https://hades-benchmarker.wei-tech.site/v1/benchmark/hades"
+          COMMIT_HASH: ${{ github.sha }}
+        run: |
+          echo "Triggering benchmark for commit $COMMIT_HASH"
+          curl -X POST "${BENCHMARK_URL}?count=10&commit_hash=${COMMIT_HASH}" \
+            -H "Content-Type: application/json"
