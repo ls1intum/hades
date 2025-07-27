@@ -80,5 +80,5 @@ jobs:
           EOF
   
           curl -X POST "${BENCHMARK_URL}?count=1&commit_hash=${COMMIT_HASH}" \
-        -H "Content-Type: application/json" \
+          -H "Content-Type: application/json" \
           -d @payload.json
