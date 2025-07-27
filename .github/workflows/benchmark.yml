@@ -1,9 +1,10 @@
 name: Benchmark Hades
 
-on:
-  push:
-    branches:
-      - main
+#on:
+#  push:
+#    branches:
+#      - main
+on: [push]
 
 jobs:
   benchmark:
@@ -14,7 +15,8 @@ jobs:
     steps:
       - name: Trigger Benchmark for commit
         env:
-          BENCHMARK_URL: "https://hades-benchmarker.wei-tech.site/v1/benchmark/hades"
+          BENCHMARK_URL: "http://ma-yu.aet.cit.tum.de:8081/v1/benchmark/hades"
+          COUNT: 1
           COMMIT_HASH: ${{ github.sha }}
           GH_USER: ${{ secrets.GH_USER }}
           GH_PASSWORD: ${{ secrets.GH_TOKEN }}
@@ -77,6 +79,6 @@ jobs:
           }
           EOF
   
-          curl -X POST "${BENCHMARK_URL}?count=1&commit_hash=${COMMIT_HASH}" \
+          curl -X POST "${BENCHMARK_URL}?count=${COUNT}&commit_hash=${COMMIT_HASH}" \
           -H "Content-Type: application/json" \
           -d @payload.json
