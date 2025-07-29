@@ -51,7 +51,7 @@ body:json {
         "id": 2, // mandatory to declare the order of execution
         "name": "Execute",
         "image": "ls1tum/artemis-maven-template:java17-18", // mandatory
-        "script": "sset -e && cd /shared/example && ./gradlew --status && ./gradlew clean test"
+        "script": "set -e && cd /shared/example && ./gradlew --status && ./gradlew clean test"
       }
     ]
   }
