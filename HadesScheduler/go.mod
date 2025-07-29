@@ -7,7 +7,7 @@ toolchain go1.24.4
 replace github.com/ls1intum/hades/shared => ../shared
 
 require (
-	github.com/docker/docker v28.3.2+incompatible
+	github.com/docker/docker v28.3.3+incompatible
 	github.com/fluent/fluent-logger-golang v1.10.0
 	github.com/ls1intum/hades/shared v0.0.0-20250610091423-ecd369d566e9
 	github.com/nats-io/nats.go v1.43.0
