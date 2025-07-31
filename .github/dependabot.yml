@@ -9,12 +9,26 @@ updates:
     directories: 
       - "/HadesAPI"
       - "/HadesScheduler"
-      - "/HadesCloneContainer"
       - "/shared"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "*-alpha*"
+      - dependency-name: "*-beta*"
+    groups:
+      golang-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       # Check for updates to GitHub Actions every week
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

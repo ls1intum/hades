@@ -70,7 +70,8 @@ func main() {
 			slog.Error("Failed to create Docker scheduler", "error", err)
 			return
 		}
-		scheduler = dockerScheduler.SetNatsConnection(NatsConnection)
+
+    scheduler = dockerScheduler.SetNatsConnection(NatsConnection)
 
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
