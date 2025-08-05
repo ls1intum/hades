@@ -1,8 +1,18 @@
 # hadesoperator
-// TODO(user): Add simple overview of use/purpose
+The **Hades Operator** brings Kubernetes-native automation to the [HadesCI](https://github.com/ls1intum/hades) system — a scalable job execution tool built for programming exercises and CI pipelines.
+
+This Operator helps run, schedule, and manage Hades build jobs inside a Kubernetes cluster, using native APIs and cloud-native patterns. It improves scalability, reliability, and simplifies deployment.
+
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+The Hades Operator is designed to:
+
+- Schedule and execute CI build jobs as Kubernetes custom resources.
+- Automatically handle retries and failure recovery using native Kubernetes features.
+- Improve scalability during high traffic (e.g. student exams with many submissions).
+- Collect build logs using for easier debugging and monitoring.
+- Simplify deployment and upgrades with Helm.
+- Apply fine-grained access control using Kubernetes ServiceAccounts and RBAC.
 
 ## Getting Started
 
