@@ -20,14 +20,12 @@ import (
 	"context"
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"strings"
-	"time"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"strings"
 
 	buildv1 "github.com/ls1intum/hades/api/v1"
 
@@ -61,8 +59,8 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// ----------------------------- 1. Exit if already processed ----------------------------------
-	// Only process objects entering for the first time (Phase is empty and Job not yet created)
-	if bj.Status.Phase != "" {
+	// Only process objects that are not marked as "finalized" (i.e., not deleted)
+	if bj.Status.Phase == "Succeeded" || bj.Status.Phase == "Failed" {
 		return ctrl.Result{}, nil
 	}
 
@@ -71,7 +69,23 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	var existingJob batchv1.Job
 	err := r.Get(ctx, client.ObjectKey{Namespace: bj.Namespace, Name: jobName}, &existingJob)
 	if err == nil {
-		// Job already exists (maybe previously created, but CR status hasn't been updated yet); set Phase to Running
+		// Job already exists, check the status of the job
+		done, succeeded, msg := jobFinished(&existingJob)
+		if done {
+			// Build finished
+			bj.Status.Phase = map[bool]string{true: "Succeeded", false: "Failed"}[succeeded]
+			bj.Status.Message = msg
+			now := metav1.Now()
+			bj.Status.CompletionTime = &now
+			if err := r.Status().Update(ctx, &bj); err != nil {
+				log.Error(err, "update final status")
+				return ctrl.Result{}, err
+			}
+			// Delete the CRD after the job is either successful or failed
+			return ctrl.Result{}, r.Delete(ctx, &bj)
+		}
+
+		// Build is still running, set the status to be "running"
 		r.setStatusRunning(ctx, &bj, jobName)
 		return ctrl.Result{}, nil
 	}
@@ -99,12 +113,16 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// 3.4 Update CR Status → Running
 	r.setStatusRunning(ctx, &bj, jobName)
 
-	return ctrl.Result{}, nil // Do not requeue; later Job status changes will re-trigger reconciliation
+	// Do not requeue; later Job status changes will re-trigger reconciliation
+	return ctrl.Result{}, nil
 }
 
 func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, bj *buildv1.BuildJob, jobName string) {
+	if bj.Status.Phase == "Running" {
+		return
+	}
+	now := metav1.Now()
 	bj.Status.Phase = "Running"
-	now := metav1.NewTime(time.Now())
 	bj.Status.StartTime = &now
 	bj.Status.PodName = jobName
 
@@ -198,6 +216,23 @@ func envFromMeta(m map[string]string) []corev1.EnvVar {
 func (r *BuildJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&buildv1.BuildJob{}).
+		Owns(&batchv1.Job{}).
 		Named("buildjob").
 		Complete(r)
+}
+
+func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string) {
+	for _, c := range k8sJob.Status.Conditions {
+		switch c.Type {
+		case batchv1.JobComplete:
+			if c.Status == corev1.ConditionTrue {
+				return true, true, c.Message
+			}
+		case batchv1.JobFailed:
+			if c.Status == corev1.ConditionTrue {
+				return true, false, c.Message
+			}
+		}
+	}
+	return false, false, ""
 }
