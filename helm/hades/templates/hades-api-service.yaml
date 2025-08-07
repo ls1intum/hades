@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: "hades-api-service"
+spec:
+  selector:
+    app: hades-api-selector
+  ports:
+    - port: {{ .Values.hadesApi.service.port }}
+      targetPort: {{ .Values.hadesApi.service.targetPort }}
+      protocol: TCP
+  type: {{ .Values.hadesApi.service.type }}
