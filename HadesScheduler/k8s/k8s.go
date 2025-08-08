@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"context"
-
 	"log/slog"
 
 	"github.com/ls1intum/hades/shared/payload"
@@ -81,8 +80,10 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 		var K8sConfigSvc K8sConfigServiceaccount
 		utils.LoadConfig(&K8sConfigSvc)
 
-		slog.Warn("Service account mode not yet implemented")
-		return Scheduler{}
+		return Scheduler{
+			k8sClient: initializeInCluster(),
+			namespace: k8sCfg.K8sNamespace,
+		}
 
 	default:
 		slog.Error("Invalid Kubernetes config mode specified", "config_mode", k8sCfg.ConfigMode)

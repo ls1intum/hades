@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "hades-scheduler"
+spec:
+  replicas: {{ .Values.hadesScheduler.replicaCount }}
+  selector:
+    matchLabels:
+      app: hades-scheduler-selector
+  template:
+    metadata:
+      labels:
+        app: hades-scheduler-selector
+    spec:
+      serviceAccountName: {{ .Values.rbac.serviceAccountName }}
+      containers:
+        - name: "hades-scheduler"
+          image: "{{ .Values.hadesScheduler.image.repository }}:{{ .Values.hadesScheduler.image.tag }}"
+          imagePullPolicy: {{ .Values.hadesScheduler.image.pullPolicy }}
+          resources:
+            limits:
+              cpu: {{ .Values.hadesScheduler.resources.limits.cpu | quote }}
+              memory: {{ .Values.hadesScheduler.resources.limits.memory | quote }}
+            requests:
+              cpu: {{ .Values.hadesScheduler.resources.requests.cpu | quote }}
+              memory: {{ .Values.hadesScheduler.resources.requests.memory | quote }}
+          ports:
+            - containerPort: {{ .Values.hadesScheduler.service.targetPort }}
+          env:
+            - name: NATS_URL
+              value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
+            - name: HADES_EXECUTOR
+              value: {{ .Values.hadesScheduler.executor }}
+            - name: K8S_CONFIG_MODE
+              value: {{ .Values.hadesScheduler.configMode }}
+            - name: K8S_NAMESPACE
+              value: {{ .Release.Namespace }}
