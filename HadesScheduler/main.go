@@ -21,10 +21,8 @@ type JobScheduler interface {
 }
 
 type HadesSchedulerConfig struct {
-	Concurrency       uint   `env:"CONCURRENCY" envDefault:"1"`
-	FluentdAddr       string `env:"FLUENTD_ADDR" envDefault:""`
-	FluentdMaxRetries uint   `env:"FLUENTD_MAX_RETRIES" envDefault:"3"`
-	NatsConfig        utils.NatsConfig
+	Concurrency uint `env:"CONCURRENCY" envDefault:"1"`
+	NatsConfig  utils.NatsConfig
 }
 
 var HadesConsumer *utils.HadesConsumer
@@ -72,7 +70,8 @@ func main() {
 			slog.Error("Failed to create Docker scheduler", "error", err)
 			return
 		}
-		scheduler = dockerScheduler.SetFluentdLogging(cfg.FluentdAddr, cfg.FluentdMaxRetries).SetNatsConnection(NatsConnection)
+
+    scheduler = dockerScheduler.SetNatsConnection(NatsConnection)
 
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
