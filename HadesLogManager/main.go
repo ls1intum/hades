@@ -80,13 +80,3 @@ func main() {
 	log.Printf("Received signal %v, shutting down...", sig)
 
 }
-
-// processLog handles the received log message
-func processLog(log Log) {
-	// Add your custom processing logic here
-	// Examples:
-	// - Store to database
-	// - Write to file
-	// - Forward to another system
-
-}
