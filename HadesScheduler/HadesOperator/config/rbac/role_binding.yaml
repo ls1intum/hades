@@ -4,11 +4,11 @@ metadata:
   labels:
     app.kubernetes.io/name: hadesoperator
     app.kubernetes.io/managed-by: kustomize
-  name: manager-rolebinding
+  name: hadesoperator-manager-clusterrolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: manager-role
+  name: hadesoperator-manager-clusterrole
 subjects:
 - kind: ServiceAccount
   name: controller-manager
