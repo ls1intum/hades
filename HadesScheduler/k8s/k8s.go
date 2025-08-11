@@ -45,27 +45,19 @@ type K8sConfigServiceaccount struct {
 	K8sConfig
 }
 
-var buildJobGVR = schema.GroupVersionResource{
-	Group:    "build.hades.tum.de",
-	Version:  "v1",
-	Resource: "buildjobs",
+type BuildJobGVRConfig struct {
+	Group    string `env:"BUILDJOB_GROUP,notEmpty"    envDefault:"build.hades.tum.de"`
+	Version  string `env:"BUILDJOB_VERSION,notEmpty"  envDefault:"v1"`
+	Resource string `env:"BUILDJOB_RESOURCE,notEmpty" envDefault:"buildjobs"`
 }
 
-//// BuildJobGVRConfig 通过环境变量配置 BuildJob 的 Group/Version/Resource
-//type BuildJobGVRConfig struct {
-//	Group    string `env:"BUILDJOB_GROUP,notEmpty"    envDefault:"build.hades.tum.de"`
-//	Version  string `env:"BUILDJOB_VERSION,notEmpty"  envDefault:"v1"`
-//	Resource string `env:"BUILDJOB_RESOURCE,notEmpty" envDefault:"buildjobs"`
-//}
-//
-//// ToGVR 转换为 Kubernetes 的 schema.GroupVersionResource
-//func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
-//	return schema.GroupVersionResource{
-//		Group:    c.Group,
-//		Version:  c.Version,
-//		Resource: c.Resource,
-//	}
-//}
+func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    c.Group,
+		Version:  c.Version,
+		Resource: c.Resource,
+	}
+}
 
 func NewK8sScheduler() Scheduler {
 	slog.Debug("Initializing Kubernetes scheduler")
@@ -172,6 +164,10 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 	if k.dynClient == nil {
 		return fmt.Errorf("dynamic client is nil: operator mode not initialized")
 	}
+
+	var gvrCfg BuildJobGVRConfig
+	utils.LoadConfig(&gvrCfg)
+	buildJobGVR := gvrCfg.ToGVR()
 
 	// assemble steps
 	steps := make([]map[string]interface{}, 0, len(job.Steps))
