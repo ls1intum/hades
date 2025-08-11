@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+      - --certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/acme.json:/etc/traefik/acme.json
+    restart: unless-stopped
+    networks:
+      - hades
+
+  hadesAPI:
+    ports: []
+    expose:
+      - "8080"
+    networks:
+      - hades
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hadesapi.rule=Host(`${HADES_API_HOST}`)"
+      - "traefik.http.routers.hadesapi.entrypoints=web,websecure"
+      - "traefik.http.routers.hadesapi.tls.certresolver=letsencrypt"
+      - "traefik.http.services.hadesapi.loadbalancer.server.port=8080"
+
+  hadesScheduler:
+    networks:
+      - hades
+
+  nats:
+    ports: []
+    networks:
+      - hades
+
+networks:
+  hades:
+    external: false
