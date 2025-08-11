@@ -26,7 +26,6 @@ services:
       - hades
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=hades"
       - "traefik.http.routers.hadesapi.rule=Host(`${HADES_API_HOST}`)"
       - "traefik.http.routers.hadesapi.entrypoints=web,websecure"
       - "traefik.http.routers.hadesapi.tls.certresolver=letsencrypt"
