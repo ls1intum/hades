@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+      - --certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/acme.json:/etc/traefik/acme.json
+    restart: always
+
+  hadesAPI:
+    expose:
+      - "8080"
+    environment:
+      - NATS_URL=nats://nats:4222
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.hadesapi.rule=Host(`${HADES_API_HOST}`)
+      - traefik.http.routers.hadesapi.entrypoints=web,websecure
+      - traefik.http.routers.hadesapi.tls.certresolver=letsencrypt
+      - traefik.http.services.hadesapi.loadbalancer.server.port=8080
+    depends_on:
+      - nats
+
+  hadesScheduler:
+    environment:
+      - NATS_URL=nats://nats:4222
+      - HADES_EXECUTOR=docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - nats
+      - hadesAPI
+
+  nats:
+    image: nats:2.11.4
+    command: ["-js", "-m", "8222"]
+    healthcheck:
+      test: ["CMD", "nats-server", "--health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
