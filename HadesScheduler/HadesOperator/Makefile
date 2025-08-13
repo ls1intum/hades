@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-IMG ?= ysw1999/hades-operator:latest
+IMG ?= ghcr.io/ls1intum/hades/hades-operator:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
