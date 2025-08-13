@@ -6,19 +6,19 @@ on:
       count:
         description: "How many benchmark jobs to trigger"
         required: false
-        default: "1"
+        default: "1000"
 
 jobs:
   benchmark:
     name: Trigger Benchmark
     runs-on: ubuntu-latest
-#    if: github.ref_name == 'main'
+    if: github.ref_name == 'main'
     permissions:
       contents: read
 
     env:
       BENCHMARK_URL: "https://ma-yu.aet.cit.tum.de/v1/benchmark/hades"
-      COUNT: ${{ inputs.count || '1' }}
+      COUNT: ${{ inputs.count || '1000' }}
       COMMIT_HASH: ${{ github.sha }}
       GH_USER: ${{ secrets.GH_USER }}
       GH_PASSWORD: ${{ secrets.GH_TOKEN }}
@@ -37,7 +37,6 @@ jobs:
           set -euo pipefail
           echo "Triggering benchmark for commit $COMMIT_HASH (count=$COUNT)"
 
-          # 使用 jq 安全构建 JSON（自动转义 GH_USER / GH_PASSWORD 中的特殊字符）
           payload="$(
             jq -n \
               --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -52,7 +51,7 @@ jobs:
                   {
                     id: 1,
                     name: "Report Starting Time",
-                    image: "ghcr.io/shuaiweiyu/hades-reporter:latest",
+                    image: "ghcr.io/ls1intum/hades-reporter/hades-reporter:latest",
                     metadata: {
                       ENDPOINT: "https://hades-benchmarker.wei-tech.site/v1/start_time"
                     }
@@ -84,7 +83,7 @@ jobs:
                   {
                     id: 4,
                     name: "Result",
-                    image: "ghcr.io/shuaiweiyu/hades-result-parser:latest",
+                    image: "ghcr.io/ls1intum/hades/junit-result-parser:latest",
                     metadata: {
                       API_ENDPOINT: "https://hades-benchmarker.wei-tech.site/v1/result",
                       INGEST_DIR: "./shared/example",
