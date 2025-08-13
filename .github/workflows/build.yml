@@ -30,7 +30,7 @@ jobs:
             image: ls1intum/hades/hades-scheduler
           - dockerfile: ./HadesScheduler/HadesOperator/Dockerfile
             image: ls1intum/hades/hades-operator
-    uses: ls1intum/.github/.hades/workflows/build-and-push-docker-image.yml@v1.1.1
+    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.1.1
     with:
       image-name: ${{ matrix.image }}
       docker-file: ${{ matrix.dockerfile }}
