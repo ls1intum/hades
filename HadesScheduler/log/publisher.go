@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 
+	logs "github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/nats-io/nats.go"
 )
 
 type Publisher interface {
-	PublishLogs(buildJobLog Log) error
+	PublishLogs(buildJobLog logs.Log) error
 }
 
 type NATSPublisher struct {
@@ -23,7 +24,7 @@ func NewNATSPublisher(nc *nats.Conn) *NATSPublisher {
 }
 
 // publish log entries to NATS
-func (np NATSPublisher) PublishLogs(buildJobLog Log) error {
+func (np NATSPublisher) PublishLogs(buildJobLog logs.Log) error {
 	if np.nc == nil {
 		slog.Error("Cannot publish logs: nil NATS connection", slog.String("job_id", buildJobLog.JobID))
 		return fmt.Errorf("nil NATS connection")

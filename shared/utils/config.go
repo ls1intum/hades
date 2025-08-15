@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type NatsConfig struct {
@@ -23,6 +25,26 @@ type ExecutorConfig struct {
 	CleanupSharedVolumes bool   `env:"CLEANUP" envDefault:"false"`
 }
 
+type JetStreamJobsConfig struct {
+	StreamName string                    `env:"JETSTREAM_JOBS_STREAM_NAME"`
+	Subjects   []string                  `env:"JETSTREAM_JOBS_SUBJECTS"`
+	Storage    jetstream.StorageType     `env:"JETSTREAM_JOBS_STORAGE"`
+	Retention  jetstream.RetentionPolicy `env:"JETSTREAM_JOBS_RETENTION"`
+	Duplicates time.Duration             `env:"JETSTREAM_JOBS_DUPLICATES"`
+	MaxMsgs    int64                     `env:"JETSTREAM_JOBS_MAX_MSGS"`
+	MaxAge     time.Duration             `env:"JETSTREAM_JOBS_MAX_AGE"`
+}
+
+type JetStreamJobLogsConfig struct {
+	StreamName string                    `env:"JETSTREAM_LOGS_STREAM_NAME"`
+	Subjects   []string                  `env:"JETSTREAM_LOGS_SUBJECTS"`
+	Storage    jetstream.StorageType     `env:"JETSTREAM_LOGS_STORAGE"`
+	Retention  jetstream.RetentionPolicy `env:"JETSTREAM_LOGS_RETENTION"`
+	Duplicates time.Duration             `env:"JETSTREAM_LOGS_DUPLICATES"`
+	MaxMsgs    int64                     `env:"JETSTREAM_LOGS_MAX_MSGS"`
+	MaxAge     time.Duration             `env:"JETSTREAM_LOGS_MAX_AGE"`
+}
+
 func LoadConfig(cfg interface{}) {
 	log.Debug("Loading config for: ", "config", cfg)
 
@@ -37,6 +59,30 @@ func LoadConfig(cfg interface{}) {
 	}
 
 	log.Debug("Config loaded", "config", cfg)
+}
+
+func (c JetStreamJobLogsConfig) ToStreamConfig() jetstream.StreamConfig {
+	return jetstream.StreamConfig{
+		Name:       c.StreamName,
+		Subjects:   c.Subjects,
+		Storage:    c.Storage,
+		Retention:  c.Retention,
+		Duplicates: c.Duplicates,
+		MaxMsgs:    c.MaxMsgs,
+		MaxAge:     c.MaxAge,
+	}
+}
+
+func (c JetStreamJobsConfig) ToStreamConfig() jetstream.StreamConfig {
+	return jetstream.StreamConfig{
+		Name:       c.StreamName,
+		Subjects:   c.Subjects,
+		Storage:    c.Storage,
+		Retention:  c.Retention,
+		Duplicates: c.Duplicates,
+		MaxMsgs:    c.MaxMsgs,
+		MaxAge:     c.MaxAge,
+	}
 }
 
 func ParseMemoryLimit(limit string) (int64, error) {

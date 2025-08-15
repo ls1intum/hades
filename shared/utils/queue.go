@@ -66,7 +66,7 @@ func SetupNatsConnection(config NatsConfig) (*nats.Conn, error) {
 }
 
 // SetupNatsJetStream creates a JetStream connection for persistent message delivery
-func NewHadesProducer(nc *nats.Conn) (*HadesProducer, error) {
+func NewHadesProducer(nc *nats.Conn, config jetstream.StreamConfig) (*HadesProducer, error) {
 	ctx := context.Background()
 	js, err := jetstream.New(nc)
 	if err != nil {
@@ -74,15 +74,7 @@ func NewHadesProducer(nc *nats.Conn) (*HadesProducer, error) {
 		return nil, err
 	}
 
-	s, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:       "HADES_JOBS",
-		Subjects:   []string{fmt.Sprintf("%s.*", NatsSubject)},
-		Storage:    jetstream.FileStorage,
-		Retention:  jetstream.WorkQueuePolicy,
-		Duplicates: 1 * time.Minute, // Disallow duplicates for 1 minute
-		MaxMsgs:    -1,
-		MaxAge:     24 * time.Hour, // Retain jobs for 24 hours by default
-	})
+	s, err := js.CreateOrUpdateStream(ctx, config)
 	if err != nil {
 		slog.Error("Failed to create JetStream stream", "error", err)
 		return nil, err
@@ -90,7 +82,7 @@ func NewHadesProducer(nc *nats.Conn) (*HadesProducer, error) {
 	slog.Info("Created JetStream stream", "stream", s)
 
 	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket: "HADES_JOBS",
+		Bucket: config.Name,
 	})
 	if err != nil {
 		slog.Error("Failed to create JetStream KeyValue store", "error", err)
@@ -239,8 +231,8 @@ func (hc HadesConsumer) DequeueJob(ctx context.Context, processing func(payload 
 					msg_id, err := uuid.FromBytes(msg.Data())
 					if err != nil {
 						slog.Error("Failed to parse message ID", "error", err, "data", string(msg.Data()))
-						
-            if err := msg.Nak(); err != nil {
+
+						if err := msg.Nak(); err != nil {
 							slog.Error("Failed to NAK message after parse error", "error", err, "subject", msg.Subject)
 						}
 						return
