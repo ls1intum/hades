@@ -10,10 +10,11 @@ import (
 )
 
 type HadesAPIConfig struct {
-	APIPort           uint `env:"API_PORT,notEmpty" envDefault:"8080"`
-	NatsConfig        utils.NatsConfig
-	AuthKey           string `env:"AUTH_KEY"`
-	PrometheusAddress string `env:"PROMETHEUS_ADDRESS" envDefault:""`
+	APIPort             uint `env:"API_PORT,notEmpty" envDefault:"8080"`
+	NatsConfig          utils.NatsConfig
+	JetStreamJobsConfig utils.JetStreamJobsConfig
+	AuthKey             string `env:"AUTH_KEY"`
+	PrometheusAddress   string `env:"PROMETHEUS_ADDRESS" envDefault:""`
 	// How long the task should be kept for monitoring
 	RetentionTime uint `env:"RETENTION_IN_MIN" envDefault:"30"`
 	MaxRetries    uint `env:"MAX_RETRIES" envDefault:"3"`
@@ -21,7 +22,6 @@ type HadesAPIConfig struct {
 }
 
 var cfg HadesAPIConfig
-
 var HadesProducer *utils.HadesProducer
 
 func main() {
@@ -40,7 +40,10 @@ func main() {
 	}
 	defer NatsConnection.Close()
 
-	HadesProducer, err = utils.NewHadesProducer(NatsConnection)
+	var jetStreamCfg utils.JetStreamJobsConfig // Create empty struct
+	utils.LoadConfig(&jetStreamCfg)            // Pass address, function modifies cfg
+
+	HadesProducer, err = utils.NewHadesProducer(NatsConnection, jetStreamCfg.ToStreamConfig())
 	if err != nil {
 		log.Fatalf("Failed to create HadesProducer: %v", err)
 		return

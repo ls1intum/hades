@@ -70,8 +70,14 @@ func (suite *APISuite) SetupSuite() {
 		log.Fatalf("Failed to connect to NATS: %v", err)
 	}
 
+	//Create example stream config
+	var TestJetStreamJobsConfig = utils.JetStreamJobsConfig{
+		StreamName: "TestStream",
+		Subjects:   []string{"TestStream.*"},
+	}
+
 	// Create producer for tests
-	suite.hadesProducer, err = utils.NewHadesProducer(suite.natsConnection)
+	suite.hadesProducer, err = utils.NewHadesProducer(suite.natsConnection, TestJetStreamJobsConfig.ToStreamConfig())
 	if err != nil {
 		log.Fatalf("Failed to create HadesProducer: %v", err)
 	}
