@@ -26,11 +26,10 @@ const NATS_IMAGE = "nats:2.11.4"
 
 type APISuite struct {
 	suite.Suite
-	router              *gin.Engine
-	natsC               testcontainers.Container
-	natsConnection      *nats.Conn
-	hadesProducer       *utils.HadesProducer
-	JetStreamJobsConfig utils.JetStreamJobsConfig
+	router         *gin.Engine
+	natsC          testcontainers.Container
+	natsConnection *nats.Conn
+	hadesProducer  *utils.HadesProducer
 }
 
 func (suite *APISuite) SetupSuite() {
@@ -71,11 +70,14 @@ func (suite *APISuite) SetupSuite() {
 		log.Fatalf("Failed to connect to NATS: %v", err)
 	}
 
+	//Create example stream config
+	var TestJetStreamJobsConfig = utils.JetStreamJobsConfig{
+		StreamName: "TestStream",
+		Subjects:   []string{"TestStream.*"},
+	}
+
 	// Create producer for tests
-	var cfg utils.JetStreamJobsConfig
-	utils.LoadConfig(&cfg)
-	suite.JetStreamJobsConfig = cfg
-	suite.hadesProducer, err = utils.NewHadesProducer(suite.natsConnection, suite.JetStreamJobsConfig.ToStreamConfig())
+	suite.hadesProducer, err = utils.NewHadesProducer(suite.natsConnection, TestJetStreamJobsConfig.ToStreamConfig())
 	if err != nil {
 		log.Fatalf("Failed to create HadesProducer: %v", err)
 	}
