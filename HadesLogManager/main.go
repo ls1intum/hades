@@ -12,7 +12,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-type HadesAdapterConfig struct {
+type HadesLogManagerConfig struct {
 	NatsConfig utils.NatsConfig
 	Topic      string
 }
@@ -36,7 +36,7 @@ type Log struct {
 // 4. send to endpoint
 
 func main() {
-	var cfg HadesAdapterConfig
+	var cfg HadesLogManagerConfig
 
 	// Connect to NATS server
 	nc, err := nats.Connect(cfg.NatsConfig.URL)
