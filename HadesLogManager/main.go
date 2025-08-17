@@ -49,19 +49,19 @@ func main() {
 
 	// Subscribe to all log messages (using wildcard for now)
 	sub, err := nc.Subscribe("logs.*", func(m *nats.Msg) {
-		var logMsg Log
+		var buildJobLog Log
 
 		// Unmarshal the JSON message back to Log struct
-		if err := json.Unmarshal(m.Data, &logMsg); err != nil {
+		if err := json.Unmarshal(m.Data, &buildJobLog); err != nil {
 			log.Printf("Error unmarshaling message: %v", err)
 			return
 		}
 
 		// Process the received log
-		log.Printf("Received log from job %s/n%s", logMsg.JobID, logMsg.Logs)
+		log.Printf("Received log from job %s/n%s", buildJobLog.JobID, buildJobLog.Logs)
 
 		// You can add your own processing logic here
-		processLog(logMsg)
+		processLog(buildJobLog)
 	})
 
 	if err != nil {
@@ -80,3 +80,5 @@ func main() {
 	log.Printf("Received signal %v, shutting down...", sig)
 
 }
+
+// ctx := context.Background()

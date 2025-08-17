@@ -15,7 +15,7 @@ type DockerJob struct {
 	logger *slog.Logger
 	DockerProps
 	payload.QueuePayload
-	publisher log.Publisher
+	publisher log.NATSPublisher
 }
 
 type jobIDContextKey string
