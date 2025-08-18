@@ -39,7 +39,7 @@ type Scheduler struct {
 	cli *client.Client
 	DockerProps
 	fluentd.FluentdOptions
-	publisher log.Publisher
+	publisher log.NATSPublisher
 }
 
 func NewDockerScheduler() (*Scheduler, error) {
@@ -76,9 +76,9 @@ func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler 
 
 func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 	if nc != nil {
-		d.publisher = log.NewNATSPublisher(nc)
+		d.publisher = *log.NewNATSPublisher(nc)
 	} else {
-		slog.Warn("NATS connection is nil, logs will not be published")
+		slog.Warn("NATS connection is nil, logs nor status will be published")
 	}
 	return d
 }
@@ -131,12 +131,17 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		QueuePayload: job,
 		publisher:    d.publisher,
 	}
+
+	//block to send status first before execution
+	d.publisher.PublishJobStatus("Executing job with job ID", job.ID.String())
+
 	err := docker_job.execute(ctx)
 	if err != nil {
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
 		return err
 	}
 
+	d.publisher.PublishJobStatus("Finished job with job ID", job.ID.String())
 	job_logger.Debug("Job executed successfully", slog.Any("job_id", job.ID))
 
 	// Delete the shared volume after the job is done
