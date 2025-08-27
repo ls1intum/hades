@@ -153,3 +153,36 @@ func (hlp *HadesLogProducer) PublishLog(buildJobLog Log) error {
 
 	return nil
 }
+
+func (hlc *HadesLogConsumer) WatchJobLogs(ctx context.Context, jobID string, handler func(Log)) error {
+	subject := fmt.Sprintf("hades.logs.%s", jobID)
+
+	// Subscribe directly to the job-specific subject
+	sub, err := hlc.natsConnection.Subscribe(subject, func(msg *nats.Msg) {
+		var log Log
+		if err := json.Unmarshal(msg.Data, &log); err != nil {
+			slog.Error("Failed to unmarshal log", "job_id", jobID, "error", err)
+			return
+		}
+
+		slog.Debug("Received log for job", "job_id", jobID)
+		handler(log) // Process the log
+	})
+
+	if err != nil {
+		slog.Error("Failed to subscribe to job logs", "job_id", jobID, "error", err)
+		return err
+	}
+
+	slog.Info("Started watching logs for job", "job_id", jobID, "subject", subject)
+
+	// Wait for context cancellation, then cleanup
+	<-ctx.Done()
+
+	if err := sub.Unsubscribe(); err != nil {
+		slog.Error("Failed to unsubscribe from job logs", "job_id", jobID, "error", err)
+	}
+
+	slog.Info("Stopped watching logs for job", "job_id", jobID)
+	return ctx.Err()
+}
