@@ -4,18 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
-	"github.com/ls1intum/hades/hadesScheduler/fluentd"
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
-
-	slogfluentd "github.com/samber/slog-fluentd/v2"
 )
 
 type DockerEnvConfig struct {
@@ -38,8 +34,7 @@ type DockerProps struct {
 type Scheduler struct {
 	cli *client.Client
 	DockerProps
-	fluentd.FluentdOptions
-	publisher log.NATSPublisher
+	publisher log.Publisher
 }
 
 func NewDockerScheduler() (*Scheduler, error) {
@@ -64,16 +59,6 @@ func NewDockerScheduler() (*Scheduler, error) {
 	}, nil
 }
 
-func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler {
-	if addr != "" {
-		d.FluentdOptions = fluentd.FluentdOptions{
-			Addr:     addr,
-			MaxRetry: max_retries,
-		}
-	}
-	return d
-}
-
 func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 	if nc != nil {
 		d.publisher = *log.NewNATSPublisher(nc)
@@ -84,34 +69,12 @@ func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 }
 
 func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
-	// Create a custom logger only for this job when fluentd is enabled
 	var job_logger *slog.Logger
 	var container_logs_options container.LogConfig
-	if d.FluentdOptions.Addr != "" {
-		fluentd_client, err := fluentd.GetFluentdClient(d.FluentdOptions)
-		if err != nil {
-			slog.Error("Failed to create fluentd client", slog.Any("error", err))
-			return err
-		}
-		job_logger = slog.New(slogfluentd.Option{
-			Level:  slog.LevelDebug,
-			Client: fluentd_client,
-		}.NewFluentdHandler()).With(slog.String("job_id", job.ID.String()))
 
-		// Configure the handler for the container logs
-		container_logs_options = container.LogConfig{
-			Type: "fluentd",
-			Config: map[string]string{
-				"fluentd-address":     d.FluentdOptions.Addr,
-				"fluentd-max-retries": strconv.FormatUint(uint64(d.FluentdOptions.MaxRetry), 10),
-				"labels":              "job_id",
-			},
-		}
-	} else {
-		job_logger = slog.Default().With(slog.String("job_id", job.ID.String()))
-		container_logs_options = container.LogConfig{}
-		job_logger.Warn("No fluentd address provided, using default logger")
-	}
+	job_logger = slog.Default().With(slog.String("job_id", job.ID.String()))
+	container_logs_options = container.LogConfig{}
+
 	// Create a unique volume name for this job
 	volumeName := fmt.Sprintf("shared-%s", job.ID.String())
 	// Create the shared volume

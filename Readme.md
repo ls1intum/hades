@@ -97,6 +97,27 @@ For production deployments or testing with Kubernetes:
    docker compose -f docker-compose.yml -f docker-compose.k8s.yml up -d
    ```
 
+### Deploy into a VM
+
+For production deployments in a VM:
+1. Ensure you have Docker installed in the VM 
+2. Copy the `.env.example` file to `.env` and update the configuration:
+
+   ```fish
+   cp .env.example .env
+   ```
+3. Change the `LETSENCRYPT_EMAIL` variable to your email address in your `.env` file. 
+4. Change the `HADES_API_HOST` variable to domain name or your IP address in your `.env` file.
+5. Create Traefik configuration files
+
+    ```fish
+    touch traefik/acme.json
+    chmod 600 traefik/acme.json
+    ```
+6. Deploy Hades:  
+   ```fish
+   docker compose -f compose.yml -f docker-compose.deploy.yml up -d
+   ```
 ## Usage Examples
 
 ### Creating a Simple Job
