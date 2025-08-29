@@ -17,6 +17,7 @@ jobs:
 
     env:
       BENCHMARK_URL: ${{ vars.BENCHMARK_URL }}
+      HOST: ${{ vars.BENCHMARK_HOST }}
       COUNT: ${{ inputs.count || '1000' }}
       COMMIT_HASH: ${{ github.sha }}
       GH_USER: ${{ secrets.GH_USER }}
@@ -35,14 +36,13 @@ jobs:
         run: |
           set -euo pipefail
           missing=0
-          for v in BENCHMARK_URL; do
+          for v in BENCHMARK_URL HOST; do
             if [ -z "${!v:-}" ]; then
               echo "::error title=Missing $v::Environment variable '$v' is empty. Check repo/org variables/secrets."
               missing=1
             fi
           done
-          
-          # set Maximum for job count
+
           if ! echo "$COUNT" | grep -Eq '^[0-9]+$'; then
             echo "::error title=Bad COUNT::COUNT must be a number, got '$COUNT'"
             missing=1
@@ -58,7 +58,10 @@ jobs:
       - name: Trigger Benchmark for commit
         run: |
           set -euo pipefail
-          echo "Triggering benchmark for commit $COMMIT_HASH (count=$COUNT)"
+          echo "Triggering benchmark for commit $COMMIT_HASH (count=$COUNT, host=$HOST)"
+
+          # URL-encode the host param (handles :// and /)
+          ENCODED_HOST="$(printf '%s' "$HOST" | jq -sRr @uri)"
 
           payload="$(
             jq -n \
@@ -119,8 +122,8 @@ jobs:
           )"
 
           # send the payload to the benchmark server with retry
-          echo "$payload" | curl -fsS --retry 3 --retry-delay 2 --max-time 120 \
-            -X POST "${BENCHMARK_URL}?count=${COUNT}&commit_hash=${COMMIT_HASH}" \
+          echo "$payload" | curl -sS --fail-with-body --retry 3 --retry-delay 2 --max-time 120 \
+            -X POST "${BENCHMARK_URL}?count=${COUNT}&commit_hash=${COMMIT_HASH}&host=${ENCODED_HOST}" \
             -H "Content-Type: application/json" \
             --data-binary @-
 
