@@ -16,20 +16,44 @@ jobs:
       contents: read
 
     env:
-      BENCHMARK_URL: "https://ma-yu.aet.cit.tum.de/v1/benchmark/hades"
+      BENCHMARK_URL: ${{ vars.BENCHMARK_URL }}
       COUNT: ${{ inputs.count || '1000' }}
       COMMIT_HASH: ${{ github.sha }}
       GH_USER: ${{ secrets.GH_USER }}
       GH_PASSWORD: ${{ secrets.GH_TOKEN }}
 
     steps:
-      - name: Ensure jq is available (usually preinstalled)
+      - name: Ensure jq is available
         run: |
           set -e
           if ! command -v jq >/dev/null 2>&1; then
             sudo apt-get update -y
             sudo apt-get install -y jq
           fi
+
+      - name: Validate required settings
+        run: |
+          set -euo pipefail
+          missing=0
+          for v in BENCHMARK_URL; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error title=Missing $v::Environment variable '$v' is empty. Check repo/org variables/secrets."
+              missing=1
+            fi
+          done
+          
+          # set Maximum for job count
+          if ! echo "$COUNT" | grep -Eq '^[0-9]+$'; then
+            echo "::error title=Bad COUNT::COUNT must be a number, got '$COUNT'"
+            missing=1
+          fi
+          MAX_COUNT=5000
+          if [ "$COUNT" -gt "$MAX_COUNT" ]; then
+            echo "::warning::COUNT=$COUNT exceeds MAX_COUNT=$MAX_COUNT, clipping."
+            COUNT=$MAX_COUNT
+            echo "COUNT=$COUNT" >> "$GITHUB_ENV"
+          fi
+          [ "$missing" -eq 0 ]
 
       - name: Trigger Benchmark for commit
         run: |
