@@ -76,7 +76,7 @@ jobs:
                     name: "Report Starting Time",
                     image: "ghcr.io/ls1intum/hades-reporter/hades-reporter:latest",
                     metadata: {
-                      ENDPOINT: "https://hades-benchmarker.wei-tech.site/v1/start_time"
+                      ENDPOINT: "https://ma-yu.aet.cit.tum.de/v1/start_time"
                     }
                   },
                   {
@@ -108,7 +108,7 @@ jobs:
                     name: "Result",
                     image: "ghcr.io/ls1intum/hades/junit-result-parser:latest",
                     metadata: {
-                      API_ENDPOINT: "https://hades-benchmarker.wei-tech.site/v1/result",
+                      API_ENDPOINT: "https://ma-yu.aet.cit.tum.de/v1/result",
                       INGEST_DIR: "./shared/example",
                       HADES_TEST_PATH: "./example",
                       HADES_ASSIGNMENT_PATH: "./example/assignment"
