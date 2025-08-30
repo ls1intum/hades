@@ -22,15 +22,10 @@ import (
 )
 
 type BuildJobSpec struct {
-	// +kubebuilder:validation:Minimum=0
-	// Priority (1 = highest). Scheduler may use this to decide job queueing order.
-	//TODO: Operator might not need this, as it's only used for scheduling.
-	Priority int32 `json:"priority,omitempty"`
-
 	// Job name, useful for debugging
 	Name string `json:"name"`
 
-	// Additional metadata (e.g., course ID, submitter, language, etc.)
+	// Additional metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// Build steps to be executed sequentially

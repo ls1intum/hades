@@ -52,12 +52,6 @@ spec:
               name:
                 description: Job name, useful for debugging
                 type: string
-              priority:
-                description: Priority (1 = highest). Scheduler may use this to decide
-                  job queueing order.
-                format: int32
-                minimum: 0
-                type: integer
               steps:
                 description: Build steps to be executed sequentially
                 items:

@@ -7,11 +7,15 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
 spec:
   name: "Example Job"
-  priority: 3
   metadata:
     GLOBAL: "test"
   steps:
     - id: 1
+      name: "Report Starting Time"
+      image: "ghcr.io/ls1intum/hades-reporter/hades-reporter:latest"
+      metadata:
+        ENDPOINT: "https://ma-yu.aet.cit.tum.de/v1/start_time"
+    - id: 2
       name: "Clone"
       image: "ghcr.io/ls1intum/hades/hades-clone-container:latest"
       metadata:
@@ -26,12 +30,7 @@ spec:
         HADES_ASSIGNMENT_URL: "https://github.com/Mtze/Artemis-Java-Solution.git"
         HADES_ASSIGNMENT_PATH: "./example/assignment"
         HADES_ASSIGNMENT_ORDER: "2"
-#    - id: 2
-#      name: "Report Starting Time"
-#      image: "ghcr.io/shuaiweiyu/hades-reporter:latest"
-#      metadata:
-#        ENDPOINT: "https://your-api.com/api/timestamp"
-    - id: 2
+    - id: 3
       name: "Execute"
       image: "ls1tum/artemis-maven-template:java17-18"
       script: |
@@ -39,13 +38,12 @@ spec:
         cd ./shared/example || exit 0 && \
         ./gradlew --status || exit 0 && \
         ./gradlew clean test || exit 0
-    - id: 3
+    - id: 4
       name: "Report Results"
-      image: "ghcr.io/shuaiweiyu/hades-result-parser:latest"
+      image: "ghcr.io/ls1intum/hades/junit-result-parser:latest"
       metadata:
-        API_ENDPOINT: "https://your-api.com/api/timestamp"
+        API_ENDPOINT: "https://ma-yu.aet.cit.tum.de/v1/result"
         INGEST_DIR: "./shared/example"
-        HADES_TEST_PATH: "<token>"
         HADES_ASSIGNMENT_PATH: "./example/assignment"
   timeoutSeconds: 600
   maxRetries: 1

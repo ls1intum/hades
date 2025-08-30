@@ -207,7 +207,6 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 			},
 			"spec": map[string]interface{}{
 				"name":     job.Name,
-				"priority": jobPriorityInt32(job),
 				"metadata": job.Metadata,
 				"steps":    steps,
 			},
@@ -225,9 +224,4 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 
 	slog.Info("Created BuildJob CR", "name", job.ID.String(), "namespace", k.namespace)
 	return nil
-}
-
-func jobPriorityInt32(job payload.QueuePayload) int32 {
-	//TODO: Operator might not need the priority value
-	return int32(0)
 }

@@ -186,6 +186,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string) *batchv1.Job {
 		RestartPolicy: corev1.RestartPolicyNever,
 	}
 
+	//TODO: Change the hard coded ttl time
 	ttl := int32(300)
 	backoff := int32(0)
 
