@@ -59,6 +59,12 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	// ----------------------------- 0b. If being deleted, skip (avoid recreating children) --------
+	if !bj.DeletionTimestamp.IsZero() {
+		log.Info("BuildJob is being deleted; skip reconcile", "name", bj.Name)
+		return ctrl.Result{}, nil
+	}
+
 	// ----------------------------- 1. Exit if already processed ----------------------------------
 	// Only process objects that are not marked as "finalized" (i.e., not deleted)
 	if bj.Status.Phase == "Succeeded" || bj.Status.Phase == "Failed" {
@@ -82,8 +88,10 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Error(err, "update final status")
 				return ctrl.Result{}, err
 			}
-			// Delete the CRD after the job is either successful or failed
-			return ctrl.Result{}, r.Delete(ctx, &bj)
+			// Delete the CR after the job is either successful or failed
+			policy := metav1.DeletePropagationForeground
+			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
+
 		}
 
 		// Build is still running, set the status to be "running"
@@ -186,8 +194,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string) *batchv1.Job {
 		RestartPolicy: corev1.RestartPolicyNever,
 	}
 
-	//TODO: Change the hard coded ttl time
-	ttl := int32(300)
+	ttl := int32(30)
 	backoff := int32(0)
 
 	return &batchv1.Job{
