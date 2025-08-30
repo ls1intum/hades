@@ -10,12 +10,19 @@ import (
 
 type NATSPublisher struct {
 	nc *nats.Conn
+	pd *logs.HadesLogProducer
 }
 
-func NewNATSPublisher(nc *nats.Conn) *NATSPublisher {
+func NewNATSPublisher(nc *nats.Conn) (*NATSPublisher, error) {
+	pd, err := logs.NewHadesLogProducer(nc)
+	if err != nil {
+		return nil, fmt.Errorf("creating log producer: %w", err)
+	}
+
 	return &NATSPublisher{
 		nc: nc,
-	}
+		pd: pd,
+	}, nil
 }
 
 func (np NATSPublisher) PublishJobStatus(status string, jobID string) error {
@@ -31,12 +38,6 @@ func (np NATSPublisher) PublishJobStatus(status string, jobID string) error {
 
 // publish log entries to NATS JetStream
 func (np NATSPublisher) PublishLogs(buildJobLog logs.Log) error {
-	producer, err := logs.NewHadesLogProducer(np.nc)
-
-	if err != nil {
-		slog.Error("failed to create JetStream stream for", slog.String("buildjob", buildJobLog.JobID), slog.Any("error", err))
-	}
-	producer.PublishLog(buildJobLog)
-
+	np.pd.PublishLog(buildJobLog)
 	return nil
 }

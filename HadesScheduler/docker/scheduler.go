@@ -34,7 +34,7 @@ type DockerProps struct {
 type Scheduler struct {
 	cli *client.Client
 	DockerProps
-	publisher log.Publisher
+	publisher log.NATSPublisher
 }
 
 func NewDockerScheduler() (*Scheduler, error) {
@@ -97,16 +97,16 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 
 	//block to send status first before execution
 	//TODO: change to enum?
-	d.publisher.PublishJobStatus("executing", job.ID.String())
+	d.publisher.PublishJobStatus("executing job", job.ID.String())
 
 	err := docker_job.execute(ctx)
 	if err != nil {
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
-		d.publisher.PublishJobStatus("failed", job.ID.String())
+		d.publisher.PublishJobStatus("job failed", job.ID.String())
 		return err
 	}
 
-	d.publisher.PublishJobStatus("finished", job.ID.String())
+	d.publisher.PublishJobStatus("job finished", job.ID.String())
 	job_logger.Debug("Job executed successfully", slog.Any("job_id", job.ID))
 
 	// Delete the shared volume after the job is done
