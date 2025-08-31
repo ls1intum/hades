@@ -1,93 +1,110 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
+	"context"
 	"log/slog"
-	"net/http"
+	"sync"
+	"time"
+
+	"github.com/ls1intum/hades/shared/buildlogs"
 )
 
-type ProcessedLog struct {
-	JobID       string     `json:"job_id"`
-	ContainerID string     `json:"container_id"`
-	LogCount    int        `json:"log_count"`
-	Logs        []LogEntry `json:"logs"`
+type LogAggregator struct {
+	hlc    *buildlogs.HadesLogConsumer
+	logs   map[string][]buildlogs.Log // jobID -> logs
+	mutex  sync.RWMutex
+	config AggregatorConfig
 }
 
-func processLog(logMsg Log) {
-	slog.Info("Process incoming log",
-		slog.String("job_id", logMsg.JobID),
-		slog.String("container_id", logMsg.ContainerID),
-		slog.Int("log_entries", len(logMsg.Logs)),
-	)
-
-	// Basic validation
-	if logMsg.JobID == "" {
-		slog.Warn("Received log with empty job ID")
-		return
-	}
-
-	// Transform to your DTO format
-	processedLog := ProcessedLog{
-		JobID:       logMsg.JobID,
-		ContainerID: logMsg.ContainerID,
-		LogCount:    len(logMsg.Logs),
-		Logs:        logMsg.Logs,
-	}
-
-	// Send to endpoint
-	if err := sendToEndpoint(processedLog); err != nil {
-		slog.Error("Failed to send log to endpoint",
-			slog.String("job_id", logMsg.JobID),
-			slog.Any("error", err),
-		)
-		return
-	}
-
-	slog.Info("Successfully processed and sent log",
-		slog.String("job_id", logMsg.JobID),
-	)
+type AggregatorConfig struct {
+	BatchSize     int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
+	FlushInterval time.Duration `env:"LOG_FLUSH_INTERVAL" envDefault:"30s"`
+	MaxJobLogs    int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
 }
 
-func sendToEndpoint(log ProcessedLog) error {
-	// TODO: Replace with your actual endpoint URL
-	endpoint := "http://your-endpoint-here/api/logs"
-
-	jsonData, err := json.Marshal(log)
-	if err != nil {
-		return fmt.Errorf("failed to marshal log: %w", err)
+func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) *LogAggregator {
+	return &LogAggregator{
+		hlc:    hlc,
+		logs:   make(map[string][]buildlogs.Log),
+		config: config,
 	}
-
-	resp, err := http.Post(endpoint, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to send HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("endpoint returned status: %d", resp.StatusCode)
-	}
-
-	return nil
 }
 
-// Optional: Add filtering logic if you only want certain jobs
-func shouldProcessJob(jobID string) bool {
-	// For now, process everything
-	// Later you could add logic like:
-	// - Only process certain job types
-	// - Skip jobs that are already completed
-	// - Filter based on some criteria
-	return true
+func (la *LogAggregator) StartAggregating(ctx context.Context) error {
+	// Start periodic flush
+	ticker := time.NewTicker(la.config.FlushInterval)
+	defer ticker.Stop()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				la.flushLogs()
+			}
+		}
+	}()
+
+	<-ctx.Done()
+	return ctx.Err()
 }
 
-// Updated processLog with filtering:
-func processLogWithFilter(logMsg Log) {
-	if !shouldProcessJob(logMsg.JobID) {
-		slog.Debug("Skipping job", slog.String("job_id", logMsg.JobID))
-		return
+func (la *LogAggregator) addLog(log buildlogs.Log) {
+	la.mutex.Lock()
+	defer la.mutex.Unlock()
+
+	jobID := log.JobID
+	if _, exists := la.logs[jobID]; !exists {
+		la.logs[jobID] = make([]buildlogs.Log, 0, la.config.BatchSize)
 	}
 
-	processLog(logMsg)
+	la.logs[jobID] = append(la.logs[jobID], log)
+
+	// Trim if too many logs for this job
+	if len(la.logs[jobID]) > la.config.MaxJobLogs {
+		// Keep only the latest logs
+		start := len(la.logs[jobID]) - la.config.MaxJobLogs
+		la.logs[jobID] = la.logs[jobID][start:]
+	}
+
+	slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", len(la.logs[jobID]))
+}
+
+func (la *LogAggregator) flushLogs() {
+	la.mutex.Lock()
+	defer la.mutex.Unlock()
+
+	for jobID, logs := range la.logs {
+		if len(logs) >= la.config.BatchSize {
+			slog.Info("Flushing logs batch", "job_id", jobID, "batch_size", len(logs))
+			// Here you could send to another system, save to DB, etc.
+			// For now, we'll keep them in memory for the API
+		}
+	}
+}
+
+// API methods
+func (la *LogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
+	la.mutex.RLock()
+	defer la.mutex.RUnlock()
+
+	if logs, exists := la.logs[jobID]; exists {
+		// Return a copy to prevent race conditions
+		result := make([]buildlogs.Log, len(logs))
+		copy(result, logs)
+		return result
+	}
+	return []buildlogs.Log{}
+}
+
+func (la *LogAggregator) GetAllJobs() []string {
+	la.mutex.RLock()
+	defer la.mutex.RUnlock()
+
+	jobs := make([]string, 0, len(la.logs))
+	for jobID := range la.logs {
+		jobs = append(jobs, jobID)
+	}
+	return jobs
 }

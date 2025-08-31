@@ -14,14 +14,16 @@ import (
 type DynamicLogManager struct {
 	nc             *nats.Conn
 	logConsumer    *logs.HadesLogConsumer
+	logAggregator  *LogAggregator
 	activeWatchers map[string]context.CancelFunc // jobID -> cancel function
 	mu             sync.RWMutex
 }
 
-func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer) *DynamicLogManager {
+func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, aggregator *LogAggregator) *DynamicLogManager {
 	return &DynamicLogManager{
 		nc:             nc,
 		logConsumer:    logConsumer,
+		logAggregator:  aggregator,
 		activeWatchers: make(map[string]context.CancelFunc),
 	}
 }
@@ -29,14 +31,14 @@ func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer) *Dy
 func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 	// Subscribe to executing status - start watching logs
 	_, err := dls.nc.Subscribe("hades.status.executing", func(msg *nats.Msg) {
-		var statusMsg string
-		if err := json.Unmarshal(msg.Data, &statusMsg); err != nil {
-			slog.Error("Failed to unmarshal status message", "error", err)
+		var jobID string
+		if err := json.Unmarshal(msg.Data, &jobID); err != nil {
+			slog.Error("Failed to unmarshal jobID from status: executing", "error", err)
 			return
 		}
 
-		slog.Info("Job started executing", "job_id", statusMsg)
-		dls.startWatchingJobLogs(ctx, statusMsg)
+		slog.Info("Job started executing", "job_id", jobID)
+		dls.startWatchingJobLogs(ctx, jobID)
 	})
 	if err != nil {
 		return fmt.Errorf("subscribing to executing status: %w", err)
@@ -44,14 +46,14 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 
 	// Subscribe to finished status - stop watching logs
 	_, err = dls.nc.Subscribe("hades.status.finished", func(msg *nats.Msg) {
-		var statusMsg string
-		if err := json.Unmarshal(msg.Data, &statusMsg); err != nil {
-			slog.Error("Failed to unmarshal status message", "error", err)
+		var jobID string
+		if err := json.Unmarshal(msg.Data, &jobID); err != nil {
+			slog.Error("Failed to unmarshal jobID from status: finished", "error", err)
 			return
 		}
 
-		slog.Info("Job finished", "job_id", statusMsg)
-		dls.stopWatchingJobLogs(statusMsg)
+		slog.Info("Job finished", "job_id", jobID)
+		dls.stopWatchingJobLogs(jobID)
 	})
 	if err != nil {
 		return fmt.Errorf("subscribing to finished status: %w", err)
@@ -59,14 +61,14 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 
 	// Subscribe to failed status - stop watching logs
 	_, err = dls.nc.Subscribe("hades.status.failed", func(msg *nats.Msg) {
-		var statusMsg string
-		if err := json.Unmarshal(msg.Data, &statusMsg); err != nil {
-			slog.Error("Failed to unmarshal status message", "error", err)
+		var jobID string
+		if err := json.Unmarshal(msg.Data, &jobID); err != nil {
+			slog.Error("Failed to unmarshal jobID from status: failed", "error", err)
 			return
 		}
 
-		slog.Info("Job failed", "job_id", statusMsg)
-		dls.stopWatchingJobLogs(statusMsg)
+		slog.Info("Job failed", "job_id", jobID)
+		dls.stopWatchingJobLogs(jobID)
 	})
 	if err != nil {
 		return fmt.Errorf("subscribing to failed status: %w", err)
@@ -97,12 +99,14 @@ func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 		}()
 
 		slog.Info("Starting log watch", "job_id", jobID)
-		err := dls.logConsumer.WatchJobLogs(jobCtx, jobID, func(log logs.Log) {
-			// Process the log - save to DB, forward to UI, etc.
-			slog.Info("Received job log",
-				"job_id", log.JobID,
-				"container_id", log.ContainerID,
-				"log_count", len(log.Logs))
+		err := dls.logConsumer.WatchJobLogs(jobCtx, jobID, func(batchedLog logs.Log) {
+			// Store batched logs in aggregator
+			dls.logAggregator.addLog(batchedLog)
+
+			slog.Info("Received batched job logs",
+				"job_id", batchedLog.JobID,
+				"container_id", batchedLog.ContainerID,
+				"log_count", len(batchedLog.Logs))
 		})
 
 		if err != nil && err != context.Canceled {

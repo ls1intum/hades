@@ -1,84 +1,98 @@
 package main
 
 import (
-	"encoding/json"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
+	"context"
+	"log/slog"
+	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	logs "github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
 )
 
 type HadesLogManagerConfig struct {
 	NatsConfig utils.NatsConfig
-	Topic      string
+	APIPort    string `env:"API_PORT" envDefault:"8080"`
 }
-
-type LogEntry struct {
-	Timestamp    time.Time `json:"timestamp"`
-	Message      string    `json:"message"`
-	OutputStream string    `json:"output_stream"`
-}
-
-type Log struct {
-	JobID       string     `json:"job_id"`
-	ContainerID string     `json:"container_id"`
-	Logs        []LogEntry `json:"logs"`
-}
-
-// workflow
-// 1. listen
-// 2. filter and batch logs (probably requires an input of some sort from whoever wants the logs)
-// 3. map to DTO
-// 4. send to endpoint
 
 func main() {
 	var cfg HadesLogManagerConfig
+	utils.LoadConfig(&cfg) // Load config from environment
 
 	// Connect to NATS server
 	nc, err := nats.Connect(cfg.NatsConfig.URL)
 	if err != nil {
-		log.Fatalf("Failed to connect to NATS: %v", err)
+		slog.Error("Failed to connect to NATS", "error", err.Error())
 	}
 	defer nc.Close()
 
-	log.Println("Connected to NATS server")
+	slog.Info("Connected to NATS server")
 
-	// Subscribe to all log messages (using wildcard for now)
-	sub, err := nc.Subscribe("logs.*", func(m *nats.Msg) {
-		var buildJobLog Log
-
-		// Unmarshal the JSON message back to Log struct
-		if err := json.Unmarshal(m.Data, &buildJobLog); err != nil {
-			log.Printf("Error unmarshaling message: %v", err)
-			return
-		}
-
-		// Process the received log
-		log.Printf("Received log from job %s/n%s", buildJobLog.JobID, buildJobLog.Logs)
-
-		// You can add your own processing logic here
-		processLog(buildJobLog)
-	})
-
+	consumer, err := logs.NewHadesLogConsumer(nc)
 	if err != nil {
-		log.Fatalf("Failed to subscribe: %v", err)
+		slog.Error("Failed to create log consumer", "error", err.Error())
+		return
 	}
-	defer sub.Unsubscribe()
 
-	log.Println("Listening for log messages on 'logs.*'...")
+	// Create log aggregator for batching and API access
+	aggregatorConfig := AggregatorConfig{
+		BatchSize:     100,
+		FlushInterval: 30 * time.Second,
+		MaxJobLogs:    1000,
+	}
+	logAggregator := NewLogAggregator(consumer, aggregatorConfig)
 
-	// Set up signal handling before we start waiting
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	// Create dynamic log manager
+	dynamicManager := NewDynamicLogManager(nc, consumer, logAggregator)
 
-	// Block here waiting for signal
-	sig := <-c
-	log.Printf("Received signal %v, shutting down...", sig)
+	ctx := context.Background()
+
+	// Start the dynamic log manager
+	go func() {
+		if err := dynamicManager.StartListening(ctx); err != nil {
+			slog.Error("Dynamic log manager failed", "error", err)
+		}
+	}()
+
+	// Start log aggregation
+	go func() {
+		if err := logAggregator.StartAggregating(ctx); err != nil {
+			slog.Error("Log aggregator failed", "error", err)
+		}
+	}()
+
+	// Start API server
+	router := setupAPIRoute(logAggregator)
+	slog.Info("Starting API server", "port", cfg.APIPort)
+
+	if err := http.ListenAndServe(":"+cfg.APIPort, router); err != nil {
+		slog.Error("API server failed", "error", err)
+	}
 
 }
 
-// ctx := context.Background()
+func setupAPIRoute(aggregator *LogAggregator) *gin.Engine {
+	router := gin.Default()
+
+	// Get logs for specific job
+	router.GET("/api/jobs/:jobId/logs", func(c *gin.Context) {
+		jobID := c.Param("jobId")
+		logs := aggregator.GetJobLogs(jobID)
+		c.JSON(200, gin.H{"job_id": jobID, "logs": logs})
+	})
+
+	// Get all active jobs (for testing)
+	router.GET("/api/jobs", func(c *gin.Context) {
+		jobs := aggregator.GetAllJobs()
+		c.JSON(200, gin.H{"jobs": jobs})
+	})
+
+	// Health check endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+
+	return router
+}
