@@ -61,7 +61,12 @@ func NewDockerScheduler() (*Scheduler, error) {
 
 func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 	if nc != nil {
-		d.publisher = *log.NewNATSPublisher(nc)
+		publisher, err := log.NewNATSPublisher(nc)
+		if err != nil {
+			slog.Error("Failed to create NATS publisher", slog.Any("error", err))
+		} else {
+			d.publisher = *publisher
+		}
 	} else {
 		slog.Warn("NATS connection is nil, logs nor status will be published")
 	}
