@@ -36,10 +36,33 @@ hadesScheduler:
   executor: "k8s"
   configMode: "serviceaccount"
 
+hadesOperator:
+  image:
+    repository: ghcr.io/ls1intum/hades/hades-operator
+    tag: pr-289
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+
 rbac:
-  serviceAccountName: hades-scheduler
-  role:
-    name: hades-scheduler-role
+  hadesScheduler:
+    serviceAccountName: hades-scheduler
+    role:
+      name: hades-scheduler-role
+  hadesOperator:
+    serviceAccountName: hades-operator
+    role:
+      name: hades-operator-role
 
 ingress:
   enabled: true

@@ -4,9 +4,9 @@ metadata:
   name: hades-scheduler-rolebinding
 subjects:
   - kind: ServiceAccount
-    name: {{ .Values.rbac.serviceAccountName }}
+    name: {{ .Values.rbac.hadesScheduler.serviceAccountName }}
     namespace: {{ .Release.Namespace }}
 roleRef:
   kind: Role
-  name: {{ .Values.rbac.role.name}}
+  name: {{ .Values.rbac.hadesScheduler.role.name}}
   apiGroup: rbac.authorization.k8s.io

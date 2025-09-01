@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "hades-operator"
+spec:
+  replicas: {{ .Values.hadesOperator.replicaCount }}
+  selector:
+    matchLabels:
+      app: hades-operator-selector
+  template:
+    metadata:
+      labels:
+        app: hades-operator-selector
+    spec:
+      serviceAccountName: {{ .Values.rbac.hadesOperator.serviceAccountName }}
+      containers:
+        - name: "hades-operator"
+          image: "{{ .Values.hadesOperator.image.repository }}:{{ .Values.hadesOperator.image.tag }}"
+          imagePullPolicy: {{ .Values.hadesOperator.image.pullPolicy }}
+          resources:
+            limits:
+              cpu: {{ .Values.hadesOperator.resources.limits.cpu | quote }}
+              memory: {{ .Values.hadesOperator.resources.limits.memory | quote }}
+            requests:
+              cpu: {{ .Values.hadesOperator.resources.requests.cpu | quote }}
+              memory: {{ .Values.hadesOperator.resources.requests.memory | quote }}
+          ports:
+            - containerPort: {{ .Values.hadesOperator.service.targetPort }}
