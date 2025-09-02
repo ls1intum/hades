@@ -54,6 +54,9 @@ hadesOperator:
       cpu: "200m"
       memory: "256Mi"
   clusterWide: false
+  leaderElection:
+    enabled: true
+  targetNamespace: ""
 
 rbac:
   hadesScheduler:
