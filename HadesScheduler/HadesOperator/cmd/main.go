@@ -17,10 +17,8 @@ limitations under the License.
 package main
 
 import (
-	"crypto/tls"
 	"flag"
 	"os"
-	"path/filepath"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -29,11 +27,9 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	buildv1 "github.com/ls1intum/hades/api/v1"
 	"github.com/ls1intum/hades/internal/controller"
@@ -53,65 +49,16 @@ func init() {
 
 // nolint:gocyclo
 func main() {
-	var webhookCertPath, webhookCertName, webhookCertKey string
 	var enableLeaderElection bool
 	var probeAddr string
-	var enableHTTP2 bool
-	var tlsOpts []func(*tls.Config)
+
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager.")
-	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
-	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
-	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
-	flag.BoolVar(&enableHTTP2, "enable-http2", false,
-		"If set, HTTP/2 will be enabled for the webhook server")
-	opts := zap.Options{
-		Development: true,
-	}
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
+	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-
-	// Disable HTTP/2
-	disableHTTP2 := func(c *tls.Config) {
-		setupLog.Info("disabling http/2")
-		c.NextProtos = []string{"http/1.1"}
-	}
-
-	if !enableHTTP2 {
-		tlsOpts = append(tlsOpts, disableHTTP2)
-	}
-
-	// Create watchers for metrics and webhooks certificates
-	var webhookCertWatcher *certwatcher.CertWatcher
-
-	// Initial webhook TLS options
-	webhookTLSOpts := tlsOpts
-
-	if len(webhookCertPath) > 0 {
-		setupLog.Info("Initializing webhook certificate watcher using provided certificates",
-			"webhook-cert-path", webhookCertPath, "webhook-cert-name", webhookCertName, "webhook-cert-key", webhookCertKey)
-
-		var err error
-		webhookCertWatcher, err = certwatcher.New(
-			filepath.Join(webhookCertPath, webhookCertName),
-			filepath.Join(webhookCertPath, webhookCertKey),
-		)
-		if err != nil {
-			setupLog.Error(err, "Failed to initialize webhook certificate watcher")
-			os.Exit(1)
-		}
-
-		webhookTLSOpts = append(webhookTLSOpts, func(config *tls.Config) {
-			config.GetCertificate = webhookCertWatcher.GetCertificate
-		})
-	}
-
-	webhookServer := webhook.NewServer(webhook.Options{
-		TLSOpts: webhookTLSOpts,
-	})
 
 	watchNamespace := os.Getenv("WATCH_NAMESPACE")
 	if watchNamespace != "" {
@@ -121,9 +68,9 @@ func main() {
 	}
 
 	mgrOpts := ctrl.Options{
-		Scheme:                 scheme,
+		Scheme: scheme,
+		// Disable the metrics server
 		Metrics:                metricsserver.Options{BindAddress: "0"},
-		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "715d8f3b.hades.tum.de",
@@ -160,15 +107,6 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
 		os.Exit(1)
-	}
-	// +kubebuilder:scaffold:builder
-
-	if webhookCertWatcher != nil {
-		setupLog.Info("Adding webhook certificate watcher to manager")
-		if err := mgr.Add(webhookCertWatcher); err != nil {
-			setupLog.Error(err, "unable to add webhook certificate watcher to manager")
-			os.Exit(1)
-		}
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
