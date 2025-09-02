@@ -26,3 +26,6 @@ spec:
               memory: {{ .Values.hadesOperator.resources.requests.memory | quote }}
           ports:
             - containerPort: {{ .Values.hadesOperator.service.targetPort }}
+          env:
+            - name: WATCH_NAMESPACE
+              value: "hades"

@@ -53,6 +53,7 @@ hadesOperator:
     requests:
       cpu: "200m"
       memory: "256Mi"
+  clusterWide: false
 
 rbac:
   hadesScheduler:

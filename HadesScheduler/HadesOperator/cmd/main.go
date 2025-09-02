@@ -25,6 +25,7 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -49,7 +50,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	utilruntime.Must(buildv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
@@ -174,25 +174,40 @@ func main() {
 		})
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	watchNamespace := os.Getenv("WATCH_NAMESPACE")
+	if watchNamespace != "" {
+		setupLog.Info("scoping cache to a single namespace", "namespace", watchNamespace)
+	}
+
+	mgrOpts := ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "715d8f3b.hades.tum.de",
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
-	})
+	}
+
+	if watchNamespace != "" {
+		mgrOpts.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				watchNamespace: {},
+			},
+		}
+	}
+
+	// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
+	// when the Manager ends. This requires the binary to immediately end when the
+	// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
+	// speeds up voluntary leader transitions as the new leader don't have to wait
+	// LeaseDuration time first.
+	//
+	// In the default scaffold provided, the program ends immediately after
+	// the manager stops, so would be fine to enable this option. However,
+	// if you are doing or is intended to do any operation such as perform cleanups
+	// after the manager stops then its usage might be unsafe.
+	// LeaderElectionReleaseOnCancel: true,
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
