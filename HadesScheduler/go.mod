@@ -9,8 +9,8 @@ replace github.com/ls1intum/hades/shared => ../shared
 require (
 	github.com/docker/docker v28.3.3+incompatible
 	github.com/ls1intum/hades/shared v0.0.0-20250610091423-ecd369d566e9
-	github.com/nats-io/nats.go v1.44.0
-	github.com/stretchr/testify v1.10.0
+	github.com/nats-io/nats.go v1.45.0
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.38.0
 )
 
@@ -38,7 +38,7 @@ require (
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/ebitengine/purego v0.8.4 // indirect
-	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/moby/go-archive v0.1.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/nats-io/nkeys v0.4.11 // indirect
@@ -59,7 +59,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.2.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
 
 require (
@@ -93,10 +93,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/samber/lo v1.51.0 // indirect
-	github.com/samber/slog-common v0.18.1 // indirect
 	github.com/testcontainers/testcontainers-go/modules/k3s v0.38.0
-	github.com/tinylib/msgp v1.3.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel v1.36.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.22.0 // indirect
@@ -106,12 +103,12 @@ require (
 	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
-	k8s.io/api v0.34.0-beta.0
-	k8s.io/apimachinery v0.34.0-beta.0
-	k8s.io/client-go v0.34.0-beta.0
+	k8s.io/api v0.35.0-alpha.0
+	k8s.io/apimachinery v0.35.0-alpha.0
+	k8s.io/client-go v0.35.0-alpha.0
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
-	sigs.k8s.io/yaml v1.5.0 // indirect
+	sigs.k8s.io/yaml v1.6.0 // indirect
 )
