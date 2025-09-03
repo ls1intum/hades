@@ -22,6 +22,8 @@ jobs:
       COMMIT_HASH: ${{ github.sha }}
       GH_USER: ${{ secrets.GH_USER }}
       GH_PASSWORD: ${{ secrets.GH_TOKEN }}
+      START_ENDPOINT: ${{ secrets.START_ENDPOINT }}
+      RESULT_ENDPOINT: ${{ secrets.RESULT_ENDPOINT }}
 
     steps:
       - name: Ensure jq is available
@@ -68,6 +70,8 @@ jobs:
               --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               --arg gh_user "$GH_USER" \
               --arg gh_password "$GH_PASSWORD" \
+              --arg start_endpoint "$START_ENDPOINT" \
+              --arg result_endpoint "$RESULT_ENDPOINT" \
               '{
                 name: "Benchmark Hades Job",
                 metadata: { GLOBAL: "triggered-via-github-actions" },
@@ -79,7 +83,7 @@ jobs:
                     name: "Report Starting Time",
                     image: "ghcr.io/ls1intum/hades-reporter/hades-reporter:latest",
                     metadata: {
-                      ENDPOINT: "https://ma-yu.aet.cit.tum.de/v1/start_time"
+                      ENDPOINT: $start_endpoint
                     }
                   },
                   {
@@ -111,7 +115,7 @@ jobs:
                     name: "Result",
                     image: "ghcr.io/ls1intum/hades/junit-result-parser:latest",
                     metadata: {
-                      API_ENDPOINT: "https://ma-yu.aet.cit.tum.de/v1/result",
+                      API_ENDPOINT: $result_endpoint,
                       INGEST_DIR: "./shared/example",
                       HADES_TEST_PATH: "./example",
                       HADES_ASSIGNMENT_PATH: "./example/assignment"
