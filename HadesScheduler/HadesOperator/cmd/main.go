@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/ls1intum/hades/shared/utils"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,6 +42,10 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+type NSConfig struct {
+	WatchNamespace string `env:"WATCH_NAMESPACE"`
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(buildv1.AddToScheme(scheme))
@@ -60,9 +65,11 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	watchNamespace := os.Getenv("WATCH_NAMESPACE")
-	if watchNamespace != "" {
-		setupLog.Info("scoping cache to a single namespace", "namespace", watchNamespace)
+	var nsConfig NSConfig
+	utils.LoadConfig(&nsConfig)
+
+	if nsConfig.WatchNamespace != "" {
+		setupLog.Info("scoping cache to a single namespace", "namespace", nsConfig.WatchNamespace)
 	} else {
 		setupLog.Info("no WATCH_NAMESPACE set; manager will watch cluster-wide")
 	}
@@ -76,10 +83,10 @@ func main() {
 		LeaderElectionID:       "715d8f3b.hades.tum.de",
 	}
 
-	if watchNamespace != "" {
+	if nsConfig.WatchNamespace != "" {
 		mgrOpts.Cache = cache.Options{
 			DefaultNamespaces: map[string]cache.Config{
-				watchNamespace: {},
+				nsConfig.WatchNamespace: {},
 			},
 		}
 	}
