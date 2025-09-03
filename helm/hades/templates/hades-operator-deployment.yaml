@@ -17,6 +17,7 @@ spec:
         - name: "hades-operator"
           image: "{{ .Values.hadesOperator.image.repository }}:{{ .Values.hadesOperator.image.tag }}"
           imagePullPolicy: {{ .Values.hadesOperator.image.pullPolicy }}
+
           {{- if .Values.hadesOperator.leaderElection.enabled }}
           args:
             - "--leader-elect"
@@ -25,12 +26,29 @@ spec:
           args:
             - "--health-probe-bind-address=:8081"
           {{- end }}
+
           ports:
-            - containerPort: 8081
-              name: healthz
+            - name: healthz
+              containerPort: 8081
+
           env:
             - name: WATCH_NAMESPACE
               value: {{ .Values.hadesOperator.targetNamespace | default .Release.Namespace | quote }}
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
           resources:
             limits:
               cpu: {{ .Values.hadesOperator.resources.limits.cpu | quote }}
@@ -38,20 +56,3 @@ spec:
             requests:
               cpu: {{ .Values.hadesOperator.resources.requests.cpu | quote }}
               memory: {{ .Values.hadesOperator.resources.requests.memory | quote }}
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: healthz
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: healthz
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          ports:
-            - containerPort: {{ .Values.hadesOperator.service.targetPort }}
-          env:
-            - name: WATCH_NAMESPACE
-              value: "hades"
