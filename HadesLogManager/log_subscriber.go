@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -32,11 +31,11 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 	// Subscribe to executing status - start watching logs
 	_, err := dls.nc.Subscribe("hades.status.executing", func(msg *nats.Msg) {
 		var jobID string
-		if err := json.Unmarshal(msg.Data, &jobID); err != nil {
-			slog.Error("Failed to unmarshal jobID from status: executing", "error", err)
+		if len(msg.Data) == 0 {
+			slog.Error("Empty jobID received")
 			return
 		}
-
+		jobID = string(msg.Data)
 		slog.Info("Job started executing", "job_id", jobID)
 		dls.startWatchingJobLogs(ctx, jobID)
 	})
@@ -47,11 +46,11 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 	// Subscribe to finished status - stop watching logs
 	_, err = dls.nc.Subscribe("hades.status.finished", func(msg *nats.Msg) {
 		var jobID string
-		if err := json.Unmarshal(msg.Data, &jobID); err != nil {
-			slog.Error("Failed to unmarshal jobID from status: finished", "error", err)
+		if len(msg.Data) == 0 {
+			slog.Error("Empty jobID received")
 			return
 		}
-
+		jobID = string(msg.Data)
 		slog.Info("Job finished", "job_id", jobID)
 		dls.stopWatchingJobLogs(jobID)
 	})
@@ -62,11 +61,11 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 	// Subscribe to failed status - stop watching logs
 	_, err = dls.nc.Subscribe("hades.status.failed", func(msg *nats.Msg) {
 		var jobID string
-		if err := json.Unmarshal(msg.Data, &jobID); err != nil {
-			slog.Error("Failed to unmarshal jobID from status: failed", "error", err)
+		if len(msg.Data) == 0 {
+			slog.Error("Empty jobID received")
 			return
 		}
-
+		jobID = string(msg.Data)
 		slog.Info("Job failed", "job_id", jobID)
 		dls.stopWatchingJobLogs(jobID)
 	})

@@ -1,0 +1,15 @@
+meta {
+  name: Get job log
+  type: http
+  seq: 2
+}
+
+get {
+  url: http://localhost:8080/api/jobs/jobID/logs
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

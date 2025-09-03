@@ -1,0 +1,15 @@
+meta {
+  name: Get completed jobs
+  type: http
+  seq: 4
+}
+
+get {
+  url: http://localhost:8080/api/jobs
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

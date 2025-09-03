@@ -85,17 +85,18 @@ func (la *LogAggregator) flushLogs() {
 }
 
 // API methods
-func (la *LogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
+func (la *LogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 	la.mutex.RLock()
 	defer la.mutex.RUnlock()
 
 	if logs, exists := la.logs[jobID]; exists {
-		// Return a copy to prevent race conditions
-		result := make([]buildlogs.Log, len(logs))
-		copy(result, logs)
-		return result
+		var allLogEntries []buildlogs.LogEntry
+		for _, log := range logs {
+			allLogEntries = append(allLogEntries, log.Logs...)
+		}
+		return allLogEntries
 	}
-	return []buildlogs.Log{}
+	return []buildlogs.LogEntry{}
 }
 
 func (la *LogAggregator) GetAllJobs() []string {
