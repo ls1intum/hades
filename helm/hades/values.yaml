@@ -39,7 +39,7 @@ hadesScheduler:
 hadesOperator:
   image:
     repository: ghcr.io/ls1intum/hades/hades-operator
-    tag: pr-289
+    tag: latest
     pullPolicy: Always
   service:
     type: ClusterIP

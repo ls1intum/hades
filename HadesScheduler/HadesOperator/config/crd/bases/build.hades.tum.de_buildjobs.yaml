@@ -104,7 +104,6 @@ spec:
                 minimum: 1
                 type: integer
             required:
-            - name
             - steps
             type: object
           status:
@@ -119,8 +118,13 @@ spec:
               message:
                 type: string
               phase:
-                description: Pending | Running | Succeeded | Failed
+                description: Phase of the BuildJob lifecycle
                 type: string
+                enum:
+                  - Pending
+                  - Running
+                  - Succeeded
+                  - Failed
               podName:
                 description: Name of the Pod/Job created by the Operator, helpful
                   for troubleshooting

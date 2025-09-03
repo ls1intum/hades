@@ -28,12 +28,16 @@ spec:
           {{- end }}
 
           ports:
+            - name: http
+              containerPort: {{ .Values.hadesOperator.service.targetPort }}
             - name: healthz
               containerPort: 8081
 
           env:
+            {{- if not .Values.hadesOperator.clusterWide }}
             - name: WATCH_NAMESPACE
-              value: {{ .Values.hadesOperator.targetNamespace | default .Release.Namespace | quote }}
+              value: {{ default .Release.Namespace .Values.hadesOperator.targetNamespace | quote }}
+            {{- end }}
 
           livenessProbe:
             httpGet:
