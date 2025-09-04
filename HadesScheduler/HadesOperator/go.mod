@@ -1,4 +1,5 @@
-module github.com/ls1intum/hades
+module github.com/ls1intum/hades/HadesScheduler/HadesOperator
+
 
 go 1.24.0
 
