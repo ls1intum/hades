@@ -7,13 +7,13 @@ WORKDIR /app
 # Copy go.mod and go.sum files
 COPY ./HadesScheduler/HadesOperator/go.mod ./HadesScheduler/HadesOperator/go.mod
 COPY ./HadesScheduler/HadesOperator/go.sum ./HadesScheduler/HadesOperator/go.sum
-COPY ./HadesScheduler/shared/go.mod              ./HadesScheduler/shared/go.mod
-COPY ./HadesScheduler/shared/go.sum              ./HadesScheduler/shared/go.sum
+COPY ./shared/go.mod ./shared/go.mod
+COPY ./shared/go.sum ./shared/go.sum
 RUN cd HadesScheduler/HadesOperator && go mod download
 
 # Copy the Go application source code into the container
 COPY ./HadesScheduler/HadesOperator ./HadesScheduler/HadesOperator
-COPY ./HadesScheduler/shared        ./HadesScheduler/shared
+COPY ./shared ./shared
 
 # Build the Go application
 WORKDIR /app/HadesScheduler/HadesOperator
