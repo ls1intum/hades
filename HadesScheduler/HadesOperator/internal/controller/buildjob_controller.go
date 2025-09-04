@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	buildv1 "github.com/ls1intum/hades/api/v1"
+	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 

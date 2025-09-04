@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	buildv1 "github.com/ls1intum/hades/api/v1"
-	"github.com/ls1intum/hades/internal/controller"
+	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
+	"github.com/ls1intum/hades/HadesScheduler/HadesOperator/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 

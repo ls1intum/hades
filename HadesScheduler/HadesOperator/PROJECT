@@ -16,6 +16,6 @@ resources:
   domain: hades.tum.de
   group: build
   kind: BuildJob
-  path: github.com/ls1intum/hades/api/v1
+  path: github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1
   version: v1
 version: "3"

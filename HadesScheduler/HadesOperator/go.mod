@@ -1,12 +1,13 @@
 module github.com/ls1intum/hades/HadesScheduler/HadesOperator
 
-
 go 1.24.0
+
+toolchain go1.24.4
 
 replace github.com/ls1intum/hades/shared => ../../shared
 
 require (
-	github.com/ls1intum/hades/shared v0.0.0-00010101000000-000000000000
+	github.com/ls1intum/hades/shared v0.0.0-20250610091423-ecd369d566e9
 	k8s.io/api v0.33.0
 	k8s.io/apimachinery v0.33.0
 	k8s.io/client-go v0.33.0
