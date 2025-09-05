@@ -26,8 +26,8 @@ FROM gcr.io/distroless/static-debian12
 WORKDIR /app
 
 # Copy the built binary from the builder container into the minimal runtime container
-COPY --from=builder /app/HadesScheduler/HadesOperator/manager .
+COPY --from=builder /app/HadesScheduler/HadesOperator/manager /app/manager
 
 # Run your Go application
 USER 65532:65532
-CMD ["/app/manager"]
+ENTRYPOINT ["/app/manager"]
