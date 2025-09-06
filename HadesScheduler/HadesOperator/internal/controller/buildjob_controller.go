@@ -88,6 +88,11 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Error(err, "update final status")
 				return ctrl.Result{}, err
 			}
+
+			// Stream build logs
+
+			err = waitForAllContainers(ctx, bj, jobName)
+
 			// Delete the CR after the job is either successful or failed
 			policy := metav1.DeletePropagationForeground
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})

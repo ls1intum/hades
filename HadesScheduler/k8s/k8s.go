@@ -7,6 +7,7 @@ import (
 
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
+	"github.com/nats-io/nats.go"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -23,6 +24,7 @@ type Scheduler struct {
 	dynClient   dynamic.Interface
 	namespace   string
 	useOperator bool
+	nc          *nats.Conn
 }
 
 type K8sConfig struct {
@@ -59,7 +61,7 @@ func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
 	}
 }
 
-func NewK8sScheduler() Scheduler {
+func NewK8sScheduler() *Scheduler {
 	slog.Debug("Initializing Kubernetes scheduler")
 
 	// Load the user provided Kubernetes configuration
@@ -83,7 +85,17 @@ func NewK8sScheduler() Scheduler {
 		}
 	}
 
-	return scheduler
+	// TODO: add slog.Error("Failed to create K8s Scheduler") somewhere
+	return &scheduler
+}
+
+func (k *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
+	if nc != nil {
+		k.nc = nc
+	} else {
+		slog.Warn("NATS connection is nil, logs will not be published")
+	}
+	return k
 }
 
 // Create a Kubernetes clientset based on the provided configuration
@@ -156,6 +168,7 @@ func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		k8sClient:        k.k8sClient,
 		namespace:        k.namespace,
 		sharedVolumeName: "shared",
+		nc:               k.nc,
 	}
 	return k8sJob.execute(ctx)
 }

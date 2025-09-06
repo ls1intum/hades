@@ -42,7 +42,7 @@ type Scheduler struct {
 	publisher log.Publisher
 }
 
-func NewDockerScheduler() (*Scheduler, error) {
+func NewDockerScheduler() *Scheduler {
 	var dockerCfg DockerEnvConfig
 	utils.LoadConfig(&dockerCfg)
 	slog.Debug("Docker config", "config", dockerCfg)
@@ -52,6 +52,7 @@ func NewDockerScheduler() (*Scheduler, error) {
 	cli, err := client.NewClientWithOpts(client.WithHost(dockerCfg.DockerHost), client.WithAPIVersionNegotiation())
 	if err != nil {
 		slog.Error("Failed to create Docker client", slog.Any("error", err))
+		slog.Error("Failed to create Docker Scheduler")
 	}
 	return &Scheduler{
 		cli: cli,
@@ -61,7 +62,7 @@ func NewDockerScheduler() (*Scheduler, error) {
 			cpu_limit:           dockerCfg.CPU_limit,
 			memory_limit:        dockerCfg.MEMORY_limit,
 		},
-	}, nil
+	}
 }
 
 func (d *Scheduler) SetFluentdLogging(addr string, max_retries uint) *Scheduler {
