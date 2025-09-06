@@ -20,21 +20,26 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	buildv1 "github.com/ls1intum/hades/api/v1"
+	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+const conflictRequeueDelay = 200 * time.Millisecond
 
 // BuildJobReconciler reconciles a BuildJob object
 type BuildJobReconciler struct {
@@ -79,13 +84,10 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Job already exists, check the status of the job
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
-			// Build finished
-			bj.Status.Phase = map[bool]string{true: "Succeeded", false: "Failed"}[succeeded]
-			bj.Status.Message = msg
-			now := metav1.Now()
-			bj.Status.CompletionTime = &now
-			if err := r.Status().Update(ctx, &bj); err != nil {
-				log.Error(err, "update final status")
+			if err := r.setStatusCompleted(ctx, req.NamespacedName, succeeded, msg); err != nil {
+				if apierrors.IsConflict(err) {
+					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+				}
 				return ctrl.Result{}, err
 			}
 
@@ -96,11 +98,15 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			// Delete the CR after the job is either successful or failed
 			policy := metav1.DeletePropagationForeground
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
-
 		}
 
 		// Build is still running, set the status to be "running"
-		r.setStatusRunning(ctx, &bj, jobName)
+		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+			}
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 	if !apierrors.IsNotFound(err) {
@@ -125,25 +131,72 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 3.4 Update CR Status → Running
-	r.setStatusRunning(ctx, &bj, jobName)
+	if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+		}
+		return ctrl.Result{}, err
+	}
 
 	// Do not requeue; later Job status changes will re-trigger reconciliation
 	return ctrl.Result{}, nil
 }
 
-func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, bj *buildv1.BuildJob, jobName string) {
-	if bj.Status.Phase == "Running" {
-		return
-	}
-	now := metav1.Now()
-	bj.Status.Phase = "Running"
-	bj.Status.StartTime = &now
-	bj.Status.PodName = jobName
+func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.NamespacedName, jobName string) error {
+	logger := log.FromContext(ctx)
 
-	if err := r.Status().Update(ctx, bj); err != nil {
-		log := log.FromContext(ctx)
-		log.Error(err, "failed to update BuildJob status to Running")
-	}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &buildv1.BuildJob{}
+		if err := r.Get(ctx, nn, latest); err != nil {
+			return client.IgnoreNotFound(err)
+		}
+		if latest.DeletionTimestamp != nil {
+			return nil
+		}
+		if latest.Status.Phase == "Running" {
+			return nil
+		}
+
+		base := latest.DeepCopy()
+		now := metav1.Now()
+		latest.Status.Phase = "Running"
+		latest.Status.StartTime = &now
+		latest.Status.PodName = jobName
+
+		if err := r.Status().Patch(ctx, latest, client.MergeFrom(base)); err != nil {
+			logger.Error(err, "failed to patch BuildJob status to Running")
+			return err
+		}
+		return nil
+	})
+}
+
+func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.NamespacedName, succeeded bool, msg string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &buildv1.BuildJob{}
+		if err := r.Get(ctx, nn, latest); err != nil {
+			return client.IgnoreNotFound(err)
+		}
+		if latest.DeletionTimestamp != nil {
+			return nil
+		}
+
+		if latest.Status.Phase == "Succeeded" || latest.Status.Phase == "Failed" {
+			return nil
+		}
+
+		base := latest.DeepCopy()
+		now := metav1.Now()
+		if succeeded {
+			latest.Status.Phase = "Succeeded"
+		} else {
+			latest.Status.Phase = "Failed"
+		}
+		latest.Status.Message = msg
+		latest.Status.CompletionTime = &now
+
+		return r.Status().Patch(ctx, latest, client.MergeFrom(base))
+	})
 }
 
 // buildK8sJob creates a one-time Job with InitContainers that execute each Step in order

@@ -1,33 +1,33 @@
-# Build the manager binary
-FROM golang:1.24 AS builder
-ARG TARGETOS
-ARG TARGETARCH
+# Use an official Go runtime as a parent image
+FROM golang:1.24-alpine AS builder
 
-WORKDIR /workspace
-# Copy the Go Modules manifests
-COPY HadesScheduler/HadesOperator/go.mod go.mod
-COPY HadesScheduler/HadesOperator/go.sum go.sum
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
-RUN go mod download
+# Set the working directory inside the container
+WORKDIR /app
 
-# Copy the go source
-COPY HadesScheduler/HadesOperator/cmd/main.go cmd/main.go
-COPY HadesScheduler/HadesOperator/api api/
-COPY HadesScheduler/HadesOperator/internal internal/
+# Copy go.mod and go.sum files
+COPY ./HadesScheduler/HadesOperator/go.mod ./HadesScheduler/HadesOperator/go.mod
+COPY ./HadesScheduler/HadesOperator/go.sum ./HadesScheduler/HadesOperator/go.sum
+COPY ./shared/go.mod ./shared/go.mod
+COPY ./shared/go.sum ./shared/go.sum
+RUN cd HadesScheduler/HadesOperator && go mod download
 
-# Build
-# the GOARCH has not a default value to allow the binary be built according to the host where the command
-# was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
-# the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
-# by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go
+# Copy the Go application source code into the container
+COPY ./HadesScheduler/HadesOperator ./HadesScheduler/HadesOperator
+COPY ./shared ./shared
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
-WORKDIR /
-COPY --from=builder /workspace/manager .
+# Build the Go application
+WORKDIR /app/HadesScheduler/HadesOperator
+RUN CGO_ENABLED=0 GOOS=linux go build -o manager ./cmd/main.go
+
+# Start a new stage for the minimal runtime container
+FROM gcr.io/distroless/static-debian12
+
+# Set the working directory inside the minimal runtime container
+WORKDIR /app
+
+# Copy the built binary from the builder container into the minimal runtime container
+COPY --from=builder /app/HadesScheduler/HadesOperator/manager /app/manager
+
+# Run your Go application
 USER 65532:65532
-
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/app/manager"]
