@@ -1,8 +1,12 @@
 {{- if .Values.ingress.enabled -}}
+{{- $baseDomain := .Values.ingress.baseDomain | default "student.k8s.aet.cit.tum.de" -}}
+{{- $host := .Values.ingress.host | default (printf "%s.%s" .Release.Namespace $baseDomain) -}}
+{{- $tlsSecret := .Values.ingress.tls.secretName | default (printf "%s-tls" .Release.Name) -}}
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: "hades-ingress"
+  name: "{{ .Release.Name }}-ingress"
   {{- $annotations := .Values.ingress.annotations | default dict }}
   {{- if $annotations }}
   annotations:
@@ -14,15 +18,15 @@ spec:
   {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
-        - {{ .Values.ingress.host }}
-      secretName: {{ .Values.ingress.tls.secretName }}
+        - {{ $host }}
+      secretName: {{ $tlsSecret }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.host }}
+    - host: {{ $host }}
       http:
         paths:
           # Hades API
-          - path: /build
+          - path: {{ .Values.ingress.path }}
             pathType: Prefix
             backend:
               service:
