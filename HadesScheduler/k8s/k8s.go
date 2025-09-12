@@ -2,8 +2,11 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"log/slog"
+	"sync"
 
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
@@ -20,11 +23,12 @@ import (
 
 type Scheduler struct {
 	// TODO: This may be problematic - We need to clarify how to access the cluster with the service account and find a solution that is compatible with both modes
-	k8sClient   *kubernetes.Clientset
-	dynClient   dynamic.Interface
-	namespace   string
-	useOperator bool
-	nc          *nats.Conn
+	k8sClient     *kubernetes.Clientset
+	dynClient     dynamic.Interface
+	namespace     string
+	useOperator   bool
+	nc            *nats.Conn
+	activeStreams sync.Map // buildJobName -> cancel function
 }
 
 type K8sConfig struct {
@@ -156,9 +160,44 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 	}
 }
 
-func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
+// Event received from Operator
+func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
+	var event map[string]interface{}
+	if err := json.Unmarshal(msg.Data, &event); err != nil {
+		log.Printf("Failed to unmarshal BuildJob event: %v", err)
+		return
+	}
+
+	buildJobName := event["buildJob"].(string)
+	status := event["status"].(string)
+
+	switch status {
+	case "pod_running":
+		if podName, ok := event["podName"].(string); ok && podName != "" {
+			logreader := PodLogReader{
+				k8sClient:   k.k8sClient,
+				namespace:   k.namespace,
+				podName:     podName,
+				containerID: buildJobName,
+				nc:          k.nc,
+			}
+
+			go logreader.waitForAllContainers(context.Background())
+		}
+	case "completed":
+		// Stop log streaming if it's active
+		if cancel, exists := k.activeStreams.LoadAndDelete(buildJobName); exists {
+			cancel.(context.CancelFunc)()
+		}
+		log.Printf("BuildJob %s completed: %v", buildJobName, event["succeeded"])
+	}
+}
+
+func (k *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	if k.useOperator {
 		slog.Debug("Scheduling job via Operator (creating BuildJob CR)")
+		k.nc.Subscribe("buildjob.events.*", k.handleBuildJobEvent)
+
 		return k.createBuildJobCR(ctx, job)
 	}
 
@@ -173,7 +212,7 @@ func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 	return k8sJob.execute(ctx)
 }
 
-func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayload) error {
+func (k *Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayload) error {
 	if k.dynClient == nil {
 		return fmt.Errorf("dynamic client is nil: operator mode not initialized")
 	}

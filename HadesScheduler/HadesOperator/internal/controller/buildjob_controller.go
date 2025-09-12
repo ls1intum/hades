@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
+	"github.com/nats-io/nats.go"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -45,6 +47,7 @@ const conflictRequeueDelay = 200 * time.Millisecond
 type BuildJobReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	nc     *nats.Conn
 }
 
 // +kubebuilder:rbac:groups=build.hades.tum.de,resources=buildjobs;buildjobs/status;buildjobs/finalizers,verbs=get;list;watch;create;update;patch;delete
@@ -84,6 +87,13 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Job already exists, check the status of the job
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
+			// Publish completion event before updating status
+			r.publishBuildJobEvent(bj.Name, bj.Namespace, "completed", map[string]interface{}{
+				"succeeded": succeeded,
+				"message":   msg,
+				"jobName":   jobName,
+			})
+
 			if err := r.setStatusCompleted(ctx, req.NamespacedName, succeeded, msg); err != nil {
 				if apierrors.IsConflict(err) {
 					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
@@ -91,14 +101,21 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				return ctrl.Result{}, err
 			}
 
-			// Stream build logs
-
-			err = waitForAllContainers(ctx, bj, jobName)
-
 			// Delete the CR after the job is either successful or failed
 			policy := metav1.DeletePropagationForeground
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
 		}
+
+		// Job is running - check if we need to publish "running" event
+		// if existingJob.Status.Active > 0 && bj.Status.Phase != "Running" {
+		// 	// Get the actual pod name from the job
+		// 	podName := r.getPodNameFromJob(ctx, &existingJob)
+		// 	r.publishBuildJobEvent(bj.Name, bj.Namespace, "pod_running", map[string]interface{}{
+		// 		"jobName":   jobName,
+		// 		"podName":   podName,
+		// 		"namespace": bj.Namespace,
+		// 	})
+		// }
 
 		// Build is still running, set the status to be "running"
 		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
@@ -303,3 +320,46 @@ func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string)
 	}
 	return false, false, ""
 }
+
+func (r *BuildJobReconciler) publishBuildJobEvent(buildJobName, namespace, status string, data map[string]interface{}) {
+	if r.nc == nil {
+		return // Gracefully handle if NATS is not configured
+	}
+
+	event := map[string]any{
+		"buildJob":  buildJobName,
+		"namespace": namespace,
+		"status":    status,
+		"timestamp": time.Now(),
+	}
+
+	// Merge additional data
+	for k, v := range data {
+		event[k] = v
+	}
+
+	eventBytes, _ := json.Marshal(event)
+	subject := fmt.Sprintf("buildjob.events.%s", buildJobName)
+
+	if err := r.nc.Publish(subject, eventBytes); err != nil {
+		// Log but don't fail the reconciliation
+		log.FromContext(context.Background()).Error(err, "Failed to publish BuildJob event", "subject", subject)
+	}
+}
+
+// func (r *BuildJobReconciler) getPodNameFromJob(ctx context.Context, job *batchv1.Job) string {
+// 	// List pods owned by this job
+// 	var pods corev1.PodList
+// 	if err := r.List(ctx, &pods, client.InNamespace(job.Namespace), client.MatchingLabels(job.Spec.Selector.MatchLabels)); err != nil {
+// 		return ""
+// 	}
+
+// 	for _, pod := range pods.Items {
+// 		for _, owner := range pod.OwnerReferences {
+// 			if owner.UID == job.UID {
+// 				return pod.Name
+// 			}
+// 		}
+// 	}
+// 	return ""
+// }

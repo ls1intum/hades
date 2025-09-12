@@ -23,8 +23,6 @@ type JobScheduler interface {
 type HadesSchedulerConfig struct {
 	Concurrency uint `env:"CONCURRENCY" envDefault:"1"`
 	NatsConfig  utils.NatsConfig
-	Concurrency uint `env:"CONCURRENCY" envDefault:"1"`
-	NatsConfig  utils.NatsConfig
 }
 
 var HadesConsumer *utils.HadesConsumer
