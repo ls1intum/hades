@@ -175,11 +175,10 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 	case "pod_running":
 		if podName, ok := event["podName"].(string); ok && podName != "" {
 			logreader := PodLogReader{
-				k8sClient:   k.k8sClient,
-				namespace:   k.namespace,
-				podName:     podName,
-				containerID: buildJobName,
-				nc:          k.nc,
+				k8sClient: k.k8sClient,
+				namespace: k.namespace,
+				jobID:     buildJobName,
+				nc:        k.nc,
 			}
 
 			go logreader.waitForAllContainers(context.Background())

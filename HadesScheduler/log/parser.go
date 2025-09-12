@@ -23,15 +23,15 @@ type LogEntry struct {
 }
 
 type Log struct {
-	JobID       string     `json:"job_id"`
-	ContainerID string     `json:"container_id"`
-	Logs        []LogEntry `json:"logs"`
+	JobID         string     `json:"job_id"`
+	ContainerName string     `json:"container_id"`
+	Logs          []LogEntry `json:"logs"`
 }
 
 // converts raw log streams into structured log entries
-func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (Log, error) {
+func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerName string) (Log, error) {
 	var buildJobLog Log
-	buildJobLog.ContainerID = containerID
+	buildJobLog.ContainerName = containerName
 
 	// Process stdout and stderr
 	for _, stream := range []struct {
@@ -47,7 +47,7 @@ func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (Log, 
 	}
 
 	slog.Debug("Parsed container logs",
-		slog.String("container_id", containerID),
+		slog.String("container_id", containerName),
 		slog.Int("entries_count", len(buildJobLog.Logs)))
 
 	return buildJobLog, nil

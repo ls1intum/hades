@@ -68,11 +68,10 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 	}
 
 	logreader := PodLogReader{
-		k8sClient:   k8sJob.k8sClient,
-		namespace:   jobPodSpec.Namespace,
-		podName:     jobPodSpec.Name,
-		containerID: k8sJob.ID.String(),
-		nc:          k8sJob.nc,
+		k8sClient: k8sJob.k8sClient,
+		namespace: jobPodSpec.Namespace,
+		jobID:     k8sJob.ID.String(),
+		nc:        k8sJob.nc,
 	}
 
 	err = logreader.waitForAllContainers(ctx)
@@ -81,7 +80,7 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 		slog.Error("Failed to write container logs to NATS", slog.Any("error", err), slog.Any("PodSpec", jobPodSpec.Name))
 		return err
 	} else {
-		slog.Debug("Container logs written to NATS", slog.Any("PodSpec", jobPodSpec.Name))
+		slog.Debug("Container logs written to NATS", slog.Any("job id", jobPodSpec.Name))
 	}
 
 	return nil

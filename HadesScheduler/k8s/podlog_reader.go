@@ -17,18 +17,17 @@ import (
 )
 
 type PodLogReader struct {
-	k8sClient   *kubernetes.Clientset
-	namespace   string
-	podName     string
-	containerID string
-	nc          *nats.Conn
+	k8sClient *kubernetes.Clientset
+	namespace string
+	jobID     string
+	nc        *nats.Conn
 }
 
 func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
 
 	// Get pod spec to know what containers to expect
-	p, err := cli.Get(ctx, pl.podName, metav1.GetOptions{})
+	p, err := cli.Get(ctx, pl.jobID, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -56,7 +55,7 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, containerName strin
 	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
 
 	err := wait.PollUntilContextTimeout(ctx, 3*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
-		p, err := cli.Get(ctx, pl.podName, metav1.GetOptions{})
+		p, err := cli.Get(ctx, pl.jobID, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -86,12 +85,12 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, containerName strin
 		return fmt.Errorf("timeout waiting for container %s: %v", containerName, err)
 	}
 
-	slog.Debug("Container completed", slog.String("pod_name", pl.podName), slog.String("container_name", containerName),
+	slog.Debug("Container completed", slog.String("job_id", pl.jobID), slog.String("container_name", containerName),
 		slog.Int("exit_code", int(exitCode)))
 
 	// Process logs upon container completion
 	if err := pl.processContainerLogs(ctx, containerName); err != nil {
-		fmt.Printf("Warning: failed to process logs for %s: %v\n", containerName, err)
+		slog.Error("Warning: failed to process logs for %s: %v\n", containerName, err)
 	}
 
 	if exitCode != 0 {
@@ -107,12 +106,11 @@ func (pl PodLogReader) processContainerLogs(ctx context.Context, containerName s
 		return fmt.Errorf("getting container logs: %w", err)
 	}
 
-	//pl.containerID = k8sJob.ID
-	buildJobLog, err := log.ParseContainerLogs(stdout, stderr, pl.containerID)
+	buildJobLog, err := log.ParseContainerLogs(stdout, stderr, containerName)
 	if err != nil {
 		return fmt.Errorf("parsing container logs: %w", err)
 	}
-
+	buildJobLog.JobID = pl.jobID
 	publisher := log.NewNATSPublisher(pl.nc)
 	return publisher.PublishLogs(buildJobLog)
 }
@@ -120,11 +118,12 @@ func (pl PodLogReader) processContainerLogs(ctx context.Context, containerName s
 func (pl PodLogReader) getContainerLogs(ctx context.Context, containerName string) (*bytes.Buffer, *bytes.Buffer, error) {
 	// get logs of <container name>
 	podLogOpts := corev1.PodLogOptions{
-		Container: containerName,
-		Follow:    false,
+		Container:  containerName,
+		Follow:     true,
+		Timestamps: true,
 	}
 
-	req := pl.k8sClient.CoreV1().Pods(pl.namespace).GetLogs(pl.podName, &podLogOpts)
+	req := pl.k8sClient.CoreV1().Pods(pl.namespace).GetLogs(pl.jobID, &podLogOpts)
 	logReader, err := req.Stream(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting container logs: %w", err)
