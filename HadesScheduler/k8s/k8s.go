@@ -162,7 +162,7 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 
 // Event received from Operator
 func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
-	var event map[string]interface{}
+	var event map[string]any
 	if err := json.Unmarshal(msg.Data, &event); err != nil {
 		log.Printf("Failed to unmarshal BuildJob event: %v", err)
 		return

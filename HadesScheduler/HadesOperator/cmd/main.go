@@ -46,6 +46,10 @@ type NSConfig struct {
 	WatchNamespace string `env:"WATCH_NAMESPACE"`
 }
 
+type NCConfig struct {
+	NatsConfig utils.NatsConfig
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(buildv1.AddToScheme(scheme))
@@ -108,9 +112,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	var cfg NCConfig
+	utils.LoadConfig(&cfg)
+	nc, err := utils.SetupNatsConnection(cfg.NatsConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to setup NATS Connection")
+		os.Exit(1)
+	}
+
 	if err := (&controller.BuildJobReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		NatsConnection: nc,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
 		os.Exit(1)

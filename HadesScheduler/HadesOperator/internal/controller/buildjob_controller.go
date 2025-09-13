@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -46,8 +47,8 @@ const conflictRequeueDelay = 200 * time.Millisecond
 // BuildJobReconciler reconciles a BuildJob object
 type BuildJobReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	nc     *nats.Conn
+	Scheme         *runtime.Scheme
+	NatsConnection *nats.Conn
 }
 
 // +kubebuilder:rbac:groups=build.hades.tum.de,resources=buildjobs;buildjobs/status;buildjobs/finalizers,verbs=get;list;watch;create;update;patch;delete
@@ -87,12 +88,18 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Job already exists, check the status of the job
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
+			fmt.Printf("=================DEBUG START=============\n")
+			fmt.Printf("bj.Status.PodName%s\n", bj.Status.PodName)
+			fmt.Printf("bj.Name%s\n", bj.Name)
+			fmt.Printf("=================DEBUG END===============\n")
+
 			// Publish completion event before updating status
-			r.publishBuildJobEvent(bj.Name, bj.Namespace, "completed", map[string]interface{}{
+			r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "completed", map[string]any{
 				"succeeded": succeeded,
 				"message":   msg,
 				"jobName":   jobName,
 			})
+			log.Info("BuildJob event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
 
 			if err := r.setStatusCompleted(ctx, req.NamespacedName, succeeded, msg); err != nil {
 				if apierrors.IsConflict(err) {
@@ -321,9 +328,11 @@ func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string)
 	return false, false, ""
 }
 
-func (r *BuildJobReconciler) publishBuildJobEvent(buildJobName, namespace, status string, data map[string]interface{}) {
-	if r.nc == nil {
-		return // Gracefully handle if NATS is not configured
+func (r *BuildJobReconciler) publishBuildJobEvent(ctx context.Context, buildJobName, namespace, status string, data map[string]any) {
+	log := log.FromContext(ctx)
+	if r.NatsConnection == nil {
+		log.Error(nil, "Cannot publish BuildJob Event: nil NATS Connection", "buildJobName", buildJobName)
+		return
 	}
 
 	event := map[string]any{
@@ -334,32 +343,13 @@ func (r *BuildJobReconciler) publishBuildJobEvent(buildJobName, namespace, statu
 	}
 
 	// Merge additional data
-	for k, v := range data {
-		event[k] = v
-	}
+	maps.Copy(event, data)
 
 	eventBytes, _ := json.Marshal(event)
 	subject := fmt.Sprintf("buildjob.events.%s", buildJobName)
 
-	if err := r.nc.Publish(subject, eventBytes); err != nil {
+	if err := r.NatsConnection.Publish(subject, eventBytes); err != nil {
 		// Log but don't fail the reconciliation
-		log.FromContext(context.Background()).Error(err, "Failed to publish BuildJob event", "subject", subject)
+		log.Error(err, "Failed to publish BuildJob event", "subject", subject)
 	}
 }
-
-// func (r *BuildJobReconciler) getPodNameFromJob(ctx context.Context, job *batchv1.Job) string {
-// 	// List pods owned by this job
-// 	var pods corev1.PodList
-// 	if err := r.List(ctx, &pods, client.InNamespace(job.Namespace), client.MatchingLabels(job.Spec.Selector.MatchLabels)); err != nil {
-// 		return ""
-// 	}
-
-// 	for _, pod := range pods.Items {
-// 		for _, owner := range pod.OwnerReferences {
-// 			if owner.UID == job.UID {
-// 				return pod.Name
-// 			}
-// 		}
-// 	}
-// 	return ""
-// }
