@@ -14,7 +14,7 @@ import (
 
 type HadesLogManagerConfig struct {
 	NatsConfig utils.NatsConfig
-	APIPort    string `env:"API_PORT" envDefault:"8080"`
+	APIPort    string `env:"API_PORT" envDefault:"8081"`
 }
 
 func main() {
