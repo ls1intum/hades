@@ -80,7 +80,7 @@ func setupAPIRoute(aggregator *LogAggregator) *gin.Engine {
 	router.GET("/api/jobs/:jobId/logs", func(c *gin.Context) {
 		jobID := c.Param("jobId")
 		logs := aggregator.GetJobLogs(jobID)
-		c.JSON(200, gin.H{"job_id": jobID, "logs": logs})
+		c.JSON(200, gin.H{"logs": logs})
 	})
 
 	// Get all active jobs (for testing)
