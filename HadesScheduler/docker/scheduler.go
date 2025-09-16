@@ -39,7 +39,7 @@ type Scheduler struct {
 	kv        jetstream.KeyValue
 }
 
-func NewDockerScheduler() (*Scheduler, error) {
+func NewDockerScheduler(kv jetstream.KeyValue) (*Scheduler, error) {
 	var dockerCfg DockerEnvConfig
 	utils.LoadConfig(&dockerCfg)
 	slog.Debug("Docker config", "config", dockerCfg)
@@ -59,7 +59,7 @@ func NewDockerScheduler() (*Scheduler, error) {
 			cpu_limit:           dockerCfg.CPU_limit,
 			memory_limit:        dockerCfg.MEMORY_limit,
 		},
-		kv: nil,
+		kv: kv,
 	}, nil
 }
 
@@ -74,21 +74,6 @@ func (d *Scheduler) SetNatsConnection(ctx context.Context, nc *nats.Conn) *Sched
 	} else {
 		slog.Warn("NATS connection is nil, logs nor status will be published")
 	}
-
-	// Create JetStream to store build status
-	js, err := jetstream.New(nc)
-	if err != nil {
-		slog.Error("Failed to create JetStream context", "error", err)
-	}
-
-	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket: "HADES_JOBS_STATUS",
-	})
-	if err != nil {
-		slog.Error("Failed to create JetStream KeyValue store", "error", err)
-	}
-
-	d.kv = kv
 
 	return d
 }
