@@ -12,6 +12,7 @@ import (
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type DockerEnvConfig struct {
@@ -35,6 +36,7 @@ type Scheduler struct {
 	cli *client.Client
 	DockerProps
 	publisher log.NATSPublisher
+	kv        jetstream.KeyValue
 }
 
 func NewDockerScheduler() (*Scheduler, error) {
@@ -48,6 +50,7 @@ func NewDockerScheduler() (*Scheduler, error) {
 	if err != nil {
 		slog.Error("Failed to create Docker client", slog.Any("error", err))
 	}
+
 	return &Scheduler{
 		cli: cli,
 		DockerProps: DockerProps{
@@ -56,10 +59,11 @@ func NewDockerScheduler() (*Scheduler, error) {
 			cpu_limit:           dockerCfg.CPU_limit,
 			memory_limit:        dockerCfg.MEMORY_limit,
 		},
+		kv: nil,
 	}, nil
 }
 
-func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
+func (d *Scheduler) SetNatsConnection(ctx context.Context, nc *nats.Conn) *Scheduler {
 	if nc != nil {
 		publisher, err := log.NewNATSPublisher(nc)
 		if err != nil {
@@ -70,6 +74,22 @@ func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 	} else {
 		slog.Warn("NATS connection is nil, logs nor status will be published")
 	}
+
+	// Create JetStream to store build status
+	js, err := jetstream.New(nc)
+	if err != nil {
+		slog.Error("Failed to create JetStream context", "error", err)
+	}
+
+	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket: "HADES_JOBS_STATUS",
+	})
+	if err != nil {
+		slog.Error("Failed to create JetStream KeyValue store", "error", err)
+	}
+
+	d.kv = kv
+
 	return d
 }
 
@@ -98,20 +118,22 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		DockerProps:  jobDockerConfig,
 		QueuePayload: job,
 		publisher:    d.publisher,
+		status:       BuildStatusExecuting,
+		kv:           d.kv,
 	}
 
 	//block to send status first before execution
 	//TODO: change to enum?
-	d.publisher.PublishJobStatus("executing", job.ID.String())
+	docker_job.SetStatus(ctx, BuildStatusExecuting)
 
 	err := docker_job.execute(ctx)
 	if err != nil {
+		docker_job.SetStatus(ctx, BuildStatusFailed)
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
-		d.publisher.PublishJobStatus("failed", job.ID.String())
 		return err
 	}
 
-	d.publisher.PublishJobStatus("finished", job.ID.String())
+	docker_job.SetStatus(ctx, BuildStatusFinished)
 	job_logger.Debug("Job executed successfully", slog.Any("job_id", job.ID))
 
 	// Delete the shared volume after the job is done

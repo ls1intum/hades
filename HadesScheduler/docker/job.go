@@ -6,8 +6,10 @@ import (
 	"maps"
 
 	"github.com/docker/docker/client"
+	"github.com/gin-gonic/gin"
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/payload"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type DockerJob struct {
@@ -16,7 +18,17 @@ type DockerJob struct {
 	DockerProps
 	payload.QueuePayload
 	publisher log.NATSPublisher
+	status    BuildStatus
+	kv        jetstream.KeyValue
 }
+
+type BuildStatus string
+
+const (
+	BuildStatusExecuting BuildStatus = "executing"
+	BuildStatusFailed    BuildStatus = "failed"
+	BuildStatusFinished  BuildStatus = "finished"
+)
 
 type jobIDContextKey string
 
@@ -46,4 +58,40 @@ func (d DockerJob) execute(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (d *DockerJob) SetStatus(ctx context.Context, status BuildStatus) {
+	d.status = status
+	// Update both NATS and publish event
+	d.kv.Put(ctx, d.ID.String(), []byte(status))
+	d.publisher.PublishJobStatus(string(status), d.ID.String())
+}
+
+func (d *DockerJob) GetStatus() BuildStatus {
+	return d.status
+}
+
+func setupAPIRoute(d DockerJob) *gin.Engine {
+	router := gin.Default()
+
+	// Get status for specific job
+	router.GET("/api/jobs/:jobId/status", func(c *gin.Context) {
+		jobId := c.Param("jobId")
+
+		// Validate that the requested jobId matches this DockerJob
+		if jobId != d.ID.String() {
+			c.JSON(404, gin.H{"error": "Job not found"})
+			return
+		}
+
+		status := d.GetStatus()
+		c.JSON(200, gin.H{"status": status})
+	})
+
+	// Health check endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+
+	return router
 }

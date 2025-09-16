@@ -55,6 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx := context.Background()
 	var scheduler JobScheduler
 	switch executorCfg.Executor {
 	case "k8s":
@@ -70,15 +71,13 @@ func main() {
 			slog.Error("Failed to create Docker scheduler", "error", err)
 			return
 		}
-
-    scheduler = dockerScheduler.SetNatsConnection(NatsConnection)
+		scheduler = dockerScheduler.SetNatsConnection(ctx, NatsConnection)
 
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
 		os.Exit(1)
 	}
 
-	ctx := context.Background()
 	HadesConsumer.DequeueJob(ctx, func(payload payload.QueuePayload) {
 		slog.Info("Received job", "id", payload.ID.String())
 		slog.Debug("Job payload", "payload", payload)
