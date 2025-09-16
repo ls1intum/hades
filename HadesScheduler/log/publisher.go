@@ -1,46 +1,43 @@
 package log
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
+	logs "github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/nats-io/nats.go"
 )
 
-type Publisher interface {
-	PublishLogs(buildJobLog Log) error
-}
-
 type NATSPublisher struct {
 	nc *nats.Conn
+	pd *logs.HadesLogProducer
 }
 
-func NewNATSPublisher(nc *nats.Conn) *NATSPublisher {
+func NewNATSPublisher(nc *nats.Conn) (*NATSPublisher, error) {
+	pd, err := logs.NewHadesLogProducer(nc)
+	if err != nil {
+		return nil, fmt.Errorf("creating log producer: %w", err)
+	}
+
 	return &NATSPublisher{
 		nc: nc,
-	}
+		pd: pd,
+	}, nil
 }
 
-// publish log entries to NATS
-func (np NATSPublisher) PublishLogs(buildJobLog Log) error {
-	if np.nc == nil {
-		slog.Error("Cannot publish logs: nil NATS connection", slog.String("job_id", buildJobLog.JobID))
-		return fmt.Errorf("nil NATS connection")
+func (np NATSPublisher) PublishJobStatus(status string, jobID string) error {
+	var subject = fmt.Sprintf("hades.status.%s", status)
+
+	if err := np.nc.Publish(subject, []byte(jobID)); err != nil {
+		slog.Error("Failed to publish job status to NATS subject", slog.String("status", status), slog.String("job_id", jobID), slog.Any("error", err))
+		return fmt.Errorf("publishing job status to NATS subject: %w", err)
 	}
 
-	subject := fmt.Sprintf(LogSubjectFormat, buildJobLog.JobID)
-	data, err := json.Marshal(buildJobLog)
+	return nil
+}
 
-	if err != nil {
-		slog.Error("Failed to marshal log", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
-		return fmt.Errorf("marshalling log: %w", err)
-	}
-
-	if err := np.nc.Publish(subject, data); err != nil {
-		slog.Error("Failed to publish log to NATS", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
-		return fmt.Errorf("publishing log to NATS: %w", err)
-	}
-
+// publish log entries to NATS JetStream
+func (np NATSPublisher) PublishLogs(buildJobLog logs.Log) error {
+	np.pd.PublishLog(buildJobLog)
 	return nil
 }
