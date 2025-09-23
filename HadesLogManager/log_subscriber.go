@@ -78,7 +78,6 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 
 func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID string) {
 	dls.mu.Lock()
-	defer dls.mu.Unlock()
 
 	// Cancel existing watcher if any
 	if cancel, exists := dls.activeWatchers[jobID]; exists {
@@ -88,6 +87,7 @@ func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 	// Create new context for this job
 	jobCtx, cancel := context.WithCancel(ctx)
 	dls.activeWatchers[jobID] = cancel
+	dls.mu.Unlock()
 
 	// Start watching logs for this job
 	go func() {
@@ -116,11 +116,14 @@ func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 
 func (dls *DynamicLogManager) stopWatchingJobLogs(jobID string) {
 	dls.mu.Lock()
-	defer dls.mu.Unlock()
+	cancel, exists := dls.activeWatchers[jobID]
+	if exists {
+		delete(dls.activeWatchers, jobID)
+	}
+	dls.mu.Unlock()
 
-	if cancel, exists := dls.activeWatchers[jobID]; exists {
+	if exists {
 		slog.Info("Stopping log watch", "job_id", jobID)
 		cancel()
-		delete(dls.activeWatchers, jobID)
 	}
 }

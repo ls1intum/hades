@@ -52,9 +52,8 @@ func (la *LogAggregator) StartAggregating(ctx context.Context) error {
 
 func (la *LogAggregator) addLog(log buildlogs.Log) {
 	la.mutex.Lock()
-	defer la.mutex.Unlock()
-
 	jobID := log.JobID
+
 	if _, exists := la.logs[jobID]; !exists {
 		la.logs[jobID] = make([]buildlogs.Log, 0, la.config.BatchSize)
 	}
@@ -68,7 +67,9 @@ func (la *LogAggregator) addLog(log buildlogs.Log) {
 		la.logs[jobID] = la.logs[jobID][start:]
 	}
 
-	slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", len(la.logs[jobID]))
+	logCount := len(la.logs[jobID])
+	la.mutex.Unlock()
+	slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", logCount)
 }
 
 func (la *LogAggregator) flushLogs() {
