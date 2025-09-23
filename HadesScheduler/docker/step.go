@@ -19,7 +19,7 @@ type DockerStep struct {
 	logger *slog.Logger
 	DockerProps
 	payload.Step
-	publisher log.NATSPublisher
+	publisher log.Publisher
 }
 
 func (s DockerStep) execute(ctx context.Context) error {

@@ -34,7 +34,7 @@ type DockerProps struct {
 type Scheduler struct {
 	cli *client.Client
 	DockerProps
-	publisher log.NATSPublisher
+	publisher log.Publisher
 }
 
 func NewDockerScheduler() (*Scheduler, error) {

@@ -18,7 +18,7 @@ import (
 	"github.com/ls1intum/hades/hadesScheduler/log"
 )
 
-func processContainerLogs(ctx context.Context, client *client.Client, publisher log.NATSPublisher, containerID, jobID string) error {
+func processContainerLogs(ctx context.Context, client *client.Client, publisher log.Publisher, containerID, jobID string) error {
 	stdout, stderr, err := getContainerLogs(ctx, client, containerID)
 	if err != nil {
 		return fmt.Errorf("getting container logs: %w", err)

@@ -8,6 +8,11 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+type Publisher interface {
+	PublishLogs(buildJobLog logs.Log) error
+	PublishJobStatus(status string, jobID string) error
+}
+
 type NATSPublisher struct {
 	nc *nats.Conn
 	pd *logs.HadesLogProducer
