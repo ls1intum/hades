@@ -10,6 +10,10 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// DynamicLogManager manages dynamic subscription to job logs based on job status changes.
+// It automatically starts watching logs when a job begins executing and stops when the job
+// finishes or fails. The manager maintains a map of active watchers to prevent duplicate
+// subscriptions and ensure proper cleanup.
 type DynamicLogManager struct {
 	nc             *nats.Conn
 	logConsumer    *logs.HadesLogConsumer
@@ -18,6 +22,17 @@ type DynamicLogManager struct {
 	mu             sync.RWMutex
 }
 
+// NewDynamicLogManager creates a new DynamicLogManager instance with the provided dependencies.
+// It initializes the activeWatchers map and sets up all required components for managing
+// dynamic log subscriptions.
+//
+// Parameters:
+//   - nc: NATS connection for subscribing to job status events
+//   - logConsumer: HadesLogConsumer for reading job logs
+//   - aggregator: LogAggregator for storing and processing logs
+//
+// Returns:
+//   - *DynamicLogManager: A new instance ready to start listening for job status changes
 func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, aggregator *LogAggregator) *DynamicLogManager {
 	return &DynamicLogManager{
 		nc:             nc,
@@ -27,6 +42,18 @@ func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, agg
 	}
 }
 
+// StartListening begins listening for job status changes on NATS subjects and manages
+// log watching accordingly. It subscribes to three status events:
+//   - hades.status.executing: Starts log watching for the job
+//   - hades.status.finished/ hades.status.failed: Stops log watching for the job
+//
+// The method expects job IDs to be sent as string data in NATS messages.
+//
+// Parameters:
+//   - ctx: Context for managing the lifecycle of subscriptions
+//
+// Returns:
+//   - error: Any error that occurred while setting up NATS subscriptions
 func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 	// Subscribe to executing status - start watching logs
 	_, err := dls.nc.Subscribe("hades.status.executing", func(msg *nats.Msg) {
@@ -76,6 +103,17 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 	return nil
 }
 
+// startWatchingJobLogs initiates log watching for a specific job according to jobID. If a
+// watcher already exists, it cancels the existing one before starting a new one.
+// The method runs the log watching in a separate goroutine to avoid blocking.
+//
+// The log watcher receives batched logs through a callback function and forwards them
+// to the log aggregator. It automatically cleans up the watcher from the activeWatchers
+// map when the goroutine exits.
+//
+// Parameters:
+//   - ctx: Parent context for creating the job-specific context
+//   - jobID: Unique identifier for the job to watch logs for
 func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID string) {
 	dls.mu.Lock()
 
@@ -114,6 +152,14 @@ func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 	}()
 }
 
+// stopWatchingJobLogs stops log watching for a specific job by canceling its context
+// and removing it from the activeWatchers map. If no watcher exists for the given
+// job ID, the method returns without error.
+//
+// This method is thread-safe and can be called concurrently from multiple goroutines.
+//
+// Parameters:
+//   - jobID: Unique identifier of the job to stop watching logs for
 func (dls *DynamicLogManager) stopWatchingJobLogs(jobID string) {
 	dls.mu.Lock()
 	cancel, exists := dls.activeWatchers[jobID]
