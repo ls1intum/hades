@@ -1,0 +1,134 @@
+name: Benchmark Hades
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "How many benchmark jobs to trigger"
+        required: false
+        default: "1000"
+
+jobs:
+  benchmark:
+    name: Trigger Benchmark
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      BENCHMARK_URL: ${{ vars.BENCHMARK_URL }}
+      HOST: ${{ vars.BENCHMARK_HOST }}
+      COUNT: ${{ inputs.count || '1000' }}
+      COMMIT_HASH: ${{ github.sha }}
+      GH_USER: ${{ secrets.GH_USER }}
+      GH_PASSWORD: ${{ secrets.GH_TOKEN }}
+      START_ENDPOINT: ${{ secrets.START_ENDPOINT }}
+      RESULT_ENDPOINT: ${{ secrets.RESULT_ENDPOINT }}
+
+    steps:
+      - name: Ensure jq is available
+        run: |
+          set -e
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y jq
+          fi
+
+      - name: Validate required settings
+        run: |
+          set -euo pipefail
+          missing=0
+          for v in BENCHMARK_URL HOST; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error title=Missing $v::Environment variable '$v' is empty. Check repo/org variables/secrets."
+              missing=1
+            fi
+          done
+
+          if ! echo "$COUNT" | grep -Eq '^[0-9]+$'; then
+            echo "::error title=Bad COUNT::COUNT must be a number, got '$COUNT'"
+            missing=1
+          fi
+          MAX_COUNT=5000
+          if [ "$COUNT" -gt "$MAX_COUNT" ]; then
+            echo "::warning::COUNT=$COUNT exceeds MAX_COUNT=$MAX_COUNT, clipping."
+            COUNT=$MAX_COUNT
+            echo "COUNT=$COUNT" >> "$GITHUB_ENV"
+          fi
+          [ "$missing" -eq 0 ]
+
+      - name: Trigger Benchmark for commit
+        run: |
+          set -euo pipefail
+          echo "Triggering benchmark for commit $COMMIT_HASH (count=$COUNT, host=$HOST)"
+
+          # URL-encode the host param (handles :// and /)
+          ENCODED_HOST="$(printf '%s' "$HOST" | jq -sRr @uri)"
+
+          payload="$(
+            jq -n \
+              --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --arg gh_user "$GH_USER" \
+              --arg gh_password "$GH_PASSWORD" \
+              --arg start_endpoint "$START_ENDPOINT" \
+              --arg result_endpoint "$RESULT_ENDPOINT" \
+              '{
+                name: "Benchmark Hades Job",
+                metadata: { GLOBAL: "triggered-via-github-actions" },
+                timestamp: $timestamp,
+                priority: 3,
+                steps: [
+                  {
+                    id: 1,
+                    name: "Report Starting Time",
+                    image: "ghcr.io/ls1intum/hades-reporter/hades-reporter:latest",
+                    metadata: {
+                      ENDPOINT: $start_endpoint
+                    }
+                  },
+                  {
+                    id: 2,
+                    name: "Clone",
+                    image: "ghcr.io/ls1intum/hades/hades-clone-container:latest",
+                    metadata: {
+                      REPOSITORY_DIR: "/shared",
+                      HADES_TEST_USERNAME: $gh_user,
+                      HADES_TEST_PASSWORD: $gh_password,
+                      HADES_TEST_URL: "https://github.com/Mtze/Artemis-Java-Test.git",
+                      HADES_TEST_PATH: "./example",
+                      HADES_TEST_ORDER: "1",
+                      HADES_ASSIGNMENT_USERNAME: $gh_user,
+                      HADES_ASSIGNMENT_PASSWORD: $gh_password,
+                      HADES_ASSIGNMENT_URL: "https://github.com/Mtze/Artemis-Java-Solution.git",
+                      HADES_ASSIGNMENT_PATH: "./example/assignment",
+                      HADES_ASSIGNMENT_ORDER: "2"
+                    }
+                  },
+                  {
+                    id: 3,
+                    name: "Execute",
+                    image: "ls1tum/artemis-maven-template:java17-18",
+                    script: "set -e && cd /shared/example && ./gradlew --status && ./gradlew clean test"
+                  },
+                  {
+                    id: 4,
+                    name: "Result",
+                    image: "ghcr.io/ls1intum/hades/junit-result-parser:latest",
+                    metadata: {
+                      API_ENDPOINT: $result_endpoint,
+                      INGEST_DIR: "./shared/example",
+                      HADES_TEST_PATH: "./example",
+                      HADES_ASSIGNMENT_PATH: "./example/assignment"
+                    }
+                  }
+                ]
+              }'
+          )"
+
+          # send the payload to the benchmark server with retry
+          echo "$payload" | curl -sS --fail-with-body --retry 3 --retry-delay 2 --max-time 120 \
+            -X POST "${BENCHMARK_URL}?count=${COUNT}&commit_hash=${COMMIT_HASH}&host=${ENCODED_HOST}" \
+            -H "Content-Type: application/json" \
+            --data-binary @-
+
+          echo "Benchmark trigger accepted."

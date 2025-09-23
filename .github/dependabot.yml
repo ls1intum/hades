@@ -12,9 +12,6 @@ updates:
       - "/shared"
     schedule:
       interval: "weekly"
-    ignore:
-      - dependency-name: "*-alpha*"
-      - dependency-name: "*-beta*"
     groups:
       golang-dependencies:
         patterns:
