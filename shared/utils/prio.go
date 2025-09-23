@@ -12,7 +12,7 @@ const (
 
 // PrioritySubject returns the NATS subject for a given priority
 func PrioritySubject(p Priority) string {
-	return fmt.Sprintf("%s.%s", NatsSubject, p)
+	return fmt.Sprintf("%s.%s", NatsJobSubject, p)
 }
 
 func PrioFromInt(priority int) Priority {

@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	logs "github.com/ls1intum/hades/shared/buildlogs"
 )
 
 const (
@@ -16,21 +18,9 @@ const (
 	LogSubjectFormat = "logs.%s"
 )
 
-type LogEntry struct {
-	Timestamp    time.Time `json:"timestamp"`
-	Message      string    `json:"message"`
-	OutputStream string    `json:"output_stream"`
-}
-
-type Log struct {
-	JobID       string     `json:"job_id"`
-	ContainerID string     `json:"container_id"`
-	Logs        []LogEntry `json:"logs"`
-}
-
 // converts raw log streams into structured log entries
-func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (Log, error) {
-	var buildJobLog Log
+func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (logs.Log, error) {
+	var buildJobLog logs.Log
 	buildJobLog.ContainerID = containerID
 
 	// Process stdout and stderr
@@ -54,7 +44,7 @@ func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (Log, 
 }
 
 // handles a single log stream (stdout or stderr)
-func processStream(buf *bytes.Buffer, streamType string, entries *[]LogEntry) error {
+func processStream(buf *bytes.Buffer, streamType string, entries *[]logs.LogEntry) error {
 	scanner := bufio.NewScanner(buf)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -69,7 +59,7 @@ func processStream(buf *bytes.Buffer, streamType string, entries *[]LogEntry) er
 }
 
 // parses a single log line into a structured LogEntry
-func parseLogLine(line, stream string) LogEntry {
+func parseLogLine(line, stream string) logs.LogEntry {
 	var timestamp time.Time
 	message := line
 
@@ -104,7 +94,7 @@ func parseLogLine(line, stream string) LogEntry {
 		slog.Debug("time parse failed, using current time", slog.String("message:", message))
 	}
 
-	entry := LogEntry{
+	entry := logs.LogEntry{
 		Timestamp:    timestamp,
 		Message:      message,
 		OutputStream: stream,

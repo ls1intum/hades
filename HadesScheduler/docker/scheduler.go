@@ -61,9 +61,14 @@ func NewDockerScheduler() (*Scheduler, error) {
 
 func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 	if nc != nil {
-		d.publisher = log.NewNATSPublisher(nc)
+		publisher, err := log.NewNATSPublisher(nc)
+		if err != nil {
+			slog.Error("Failed to create NATS publisher", slog.Any("error", err))
+		} else {
+			d.publisher = *publisher
+		}
 	} else {
-		slog.Warn("NATS connection is nil, logs will not be published")
+		slog.Warn("NATS connection is nil, logs nor status will be published")
 	}
 	return d
 }
@@ -94,12 +99,19 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		QueuePayload: job,
 		publisher:    d.publisher,
 	}
+
+	//block to send status first before execution
+	//TODO: change to enum?
+	d.publisher.PublishJobStatus("executing", job.ID.String())
+
 	err := docker_job.execute(ctx)
 	if err != nil {
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
+		d.publisher.PublishJobStatus("failed", job.ID.String())
 		return err
 	}
 
+	d.publisher.PublishJobStatus("finished", job.ID.String())
 	job_logger.Debug("Job executed successfully", slog.Any("job_id", job.ID))
 
 	// Delete the shared volume after the job is done
