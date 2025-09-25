@@ -44,8 +44,8 @@ rbac:
 ingress:
   enabled: true
   className: "nginx"
-
-  host: hades.student.k8s.aet.cit.tum.de
+  baseDomain: "student.k8s.aet.cit.tum.de"
+  path: /build
 
   tls:
     enabled: true

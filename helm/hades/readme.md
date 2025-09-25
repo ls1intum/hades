@@ -62,9 +62,7 @@ The Scheduler operates in **`serviceaccount` mode** by default, using Kubernetes
    or if you prefer to use the `--set` flag to override values directly in the command line, you can do so like this:
 
     ```bash
-    helm upgrade --install hades ./helm/hades -n hades --create-namespace \
-      --set ingress.host=hades.example.com \
-      --set tls.secretName=my-secrect
+    helm upgrade --install hades ./helm/hades -n hades --create-namespace
     ```
 
 > In the above command:
@@ -72,6 +70,9 @@ The Scheduler operates in **`serviceaccount` mode** by default, using Kubernetes
 > The first "hades" is the Helm release name, i.e., the name Helm will use to track this deployment. You can change this to any name (e.g., hades-dev, ci-release). 
 > 
 >The second "hades" after -n is the Kubernetes namespace where the resources will be deployed. This namespace will be created automatically if it does not exist using --create-namespace
+
+> HadesAPI will be available under {namespace}.student.k8s.aet.cit.tum.de. If you want to change the host explicitly, run `helm upgrade --install hades ./helm/hades -n hades --create-namespace --set ingress.host=your.host.com`
+> 
 
 4. Tail the Scheduler logs to verify connectivity
     ```bash
