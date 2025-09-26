@@ -22,8 +22,8 @@ jobs:
       COMMIT_HASH: ${{ github.sha }}
       GH_USER: ${{ secrets.GH_USER }}
       GH_PASSWORD: ${{ secrets.GH_TOKEN }}
-      START_ENDPOINT: ${{ secrets.START_ENDPOINT }}
-      RESULT_ENDPOINT: ${{ secrets.RESULT_ENDPOINT }}
+      START_ENDPOINT: ${{ vars.START_ENDPOINT }}
+      RESULT_ENDPOINT: ${{ vars.RESULT_ENDPOINT }}
 
     steps:
       - name: Ensure jq is available
