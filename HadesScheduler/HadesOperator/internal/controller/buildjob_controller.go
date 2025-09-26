@@ -51,6 +51,8 @@ type BuildJobReconciler struct {
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=pods;events;configmaps;secrets,verbs=get;list;watch;create;update;patch;delete
 
+// Reconcile ensures the cluster state matches the desired state of a BuildJob.
+// It creates/owns a batch Job, updates BuildJob status, and cleans up on completion.
 func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -138,6 +140,8 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
+// setStatusRunning sets BuildJob.Status to "Running", records StartTime and PodName.
+// Uses optimistic concurrency (RetryOnConflict).
 func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.NamespacedName, jobName string) error {
 	logger := log.FromContext(ctx)
 
@@ -167,6 +171,8 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.Name
 	})
 }
 
+// setStatusCompleted marks BuildJob.Status as Succeeded/Failed and sets CompletionTime/message.
+// Uses optimistic concurrency (RetryOnConflict).
 func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.NamespacedName, succeeded bool, msg string) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		latest := &buildv1.BuildJob{}
@@ -267,6 +273,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string) *batchv1.Job {
 	}
 }
 
+// envFromMeta converts a string map to []corev1.EnvVar for container env injection.
 func envFromMeta(m map[string]string) []corev1.EnvVar {
 	var envs []corev1.EnvVar
 	for k, v := range m {
@@ -275,7 +282,7 @@ func envFromMeta(m map[string]string) []corev1.EnvVar {
 	return envs
 }
 
-// SetupWithManager sets up the controller with the Manager.
+// SetupWithManager registers the controller, watching BuildJobs and owned Jobs.
 func (r *BuildJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&buildv1.BuildJob{}).
@@ -284,6 +291,7 @@ func (r *BuildJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// jobFinished checks Job conditions and reports terminal state and reason.
 func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string) {
 	for _, c := range k8sJob.Status.Conditions {
 		switch c.Type {
