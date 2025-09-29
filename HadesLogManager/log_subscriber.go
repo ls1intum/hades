@@ -168,14 +168,18 @@ func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 //   - jobID: Unique identifier of the job to stop watching logs for
 func (dls *DynamicLogManager) stopWatchingJobLogs(jobID string) {
 	dls.mu.Lock()
+	defer dls.mu.Unlock()
+
 	cancel, exists := dls.activeWatchers[jobID]
 	if exists {
 		delete(dls.activeWatchers, jobID)
-	}
-	dls.mu.Unlock()
-
-	if exists {
 		slog.Info("Stopping log watch", "job_id", jobID)
 		cancel()
+
+		if err := dls.logAggregator.FlushJobLogs(jobID); err != nil {
+			slog.Error("Failed to flush logs for completed job",
+				"job_id", jobID,
+				"error", err)
+		}
 	}
 }

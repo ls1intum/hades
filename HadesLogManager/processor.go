@@ -12,7 +12,7 @@ import (
 type LogAggregator interface {
 	StartAggregating(ctx context.Context) error
 	addLog(log buildlogs.Log)
-	flushLogs()
+	FlushJobLogs(jobID string) error
 	GetJobLogs(jobID string) []buildlogs.LogEntry
 	GetAllJobs() []string
 }
@@ -22,8 +22,7 @@ type LogAggregator interface {
 // logs per job ID and automatically trims old logs to prevent memory overflow.
 type NATSLogAggregator struct {
 	hlc    *buildlogs.HadesLogConsumer
-	logs   map[string][]buildlogs.Log // jobID -> logs
-	mutex  sync.RWMutex
+	logs   sync.Map // jobID (string) -> []buildlogs.Log
 	config AggregatorConfig
 }
 
@@ -47,14 +46,12 @@ type AggregatorConfig struct {
 func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
 	return &NATSLogAggregator{
 		hlc:    hlc,
-		logs:   make(map[string][]buildlogs.Log),
+		logs:   sync.Map{},
 		config: config,
 	}
 }
 
-// StartAggregating begins the log aggregation process with periodic flushing.
-// It runs a background goroutine that flushes logs at regular intervals based
-// on the configured FlushInterval. The method blocks until the context is canceled.
+// StartAggregating begins the log aggregation process and batching logs according to jobID.
 //
 // Parameters:
 //   - ctx: Context for controlling the aggregation lifecycle
@@ -62,21 +59,6 @@ func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) 
 // Returns:
 //   - error: Context error when the aggregation is stopped
 func (la *NATSLogAggregator) StartAggregating(ctx context.Context) error {
-	// Start periodic flush
-	ticker := time.NewTicker(la.config.FlushInterval)
-	defer ticker.Stop()
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				la.flushLogs()
-			}
-		}
-	}()
-
 	<-ctx.Done()
 	return ctx.Err()
 }
@@ -91,46 +73,41 @@ func (la *NATSLogAggregator) StartAggregating(ctx context.Context) error {
 // Parameters:
 //   - log: The buildlogs.Log entry to add to the aggregator
 func (la *NATSLogAggregator) addLog(log buildlogs.Log) {
-	la.mutex.Lock()
 	jobID := log.JobID
 
-	if _, exists := la.logs[jobID]; !exists {
-		la.logs[jobID] = make([]buildlogs.Log, 0, la.config.BatchSize)
+	value, _ := la.logs.LoadOrStore(jobID, []buildlogs.Log{})
+	existingLogs := value.([]buildlogs.Log)
+
+	updatedLogs := append(existingLogs, log)
+
+	// Trim if needed
+	if len(updatedLogs) > la.config.MaxJobLogs {
+		start := len(updatedLogs) - la.config.MaxJobLogs
+		updatedLogs = updatedLogs[start:]
 	}
 
-	la.logs[jobID] = append(la.logs[jobID], log)
-
-	// Trim if too many logs for this job
-	if len(la.logs[jobID]) > la.config.MaxJobLogs {
-		// Keep only the latest logs
-		start := len(la.logs[jobID]) - la.config.MaxJobLogs
-		la.logs[jobID] = la.logs[jobID][start:]
-	}
-
-	logCount := len(la.logs[jobID])
-	la.mutex.Unlock()
-	slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", logCount)
+	la.logs.Store(jobID, updatedLogs)
+	slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", len(updatedLogs))
 }
 
-// flushLogs processes batches of logs that have reached the configured batch size.
+// FlushJobLogs processes batches of logs where the job has been completed.
 // Currently, this method only logs the flush operation but can be extended to
-// send logs to external systems, databases, or other storage mechanisms.
-//
-// The method is called periodically by the background goroutine in StartAggregating
-// and can also be called manually for immediate flushing.
+// send logs to external systems.
 //
 // This method is thread-safe and acquires a write lock during execution.
-func (la *NATSLogAggregator) flushLogs() {
-	la.mutex.Lock()
-	defer la.mutex.Unlock()
-
-	for jobID, logs := range la.logs {
-		if len(logs) >= la.config.BatchSize {
-			slog.Info("Flushing logs batch", "job_id", jobID, "batch_size", len(logs))
-			// Here you could send to another system, save to DB, etc.
-			// For now, we'll keep them in memory for the API
-		}
+func (la *NATSLogAggregator) FlushJobLogs(jobID string) error {
+	value, exists := la.logs.LoadAndDelete(jobID)
+	if !exists {
+		slog.Warn("No logs to flush for completed job", "job_id", jobID)
+		return nil
 	}
+
+	logs := value.([]buildlogs.Log)
+	slog.Info("Flushing completed job logs", "job_id", jobID, "log_count", len(logs))
+
+	// TODO: Send logs to Adapter
+
+	return nil
 }
 
 // API methods
@@ -147,17 +124,17 @@ func (la *NATSLogAggregator) flushLogs() {
 // Returns:
 //   - []buildlogs.LogEntry: All log entries for the specified job, or empty slice if not found
 func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
-	la.mutex.RLock()
-	defer la.mutex.RUnlock()
-
-	if logs, exists := la.logs[jobID]; exists {
-		var allLogEntries []buildlogs.LogEntry
-		for _, log := range logs {
-			allLogEntries = append(allLogEntries, log.Logs...)
-		}
-		return allLogEntries
+	value, exists := la.logs.Load(jobID)
+	if !exists {
+		return []buildlogs.LogEntry{}
 	}
-	return []buildlogs.LogEntry{}
+
+	logs := value.([]buildlogs.Log)
+	var allLogEntries []buildlogs.LogEntry
+	for _, log := range logs {
+		allLogEntries = append(allLogEntries, log.Logs...)
+	}
+	return allLogEntries
 }
 
 // GetAllJobs returns a slice containing all job IDs that currently have logs
@@ -169,12 +146,10 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 // Returns:
 //   - []string: A slice of all job IDs currently stored in the aggregator
 func (la *NATSLogAggregator) GetAllJobs() []string {
-	la.mutex.RLock()
-	defer la.mutex.RUnlock()
-
-	jobs := make([]string, 0, len(la.logs))
-	for jobID := range la.logs {
-		jobs = append(jobs, jobID)
-	}
+	jobs := []string{}
+	la.logs.Range(func(key, value interface{}) bool {
+		jobs = append(jobs, key.(string))
+		return true // continue iteration
+	})
 	return jobs
 }
