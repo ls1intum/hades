@@ -9,10 +9,18 @@ import (
 	"github.com/ls1intum/hades/shared/buildlogs"
 )
 
+type LogAggregator interface {
+	StartAggregating(ctx context.Context) error
+	addLog(log buildlogs.Log)
+	flushLogs()
+	GetJobLogs(jobID string) []buildlogs.LogEntry
+	GetAllJobs() []string
+}
+
 // LogAggregator collects and batches log entries of multiple jobs, providing
 // in-memory storage with configurable batching and flushing behavior. It maintains
 // logs per job ID and automatically trims old logs to prevent memory overflow.
-type LogAggregator struct {
+type NATSLogAggregator struct {
 	hlc    *buildlogs.HadesLogConsumer
 	logs   map[string][]buildlogs.Log // jobID -> logs
 	mutex  sync.RWMutex
@@ -36,8 +44,8 @@ type AggregatorConfig struct {
 //
 // Returns:
 //   - *LogAggregator: A new instance ready to aggregate logs
-func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) *LogAggregator {
-	return &LogAggregator{
+func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
+	return &NATSLogAggregator{
 		hlc:    hlc,
 		logs:   make(map[string][]buildlogs.Log),
 		config: config,
@@ -53,7 +61,7 @@ func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) 
 //
 // Returns:
 //   - error: Context error when the aggregation is stopped
-func (la *LogAggregator) StartAggregating(ctx context.Context) error {
+func (la *NATSLogAggregator) StartAggregating(ctx context.Context) error {
 	// Start periodic flush
 	ticker := time.NewTicker(la.config.FlushInterval)
 	defer ticker.Stop()
@@ -82,7 +90,7 @@ func (la *LogAggregator) StartAggregating(ctx context.Context) error {
 //
 // Parameters:
 //   - log: The buildlogs.Log entry to add to the aggregator
-func (la *LogAggregator) addLog(log buildlogs.Log) {
+func (la *NATSLogAggregator) addLog(log buildlogs.Log) {
 	la.mutex.Lock()
 	jobID := log.JobID
 
@@ -112,7 +120,7 @@ func (la *LogAggregator) addLog(log buildlogs.Log) {
 // and can also be called manually for immediate flushing.
 //
 // This method is thread-safe and acquires a write lock during execution.
-func (la *LogAggregator) flushLogs() {
+func (la *NATSLogAggregator) flushLogs() {
 	la.mutex.Lock()
 	defer la.mutex.Unlock()
 
@@ -138,7 +146,7 @@ func (la *LogAggregator) flushLogs() {
 //
 // Returns:
 //   - []buildlogs.LogEntry: All log entries for the specified job, or empty slice if not found
-func (la *LogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
+func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 	la.mutex.RLock()
 	defer la.mutex.RUnlock()
 
@@ -160,7 +168,7 @@ func (la *LogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 //
 // Returns:
 //   - []string: A slice of all job IDs currently stored in the aggregator
-func (la *LogAggregator) GetAllJobs() []string {
+func (la *NATSLogAggregator) GetAllJobs() []string {
 	la.mutex.RLock()
 	defer la.mutex.RUnlock()
 

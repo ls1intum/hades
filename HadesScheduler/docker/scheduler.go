@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
@@ -101,17 +102,16 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 	}
 
 	//block to send status first before execution
-	//TODO: change to enum?
-	d.publisher.PublishJobStatus("executing", job.ID.String())
+	d.publisher.PublishJobStatus(buildlogs.StatusRunning, job.ID.String())
 
 	err := docker_job.execute(ctx)
 	if err != nil {
+		d.publisher.PublishJobStatus(buildlogs.StatusFailed, job.ID.String())
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
-		d.publisher.PublishJobStatus("failed", job.ID.String())
 		return err
 	}
 
-	d.publisher.PublishJobStatus("finished", job.ID.String())
+	d.publisher.PublishJobStatus(buildlogs.StatusSuccess, job.ID.String())
 	job_logger.Debug("Job executed successfully", slog.Any("job_id", job.ID))
 
 	// Delete the shared volume after the job is done

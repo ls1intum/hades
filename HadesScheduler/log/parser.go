@@ -3,6 +3,7 @@ package log
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -13,13 +14,28 @@ import (
 )
 
 const (
-	StreamStdout     = "stdout"
-	StreamStderr     = "stderr"
-	LogSubjectFormat = "logs.%s"
+	StreamStdout = "stdout"
+	StreamStderr = "stderr"
 )
 
-// converts raw log streams into structured log entries
-func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (logs.Log, error) {
+type LogParser interface {
+	ParseContainerLogs(ctx context.Context, containerID string) (logs.Log, error)
+}
+
+type StdLogParser struct {
+	stdout *bytes.Buffer
+	stderr *bytes.Buffer
+}
+
+func NewStdLogParser(stdout, stderr *bytes.Buffer) LogParser {
+	return &StdLogParser{
+		stdout: stdout,
+		stderr: stderr,
+	}
+}
+
+// converts raw standard log streams into structured log entries
+func (p *StdLogParser) ParseContainerLogs(ctx context.Context, containerID string) (logs.Log, error) {
 	var buildJobLog logs.Log
 	buildJobLog.ContainerID = containerID
 
@@ -28,8 +44,8 @@ func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (logs.
 		buf        *bytes.Buffer
 		streamType string
 	}{
-		{buf: stdout, streamType: StreamStdout},
-		{buf: stderr, streamType: StreamStderr},
+		{buf: p.stdout, streamType: StreamStdout},
+		{buf: p.stderr, streamType: StreamStderr},
 	} {
 		if err := processStream(stream.buf, stream.streamType, &buildJobLog.Logs); err != nil {
 			return buildJobLog, fmt.Errorf("processing %s: %w", stream.streamType, err)

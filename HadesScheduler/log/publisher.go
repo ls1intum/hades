@@ -9,8 +9,8 @@ import (
 )
 
 type Publisher interface {
-	PublishLogs(buildJobLog logs.Log) error
-	PublishJobStatus(status string, jobID string) error
+	PublishLog(buildJobLog logs.Log) error
+	PublishJobStatus(status logs.JobStatus, jobID string) error
 }
 
 type NATSPublisher struct {
@@ -30,11 +30,11 @@ func NewNATSPublisher(nc *nats.Conn) (*NATSPublisher, error) {
 	}, nil
 }
 
-func (np NATSPublisher) PublishJobStatus(status string, jobID string) error {
-	var subject = fmt.Sprintf("hades.status.%s", status)
+func (np NATSPublisher) PublishJobStatus(status logs.JobStatus, jobID string) error {
+	var subject = status.Subject()
 
 	if err := np.nc.Publish(subject, []byte(jobID)); err != nil {
-		slog.Error("Failed to publish job status to NATS subject", slog.String("status", status), slog.String("job_id", jobID), slog.Any("error", err))
+		slog.Error("Failed to publish job status to NATS subject", slog.String("status", status.String()), slog.String("job_id", jobID), slog.Any("error", err))
 		return fmt.Errorf("publishing job status to NATS subject: %w", err)
 	}
 
@@ -42,7 +42,7 @@ func (np NATSPublisher) PublishJobStatus(status string, jobID string) error {
 }
 
 // publish log entries to NATS JetStream
-func (np NATSPublisher) PublishLogs(buildJobLog logs.Log) error {
+func (np NATSPublisher) PublishLog(buildJobLog logs.Log) error {
 	np.pd.PublishLog(buildJobLog)
 	return nil
 }

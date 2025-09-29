@@ -73,26 +73,28 @@ func main() {
 
 }
 
-func setupAPIRoute(aggregator *LogAggregator) *gin.Engine {
-	router := gin.Default()
+func setupAPIRoute(aggregator LogAggregator) *gin.Engine {
+	r := gin.Default()
+	jobs := r.Group("/jobs")
+	{
+		// Get logs for specific job
+		jobs.GET("/:jobId/logs", func(c *gin.Context) {
+			jobID := c.Param("jobId")
+			logs := aggregator.GetJobLogs(jobID)
+			c.JSON(200, gin.H{"logs": logs})
+		})
 
-	// Get logs for specific job
-	router.GET("/api/jobs/:jobId/logs", func(c *gin.Context) {
-		jobID := c.Param("jobId")
-		logs := aggregator.GetJobLogs(jobID)
-		c.JSON(200, gin.H{"logs": logs})
-	})
-
-	// Get all active jobs (for testing)
-	router.GET("/api/jobs", func(c *gin.Context) {
-		jobs := aggregator.GetAllJobs()
-		c.JSON(200, gin.H{"jobs": jobs})
-	})
+		// Get all active jobs (for testing)
+		jobs.GET("", func(c *gin.Context) {
+			jobs := aggregator.GetAllJobs()
+			c.JSON(200, gin.H{"jobs": jobs})
+		})
+	}
 
 	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
+	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	return router
+	return r
 }

@@ -12,6 +12,15 @@ import (
 )
 
 const NatsLogSubject = "hades.logs"
+const StreamName = "HADES_JOB_LOGS"
+
+type LogPublisher interface {
+	PublishLog(buildJobLog Log) error
+}
+
+type LogConsumer interface {
+	WatchJobLogs(ctx context.Context, jobID string, handler func(Log)) error
+}
 
 type HadesLogProducer struct {
 	natsConnection *nats.Conn
@@ -34,7 +43,7 @@ func NewHadesLogProducer(nc *nats.Conn) (*HadesLogProducer, error) {
 	}
 
 	s, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:       "HADES_JOB_LOGS",
+		Name:       StreamName,
 		Subjects:   []string{fmt.Sprintf("%s.*", NatsLogSubject)},
 		Storage:    jetstream.FileStorage,
 		Retention:  jetstream.LimitsPolicy,
@@ -92,11 +101,11 @@ func (hlp *HadesLogProducer) PublishLog(buildJobLog Log) error {
 
 // WatchJobLogs uses JetStream with job-specific consumer
 func (hlc *HadesLogConsumer) WatchJobLogs(ctx context.Context, jobID string, handler func(Log)) error {
-	subject := fmt.Sprintf("hades.logs.%s", jobID)
+	subject := fmt.Sprintf("%s.%s", NatsLogSubject, jobID)
 	consumerName := fmt.Sprintf("job-watcher-%s", jobID)
 
 	// Create a temporary consumer for this specific job
-	consumer, err := hlc.js.CreateOrUpdateConsumer(ctx, "HADES_JOB_LOGS", jetstream.ConsumerConfig{
+	consumer, err := hlc.js.CreateOrUpdateConsumer(ctx, StreamName, jetstream.ConsumerConfig{
 		Name:          consumerName,
 		Durable:       consumerName,
 		AckPolicy:     jetstream.AckExplicitPolicy,
@@ -111,7 +120,7 @@ func (hlc *HadesLogConsumer) WatchJobLogs(ctx context.Context, jobID string, han
 	defer func() {
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := hlc.js.DeleteConsumer(deleteCtx, "HADES_JOB_LOGS", consumerName); err != nil {
+		if err := hlc.js.DeleteConsumer(deleteCtx, StreamName, consumerName); err != nil {
 			slog.Error("Failed to delete job consumer", "job_id", jobID, "error", err)
 		}
 	}()

@@ -10,6 +10,12 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+type LogManager interface {
+	StartListening(ctx context.Context) error
+	startWatchingJobLogs(ctx context.Context, jobID string)
+	stopWatchingJobLogs(jobId string)
+}
+
 // DynamicLogManager manages dynamic subscription to job logs based on job status changes.
 // It automatically starts watching logs when a job begins executing and stops when the job
 // finishes or fails. The manager maintains a map of active watchers to prevent duplicate
@@ -17,7 +23,7 @@ import (
 type DynamicLogManager struct {
 	nc             *nats.Conn
 	logConsumer    *logs.HadesLogConsumer
-	logAggregator  *LogAggregator
+	logAggregator  LogAggregator
 	activeWatchers map[string]context.CancelFunc // jobID -> cancel function
 	mu             sync.RWMutex
 }
@@ -33,7 +39,7 @@ type DynamicLogManager struct {
 //
 // Returns:
 //   - *DynamicLogManager: A new instance ready to start listening for job status changes
-func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, aggregator *LogAggregator) *DynamicLogManager {
+func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, aggregator LogAggregator) LogManager {
 	return &DynamicLogManager{
 		nc:             nc,
 		logConsumer:    logConsumer,
@@ -44,8 +50,8 @@ func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, agg
 
 // StartListening begins listening for job status changes on NATS subjects and manages
 // log watching accordingly. It subscribes to three status events:
-//   - hades.status.executing: Starts log watching for the job
-//   - hades.status.finished/ hades.status.failed: Stops log watching for the job
+//   - hades.status.running (logs.StatusRunning.Subject()): Starts log watching for the job
+//   - hades.status.success/ hades.status.failed: Stops log watching for the job
 //
 // The method expects job IDs to be sent as string data in NATS messages.
 //
@@ -56,37 +62,37 @@ func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, agg
 //   - error: Any error that occurred while setting up NATS subscriptions
 func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 	// Subscribe to executing status - start watching logs
-	_, err := dls.nc.Subscribe("hades.status.executing", func(msg *nats.Msg) {
+	_, err := dls.nc.Subscribe(logs.StatusRunning.Subject(), func(msg *nats.Msg) {
 		var jobID string
 		if len(msg.Data) == 0 {
 			slog.Error("Empty jobID received")
 			return
 		}
 		jobID = string(msg.Data)
-		slog.Info("Job started executing", "job_id", jobID)
+		slog.Info("Job started running", "job_id", jobID)
 		dls.startWatchingJobLogs(ctx, jobID)
 	})
 	if err != nil {
-		return fmt.Errorf("subscribing to executing status: %w", err)
+		return fmt.Errorf("subscribing to running status: %w", err)
 	}
 
-	// Subscribe to finished status - stop watching logs
-	_, err = dls.nc.Subscribe("hades.status.finished", func(msg *nats.Msg) {
+	// Subscribe to completed status - stop watching logs
+	_, err = dls.nc.Subscribe(logs.StatusSuccess.Subject(), func(msg *nats.Msg) {
 		var jobID string
 		if len(msg.Data) == 0 {
 			slog.Error("Empty jobID received")
 			return
 		}
 		jobID = string(msg.Data)
-		slog.Info("Job finished", "job_id", jobID)
+		slog.Info("Job success", "job_id", jobID)
 		dls.stopWatchingJobLogs(jobID)
 	})
 	if err != nil {
-		return fmt.Errorf("subscribing to finished status: %w", err)
+		return fmt.Errorf("subscribing to success status: %w", err)
 	}
 
 	// Subscribe to failed status - stop watching logs
-	_, err = dls.nc.Subscribe("hades.status.failed", func(msg *nats.Msg) {
+	_, err = dls.nc.Subscribe(logs.StatusFailed.Subject(), func(msg *nats.Msg) {
 		var jobID string
 		if len(msg.Data) == 0 {
 			slog.Error("Empty jobID received")
