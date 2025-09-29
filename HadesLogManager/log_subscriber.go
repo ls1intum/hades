@@ -53,7 +53,8 @@ func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, agg
 //   - hades.status.running (logs.StatusRunning.Subject()): Starts log watching for the job
 //   - hades.status.success/ hades.status.failed: Stops log watching for the job
 //
-// The method expects job IDs to be sent as string data in NATS messages.
+// and adds the logs received to the log aggregator. The method expects job IDs to be sent
+// as string data in NATS messages.
 //
 // Parameters:
 //   - ctx: Context for managing the lifecycle of subscriptions

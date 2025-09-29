@@ -56,13 +56,6 @@ func main() {
 		}
 	}()
 
-	// Start log aggregation
-	go func() {
-		if err := logAggregator.StartAggregating(ctx); err != nil {
-			slog.Error("Log aggregator failed", "error", err)
-		}
-	}()
-
 	// Start API server
 	router := setupAPIRoute(logAggregator)
 	slog.Info("Starting API server", "port", cfg.APIPort)
