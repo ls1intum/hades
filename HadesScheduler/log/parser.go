@@ -3,34 +3,40 @@ package log
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
 	"time"
+
+	logs "github.com/ls1intum/hades/shared/buildlogs"
 )
 
 const (
-	StreamStdout     = "stdout"
-	StreamStderr     = "stderr"
-	LogSubjectFormat = "logs.%s"
+	StreamStdout = "stdout"
+	StreamStderr = "stderr"
 )
 
-type LogEntry struct {
-	Timestamp    time.Time `json:"timestamp"`
-	Message      string    `json:"message"`
-	OutputStream string    `json:"output_stream"`
+type LogParser interface {
+	ParseContainerLogs(ctx context.Context, containerID string) (logs.Log, error)
 }
 
-type Log struct {
-	JobID       string     `json:"job_id"`
-	ContainerID string     `json:"container_id"`
-	Logs        []LogEntry `json:"logs"`
+type StdLogParser struct {
+	stdout *bytes.Buffer
+	stderr *bytes.Buffer
 }
 
-// converts raw log streams into structured log entries
-func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (Log, error) {
-	var buildJobLog Log
+func NewStdLogParser(stdout, stderr *bytes.Buffer) LogParser {
+	return &StdLogParser{
+		stdout: stdout,
+		stderr: stderr,
+	}
+}
+
+// converts raw standard log streams into structured log entries
+func (p *StdLogParser) ParseContainerLogs(ctx context.Context, containerID string) (logs.Log, error) {
+	var buildJobLog logs.Log
 	buildJobLog.ContainerID = containerID
 
 	// Process stdout and stderr
@@ -38,8 +44,8 @@ func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (Log, 
 		buf        *bytes.Buffer
 		streamType string
 	}{
-		{buf: stdout, streamType: StreamStdout},
-		{buf: stderr, streamType: StreamStderr},
+		{buf: p.stdout, streamType: StreamStdout},
+		{buf: p.stderr, streamType: StreamStderr},
 	} {
 		if err := processStream(stream.buf, stream.streamType, &buildJobLog.Logs); err != nil {
 			return buildJobLog, fmt.Errorf("processing %s: %w", stream.streamType, err)
@@ -54,7 +60,7 @@ func ParseContainerLogs(stdout, stderr *bytes.Buffer, containerID string) (Log, 
 }
 
 // handles a single log stream (stdout or stderr)
-func processStream(buf *bytes.Buffer, streamType string, entries *[]LogEntry) error {
+func processStream(buf *bytes.Buffer, streamType string, entries *[]logs.LogEntry) error {
 	scanner := bufio.NewScanner(buf)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -69,7 +75,7 @@ func processStream(buf *bytes.Buffer, streamType string, entries *[]LogEntry) er
 }
 
 // parses a single log line into a structured LogEntry
-func parseLogLine(line, stream string) LogEntry {
+func parseLogLine(line, stream string) logs.LogEntry {
 	var timestamp time.Time
 	message := line
 
@@ -104,7 +110,7 @@ func parseLogLine(line, stream string) LogEntry {
 		slog.Debug("time parse failed, using current time", slog.String("message:", message))
 	}
 
-	entry := LogEntry{
+	entry := logs.LogEntry{
 		Timestamp:    timestamp,
 		Message:      message,
 		OutputStream: stream,

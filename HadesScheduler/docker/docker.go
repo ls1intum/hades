@@ -24,7 +24,8 @@ func processContainerLogs(ctx context.Context, client *client.Client, publisher 
 		return fmt.Errorf("getting container logs: %w", err)
 	}
 
-	buildJobLog, err := log.ParseContainerLogs(stdout, stderr, containerID)
+	parser := log.NewStdLogParser(stdout, stderr)
+	buildJobLog, err := parser.ParseContainerLogs(ctx, containerID)
 	if err != nil {
 		return fmt.Errorf("parsing container logs: %w", err)
 	}
@@ -32,7 +33,7 @@ func processContainerLogs(ctx context.Context, client *client.Client, publisher 
 	buildJobLog.JobID = jobID
 	slog.Debug("Parsed container logs was of", slog.String("jobID", jobID))
 
-	return publisher.PublishLogs(buildJobLog)
+	return publisher.PublishLog(buildJobLog)
 }
 
 // retrieves and demultiplexes container logs
