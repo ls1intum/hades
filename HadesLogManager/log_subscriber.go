@@ -122,7 +122,6 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 //   - ctx: Parent context for creating the job-specific context
 //   - jobID: Unique identifier for the job to watch logs for
 func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID string) {
-	slog.Info("called method startWatchingJobLogs")
 	dls.mu.Lock()
 
 	// Cancel existing watcher if any
