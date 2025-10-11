@@ -64,6 +64,7 @@ func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) 
 //   - log: The buildlogs.Log entry to add to the aggregator, must contain a valid JobID
 func (la *NATSLogAggregator) addLog(log buildlogs.Log) {
 	jobID := log.JobID
+	slog.Debug("Start adding log to aggregator", "job_id", jobID)
 
 	// Load existing logs or create new slice for this job
 	value, _ := la.logs.LoadOrStore(jobID, []buildlogs.Log{})
@@ -147,7 +148,7 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 //   - []string: A slice of all job IDs currently stored in the aggregator
 func (la *NATSLogAggregator) GetAllJobs() []string {
 	jobs := []string{}
-	la.logs.Range(func(key, value interface{}) bool {
+	la.logs.Range(func(key, value any) bool {
 		jobs = append(jobs, key.(string))
 		return true // continue iteration
 	})

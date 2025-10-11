@@ -74,7 +74,7 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 		dls.startWatchingJobLogs(ctx, jobID)
 	})
 	if err != nil {
-		return fmt.Errorf("subscribing to running status: %w", err)
+		return fmt.Errorf("failed to subscribe to running status: %w", err)
 	}
 
 	// Subscribe to completed status - stop watching logs
@@ -89,7 +89,7 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 		dls.stopWatchingJobLogs(jobID)
 	})
 	if err != nil {
-		return fmt.Errorf("subscribing to success status: %w", err)
+		return fmt.Errorf("unable to subscribe to success status: %w", err)
 	}
 
 	// Subscribe to failed status - stop watching logs
@@ -104,7 +104,7 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 		dls.stopWatchingJobLogs(jobID)
 	})
 	if err != nil {
-		return fmt.Errorf("subscribing to failed status: %w", err)
+		return fmt.Errorf("unable to subscribe to failed status: %w", err)
 	}
 
 	return nil
@@ -122,6 +122,7 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 //   - ctx: Parent context for creating the job-specific context
 //   - jobID: Unique identifier for the job to watch logs for
 func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID string) {
+	slog.Info("called method startWatchingJobLogs")
 	dls.mu.Lock()
 
 	// Cancel existing watcher if any
@@ -142,9 +143,9 @@ func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 			dls.mu.Unlock()
 		}()
 
-		slog.Info("Starting log watch", "job_id", jobID)
 		err := dls.logConsumer.WatchJobLogs(jobCtx, jobID, func(batchedLog logs.Log) {
 			// Store batched logs in aggregator
+			slog.Info("About to start watching job logs", "job_id", jobID)
 			dls.logAggregator.addLog(batchedLog)
 
 			slog.Info("Received batched job logs",
@@ -177,10 +178,10 @@ func (dls *DynamicLogManager) stopWatchingJobLogs(jobID string) {
 		slog.Info("Stopping log watch", "job_id", jobID)
 		cancel()
 
-		if err := dls.logAggregator.FlushJobLogs(jobID); err != nil {
-			slog.Error("Failed to flush logs for completed job",
-				"job_id", jobID,
-				"error", err)
-		}
+		// if err := dls.logAggregator.FlushJobLogs(jobID); err != nil {
+		// 	slog.Error("Failed to flush logs for completed job",
+		// 		"job_id", jobID,
+		// 		"error", err)
+		// }
 	}
 }
