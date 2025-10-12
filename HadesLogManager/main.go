@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	logs "github.com/ls1intum/hades/shared/buildlogs"
@@ -38,17 +37,15 @@ func main() {
 	}
 
 	// Create log aggregator for batching and API access
-	aggregatorConfig := AggregatorConfig{
-		BatchSize:     100,
-		FlushInterval: 30 * time.Second,
-		MaxJobLogs:    1000,
-	}
+	var aggregatorConfig AggregatorConfig
+	utils.LoadConfig(&aggregatorConfig)
 	logAggregator := NewLogAggregator(consumer, aggregatorConfig)
 
 	// Create dynamic log manager
 	dynamicManager := NewDynamicLogManager(nc, consumer, logAggregator)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Start the dynamic log manager
 	go func() {
