@@ -102,16 +102,22 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 	}
 
 	//block to send status first before execution
-	d.publisher.PublishJobStatus(buildlogs.StatusRunning, job.ID.String())
+	if err := d.publisher.PublishJobStatus(buildlogs.StatusRunning, job.ID.String()); err != nil {
+		job_logger.Warn("failed to publish success status", slog.Any("error", err))
+	}
 
 	err := docker_job.execute(ctx)
 	if err != nil {
-		d.publisher.PublishJobStatus(buildlogs.StatusFailed, job.ID.String())
+		if err := d.publisher.PublishJobStatus(buildlogs.StatusFailed, job.ID.String()); err != nil {
+			job_logger.Warn("failed to publish success status", slog.Any("error", err))
+		}
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
 		return err
 	}
 
-	d.publisher.PublishJobStatus(buildlogs.StatusSuccess, job.ID.String())
+	if err := d.publisher.PublishJobStatus(buildlogs.StatusSuccess, job.ID.String()); err != nil {
+		job_logger.Warn("failed to publish success status", slog.Any("error", err))
+	}
 	job_logger.Debug("Job executed successfully", slog.Any("job_id", job.ID))
 
 	// Delete the shared volume after the job is done
