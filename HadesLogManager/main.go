@@ -25,6 +25,7 @@ func main() {
 	nc, err := nats.Connect(cfg.NatsConfig.URL)
 	if err != nil {
 		slog.Error("Failed to connect to NATS", "error", err.Error())
+		return
 	}
 	defer nc.Close()
 

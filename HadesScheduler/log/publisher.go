@@ -45,6 +45,8 @@ func (np NATSPublisher) PublishJobStatus(status logs.JobStatus, jobID string) er
 
 // publish log entries to NATS JetStream
 func (np NATSPublisher) PublishLog(buildJobLog logs.Log) error {
-	np.pd.PublishLog(buildJobLog)
+	if err := np.pd.PublishLog(buildJobLog); err != nil {
+		return fmt.Errorf("publishing job log: %w", err)
+	}
 	return nil
 }

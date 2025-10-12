@@ -66,22 +66,28 @@ func (la *NATSLogAggregator) addLog(log buildlogs.Log) {
 	jobID := log.JobID
 	slog.Debug("Start adding log to aggregator", "job_id", jobID)
 
-	// Load existing logs or create new slice for this job
-	value, _ := la.logs.LoadOrStore(jobID, []buildlogs.Log{})
-	existingLogs := value.([]buildlogs.Log)
+	for {
+		// Load current logs
+		value, _ := la.logs.LoadOrStore(jobID, []buildlogs.Log{})
+		existingLogs := value.([]buildlogs.Log)
 
-	// Append new log entry
-	updatedLogs := append(existingLogs, log)
+		// Create a new slice (copy + append)
+		newLogs := make([]buildlogs.Log, len(existingLogs), len(existingLogs)+1)
+		copy(newLogs, existingLogs)
+		newLogs = append(newLogs, log)
 
-	// Trim if needed
-	if len(updatedLogs) > la.config.MaxJobLogs {
-		start := len(updatedLogs) - la.config.MaxJobLogs
-		updatedLogs = updatedLogs[start:]
+		// Trim if needed
+		if len(newLogs) > la.config.MaxJobLogs {
+			start := len(newLogs) - la.config.MaxJobLogs
+			newLogs = newLogs[start:]
+		}
+
+		// Replace logs if existing
+		if la.logs.CompareAndSwap(jobID, existingLogs, newLogs) {
+			break
+		}
+		slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", len(newLogs))
 	}
-
-	// Store updated logs back to map
-	la.logs.Store(jobID, updatedLogs)
-	slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", len(updatedLogs))
 }
 
 // FlushJobLogs processes batches of logs where the job has been completed/ failed.

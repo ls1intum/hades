@@ -62,6 +62,9 @@ func (p *StdLogParser) ParseContainerLogs(ctx context.Context, containerID strin
 // handles a single log stream (stdout or stderr)
 func processStream(buf *bytes.Buffer, streamType string, entries *[]logs.LogEntry) error {
 	scanner := bufio.NewScanner(buf)
+	// Collect in local slice
+	newEntries := make([]logs.LogEntry, 0, 100) // Pre-allocate with estimated capacity
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -69,8 +72,10 @@ func processStream(buf *bytes.Buffer, streamType string, entries *[]logs.LogEntr
 		}
 
 		entry := parseLogLine(line, streamType)
-		*entries = append(*entries, entry)
+		newEntries = append(newEntries, entry)
 	}
+
+	*entries = append(*entries, newEntries...)
 	return scanner.Err()
 }
 
