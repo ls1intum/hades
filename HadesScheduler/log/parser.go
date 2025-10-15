@@ -17,6 +17,8 @@ const (
 	StreamStderr = "stderr"
 )
 
+var logLineRegex = regexp.MustCompile(`time="[^"]*".*level="[^"]*".*msg="[^"]*"`)
+
 type LogParser interface {
 	ParseContainerLogs(containerID string, jobID string) (logs.Log, error)
 }
@@ -26,6 +28,8 @@ type StdLogParser struct {
 	stderr *bytes.Buffer
 }
 
+// NewStdLogParser creates a new LogParser from stdout and stderr buffers.
+// Both stdout and stderr must be non-nil.
 func NewStdLogParser(stdout, stderr *bytes.Buffer) LogParser {
 	return &StdLogParser{
 		stdout: stdout,
@@ -87,10 +91,9 @@ func parseLogLine(line, stream string) logs.LogEntry {
 
 	// Regex pattern matches structured logs with format: time="..." level="..." msg="..."
 	// This handles application logs that embed their own timestamps and levels
-	var re = regexp.MustCompile(`time="[^"]*".*level="[^"]*".*msg="[^"]*"`)
 	var parts []string
 
-	if re.MatchString(message) {
+	if logLineRegex.MatchString(message) {
 		// Split into 3 sections: container timestamp, application timestamp, level + msg
 		// Container timestamps wont be used in favor of application timestamps
 		parts = strings.SplitN(line, " ", 3)
