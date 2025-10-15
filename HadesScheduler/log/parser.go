@@ -19,7 +19,7 @@ const (
 )
 
 type LogParser interface {
-	ParseContainerLogs(ctx context.Context, containerID string) (logs.Log, error)
+	ParseContainerLogs(ctx context.Context, containerID string, jobID string) (logs.Log, error)
 }
 
 type StdLogParser struct {
@@ -35,9 +35,11 @@ func NewStdLogParser(stdout, stderr *bytes.Buffer) LogParser {
 }
 
 // converts raw standard log streams into structured log entries
-func (p *StdLogParser) ParseContainerLogs(ctx context.Context, containerID string) (logs.Log, error) {
-	var buildJobLog logs.Log
-	buildJobLog.ContainerID = containerID
+func (p *StdLogParser) ParseContainerLogs(ctx context.Context, containerID string, jobID string) (logs.Log, error) {
+	buildJobLog := logs.Log{
+		JobID:       jobID,
+		ContainerID: containerID,
+	}
 
 	// Process stdout and stderr
 	for _, stream := range []struct {

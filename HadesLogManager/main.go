@@ -4,6 +4,11 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	logs "github.com/ls1intum/hades/shared/buildlogs"
@@ -17,6 +22,11 @@ type HadesLogManagerConfig struct {
 }
 
 func main() {
+	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+		slog.Warn("DEBUG MODE ENABLED")
+	}
+
 	var cfg HadesLogManagerConfig
 	utils.LoadConfig(&cfg) // Load config from environment
 
@@ -47,21 +57,54 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Set up OS signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// WaitGroup to track background goroutines
+	var wg sync.WaitGroup
+
 	// Start the dynamic log manager
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		slog.Info("Starting dynamic log manager")
+
 		if err := dynamicManager.StartListening(ctx); err != nil {
 			slog.Error("Dynamic log manager failed", "error", err)
 		}
 	}()
 
-	// Start API server
 	router := setupAPIRoute(logAggregator)
-	slog.Info("Starting API server", "port", cfg.APIPort)
-
-	if err := http.ListenAndServe(":"+cfg.APIPort, router); err != nil {
-		slog.Error("API server failed", "error", err)
+	server := &http.Server{
+		Addr:    ":" + cfg.APIPort,
+		Handler: router,
 	}
 
+	// Start API server in background
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		slog.Info("Starting API server", "port", cfg.APIPort)
+
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("API server failed", "error", err)
+		}
+	}()
+
+	<-sigChan
+	slog.Info("Received shutdown signal, starting graceful shutdown...")
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		slog.Error("API server shutdown failed", "error", err)
+	} else {
+		slog.Info("API server shutdown complete")
+	}
+
+	wg.Wait()
 }
 
 func setupAPIRoute(aggregator LogAggregator) *gin.Engine {
