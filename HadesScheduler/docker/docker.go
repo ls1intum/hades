@@ -25,7 +25,7 @@ func processContainerLogs(ctx context.Context, client *client.Client, publisher 
 	}
 
 	parser := log.NewStdLogParser(stdout, stderr)
-	buildJobLog, err := parser.ParseContainerLogs(ctx, containerID, jobID)
+	buildJobLog, err := parser.ParseContainerLogs(containerID, jobID)
 	if err != nil {
 		return fmt.Errorf("parsing container logs: %w", err)
 	}

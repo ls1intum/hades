@@ -3,7 +3,6 @@ package log
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -19,7 +18,7 @@ const (
 )
 
 type LogParser interface {
-	ParseContainerLogs(ctx context.Context, containerID string, jobID string) (logs.Log, error)
+	ParseContainerLogs(containerID string, jobID string) (logs.Log, error)
 }
 
 type StdLogParser struct {
@@ -35,7 +34,7 @@ func NewStdLogParser(stdout, stderr *bytes.Buffer) LogParser {
 }
 
 // converts raw standard log streams into structured log entries
-func (p *StdLogParser) ParseContainerLogs(ctx context.Context, containerID string, jobID string) (logs.Log, error) {
+func (p *StdLogParser) ParseContainerLogs(containerID string, jobID string) (logs.Log, error) {
 	buildJobLog := logs.Log{
 		JobID:       jobID,
 		ContainerID: containerID,
@@ -88,14 +87,14 @@ func parseLogLine(line, stream string) logs.LogEntry {
 
 	// Regex pattern matches structured logs with format: time="..." level="..." msg="..."
 	// This handles application logs that embed their own timestamps and levels
-	var re = regexp.MustCompile(`time=".*level=.*msg="`)
+	var re = regexp.MustCompile(`time="[^"]*".*level="[^"]*".*msg="[^"]*"`)
 	var parts []string
 
 	if re.MatchString(message) {
 		// Split into 3 sections: container timestamp, application timestamp, level + msg
 		// Container timestamps wont be used in favor of application timestamps
 		parts = strings.SplitN(line, " ", 3)
-		// replace unsused container timestamp
+		// replace unused container timestamp
 		parts[0] = strings.TrimSuffix(strings.TrimPrefix(parts[1], `time="`), `"`)
 		message = parts[2]
 	} else {
@@ -114,7 +113,7 @@ func parseLogLine(line, stream string) logs.LogEntry {
 	} else {
 		// If timestamp parsing fails
 		timestamp = time.Now()
-		slog.Debug("time parse failed, using current time", slog.String("message:", message))
+		slog.Warn("time parse failed, using current time", slog.String("message:", message))
 	}
 
 	entry := logs.LogEntry{
