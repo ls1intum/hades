@@ -173,6 +173,7 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 
 	switch status {
 	case "pod_running":
+		log.Printf("BuildJob %s is running", buildJobName)
 		if podName, ok := event["podName"].(string); ok && podName != "" {
 			logreader := PodLogReader{
 				k8sClient: k.k8sClient,
@@ -181,6 +182,7 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 				nc:        k.nc,
 			}
 
+			log.Printf("Starting log reader with waitforAllContainers")
 			go logreader.waitForAllContainers(context.Background())
 		}
 	case "completed":

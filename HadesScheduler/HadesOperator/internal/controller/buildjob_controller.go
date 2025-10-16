@@ -115,16 +115,14 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
 		}
 
-		// Job is running - check if we need to publish "running" event
-		// if existingJob.Status.Active > 0 && bj.Status.Phase != "Running" {
-		// 	// Get the actual pod name from the job
-		// 	podName := r.getPodNameFromJob(ctx, &existingJob)
-		// 	r.publishBuildJobEvent(bj.Name, bj.Namespace, "pod_running", map[string]interface{}{
-		// 		"jobName":   jobName,
-		// 		"podName":   podName,
-		// 		"namespace": bj.Namespace,
-		// 	})
-		// }
+		// Job is running - publish "running" event
+		r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "pod_running", map[string]any{
+			"jobName":   jobName,
+			"podName":   bj.Status.PodName,
+			"namespace": bj.Namespace,
+		})
+		log.Info("BuildJob event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
+		log.Info("running event is published")
 
 		// Build is still running, set the status to be "running"
 		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
