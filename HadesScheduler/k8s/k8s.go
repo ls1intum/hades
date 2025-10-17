@@ -142,6 +142,12 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 			}
 		}
 
+		kcs, err := kubernetes.NewForConfig(rc)
+		if err != nil {
+			slog.Error("Failed to create typed clientset", "error", err)
+			return Scheduler{}
+		}
+
 		dyn, err := dynamic.NewForConfig(rc)
 		if err != nil {
 			slog.Error("Failed to create dynamic client", "error", err)
@@ -149,6 +155,7 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 		}
 
 		return Scheduler{
+			k8sClient:   kcs,
 			dynClient:   dyn,
 			namespace:   k8sCfg.K8sNamespace,
 			useOperator: true,

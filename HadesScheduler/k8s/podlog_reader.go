@@ -24,24 +24,34 @@ type PodLogReader struct {
 }
 
 func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
+	if pl.k8sClient == nil {
+		return fmt.Errorf("nil k8sClient in PodLogReader: operator mode must also initialize typed clientset")
+	}
+
 	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
 
+	// Resolve actual pod name using jobID
+	podName, err := pl.resolvePodName(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Get pod spec to know what containers to expect
-	p, err := cli.Get(ctx, pl.jobID, metav1.GetOptions{})
+	p, err := cli.Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
 
 	// Wait for init containers
 	for _, initContainer := range p.Spec.InitContainers {
-		if err := pl.waitForContainer(ctx, initContainer.Name, true); err != nil {
+		if err := pl.waitForContainer(ctx, podName, initContainer.Name, true); err != nil {
 			return err
 		}
 	}
 
 	// Wait for regular container (dummy)
 	for _, container := range p.Spec.Containers {
-		if err := pl.waitForContainer(ctx, container.Name, false); err != nil {
+		if err := pl.waitForContainer(ctx, podName, container.Name, false); err != nil {
 			return err
 		}
 	}
@@ -49,13 +59,13 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 	return nil
 }
 
-func (pl PodLogReader) waitForContainer(ctx context.Context, containerName string, isInitContainer bool) error {
+func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, containerName string, isInitContainer bool) error {
 	var exitCode int32
 
 	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
 
 	err := wait.PollUntilContextTimeout(ctx, 3*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
-		p, err := cli.Get(ctx, pl.jobID, metav1.GetOptions{})
+		p, err := cli.Get(ctx, podName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -85,12 +95,20 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, containerName strin
 		return fmt.Errorf("timeout waiting for container %s: %v", containerName, err)
 	}
 
-	slog.Debug("Container completed", slog.String("job_id", pl.jobID), slog.String("container_name", containerName),
-		slog.Int("exit_code", int(exitCode)))
+	slog.Debug("Container completed",
+		slog.String("job_id", pl.jobID),
+		slog.String("pod_name", podName),
+		slog.String("container_name", containerName),
+		slog.Int("exit_code", int(exitCode)),
+	)
 
 	// Process logs upon container completion
-	if err := pl.processContainerLogs(ctx, containerName); err != nil {
-		slog.Error("Warning: failed to process logs for %s: %v\n", containerName, err)
+	if err := pl.processContainerLogs(ctx, podName, containerName); err != nil {
+		slog.Error("Warning: failed to process logs",
+			slog.String("pod_name", podName),
+			slog.String("container_name", containerName),
+			slog.Any("error", err),
+		)
 	}
 
 	if exitCode != 0 {
@@ -100,8 +118,8 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, containerName strin
 	return nil
 }
 
-func (pl PodLogReader) processContainerLogs(ctx context.Context, containerName string) error {
-	stdout, stderr, err := pl.getContainerLogs(ctx, containerName)
+func (pl PodLogReader) processContainerLogs(ctx context.Context, podName string, containerName string) error {
+	stdout, stderr, err := pl.getContainerLogs(ctx, podName, containerName)
 	if err != nil {
 		return fmt.Errorf("getting container logs: %w", err)
 	}
@@ -115,7 +133,7 @@ func (pl PodLogReader) processContainerLogs(ctx context.Context, containerName s
 	return publisher.PublishLogs(buildJobLog)
 }
 
-func (pl PodLogReader) getContainerLogs(ctx context.Context, containerName string) (*bytes.Buffer, *bytes.Buffer, error) {
+func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, containerName string) (*bytes.Buffer, *bytes.Buffer, error) {
 	// get logs of <container name>
 	podLogOpts := corev1.PodLogOptions{
 		Container:  containerName,
@@ -123,7 +141,7 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, containerName strin
 		Timestamps: true,
 	}
 
-	req := pl.k8sClient.CoreV1().Pods(pl.namespace).GetLogs(pl.jobID, &podLogOpts)
+	req := pl.k8sClient.CoreV1().Pods(pl.namespace).GetLogs(podName, &podLogOpts)
 	logReader, err := req.Stream(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting container logs: %w", err)
@@ -140,4 +158,28 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, containerName strin
 	// For K8s, you might need to separate stdout/stderr differently
 	// or just treat all logs as stdout
 	return allLogs, new(bytes.Buffer), nil
+}
+
+func (pl PodLogReader) resolvePodName(ctx context.Context) (string, error) {
+	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
+
+	// 1) 兼容：直接按 jobID 当 Pod 名（你的“Pod 名=UUID”路径）
+	if p, err := cli.Get(ctx, pl.jobID, metav1.GetOptions{}); err == nil {
+		return p.Name, nil
+	}
+
+	// 3) 退路：按 Job 的默认 label（job-name=buildjob-<uuid>）
+	jobName := fmt.Sprintf("buildjob-%s", pl.jobID)
+	if lst, err := cli.List(ctx, metav1.ListOptions{
+		LabelSelector: "job-name=" + jobName,
+	}); err == nil {
+		if len(lst.Items) == 1 {
+			return lst.Items[0].Name, nil
+		}
+		if len(lst.Items) > 1 {
+			return "", fmt.Errorf("found multiple pods with label job-name=%s; expected exactly 1", jobName)
+		}
+	}
+
+	return "", fmt.Errorf("pod for jobID %s not found yet", pl.jobID)
 }
