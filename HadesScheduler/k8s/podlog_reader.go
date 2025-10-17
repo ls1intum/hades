@@ -163,12 +163,12 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, con
 func (pl PodLogReader) resolvePodName(ctx context.Context) (string, error) {
 	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
 
-	// 1) 兼容：直接按 jobID 当 Pod 名（你的“Pod 名=UUID”路径）
+	// if we have a pod name, we're done'
 	if p, err := cli.Get(ctx, pl.jobID, metav1.GetOptions{}); err == nil {
 		return p.Name, nil
 	}
 
-	// 3) 退路：按 Job 的默认 label（job-name=buildjob-<uuid>）
+	// otherwise, we need to find the pod name by looking at the job name
 	jobName := fmt.Sprintf("buildjob-%s", pl.jobID)
 	if lst, err := cli.List(ctx, metav1.ListOptions{
 		LabelSelector: "job-name=" + jobName,
