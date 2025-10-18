@@ -90,12 +90,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Job already exists, check the status of the job
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
-			fmt.Printf("=================DEBUG START=============\n")
-			fmt.Printf("bj.Status.PodName%s\n", bj.Status.PodName)
-			fmt.Printf("bj.Name%s\n", bj.Name)
-			fmt.Printf("=================DEBUG END===============\n")
-
-			// Publish completion event before updating status
+			// Job is done, publish "completed" event
 			r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "completed", map[string]any{
 				"succeeded": succeeded,
 				"message":   msg,
@@ -115,14 +110,13 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
 		}
 
-		// Job is running - publish "running" event
+		// Job is running, publish "running" event
 		r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "pod_running", map[string]any{
 			"jobName":   jobName,
 			"podName":   bj.Status.PodName,
 			"namespace": bj.Namespace,
 		})
 		log.Info("BuildJob event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
-		log.Info("running event is published")
 
 		// Build is still running, set the status to be "running"
 		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
