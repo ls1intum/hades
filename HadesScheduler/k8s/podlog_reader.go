@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -92,6 +93,14 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, con
 	})
 
 	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
+			slog.Debug("wait canceled (expected on job completion)",
+				slog.String("job_id", pl.jobID),
+				slog.String("pod_name", podName),
+				slog.String("container_name", containerName),
+			)
+			return nil
+		}
 		return fmt.Errorf("timeout waiting for container %s: %v", containerName, err)
 	}
 
@@ -104,11 +113,11 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, con
 
 	// Process logs upon container completion
 	if err := pl.processContainerLogs(ctx, podName, containerName); err != nil {
-		slog.Error("Warning: failed to process logs",
-			slog.String("pod_name", podName),
-			slog.String("container_name", containerName),
-			slog.Any("error", err),
-		)
+		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
+			slog.Debug("processContainerLogs canceled (expected)", "pod_name", podName, "container_name", containerName)
+		} else {
+			slog.Error("Warning: failed to process logs", "pod_name", podName, "container_name", containerName, "error", err)
+		}
 	}
 
 	if exitCode != 0 {
@@ -137,13 +146,17 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, con
 	// get logs of <container name>
 	podLogOpts := corev1.PodLogOptions{
 		Container:  containerName,
-		Follow:     true,
+		Follow:     false,
 		Timestamps: true,
 	}
 
 	req := pl.k8sClient.CoreV1().Pods(pl.namespace).GetLogs(podName, &podLogOpts)
 	logReader, err := req.Stream(ctx)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
+			slog.Debug("Log stream canceled (expected on job completion)", "pod", podName, "container", containerName)
+			return new(bytes.Buffer), new(bytes.Buffer), nil
+		}
 		return nil, nil, fmt.Errorf("getting container logs: %w", err)
 	}
 	defer logReader.Close()
@@ -152,6 +165,10 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, con
 	// So we need to parse them differently
 	allLogs := new(bytes.Buffer)
 	if _, err := io.Copy(allLogs, logReader); err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
+			slog.Debug("Log copy canceled (expected on job completion)", "pod", podName, "container", containerName)
+			return allLogs, new(bytes.Buffer), nil
+		}
 		return nil, nil, fmt.Errorf("reading logs: %w", err)
 	}
 
