@@ -29,6 +29,8 @@ type Scheduler struct {
 	useOperator   bool
 	nc            *nats.Conn
 	activeStreams sync.Map // buildJobName -> cancel function
+	subOnce       sync.Once
+	eventSub      *nats.Subscription
 }
 
 type K8sConfig struct {
@@ -100,6 +102,23 @@ func (k *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 		slog.Warn("NATS connection is nil, logs will not be published")
 	}
 	return k
+}
+
+func (k *Scheduler) ensureEventSub() {
+	k.subOnce.Do(func() {
+		if k.nc == nil {
+			slog.Error("NATS connection is nil; cannot subscribe buildjob events")
+			return
+		}
+		// Queue subscription to avoid multiple schedulers processing the same event in case multi-replica deployment
+		sub, err := k.nc.QueueSubscribe("buildjob.events.*", "hades-scheduler", k.handleBuildJobEvent)
+		if err != nil {
+			slog.Error("Failed to subscribe buildjob.events.*", "error", err)
+			return
+		}
+		k.eventSub = sub
+		slog.Info("Subscribed to buildjob.events.* (queue=hades-scheduler)")
+	})
 }
 
 // Create a Kubernetes clientset based on the provided configuration
@@ -180,21 +199,30 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 
 	switch status {
 	case "pod_running":
-		log.Printf("BuildJob %s is running", buildJobName)
-		if podName, ok := event["podName"].(string); ok && podName != "" {
-			logreader := PodLogReader{
-				k8sClient: k.k8sClient,
-				namespace: k.namespace,
-				jobID:     buildJobName,
-				nc:        k.nc,
-			}
-
-			log.Printf("Starting log reader with waitforAllContainers")
-			go logreader.waitForAllContainers(context.Background())
+		if _, exists := k.activeStreams.Load(buildJobName); exists {
+			return
 		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		k.activeStreams.Store(buildJobName, cancel)
+
+		logreader := PodLogReader{
+			k8sClient: k.k8sClient,
+			namespace: k.namespace,
+			jobID:     buildJobName,
+			nc:        k.nc,
+		}
+
+		slog.Info("Starting log reader", "buildJob", buildJobName)
+		go func() {
+			defer k.activeStreams.Delete(buildJobName)
+			if err := logreader.waitForAllContainers(ctx); err != nil {
+				slog.Error("Log reader exited with error", "buildJob", buildJobName, "error", err)
+			}
+		}()
 	case "completed":
 		// Stop log streaming if it's active
-		if cancel, exists := k.activeStreams.LoadAndDelete(buildJobName); exists {
+		if cancel, ok := k.activeStreams.LoadAndDelete(buildJobName); ok {
 			cancel.(context.CancelFunc)()
 		}
 		log.Printf("BuildJob %s completed: %v", buildJobName, event["succeeded"])
@@ -204,8 +232,7 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 func (k *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	if k.useOperator {
 		slog.Debug("Scheduling job via Operator (creating BuildJob CR)")
-		k.nc.Subscribe("buildjob.events.*", k.handleBuildJobEvent)
-
+		k.ensureEventSub()
 		return k.createBuildJobCR(ctx, job)
 	}
 

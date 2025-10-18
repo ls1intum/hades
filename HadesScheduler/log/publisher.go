@@ -40,6 +40,7 @@ func (np NATSPublisher) PublishLogs(buildJobLog Log) error {
 		slog.Error("Failed to publish log to NATS", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
 		return fmt.Errorf("publishing log to NATS: %w", err)
 	}
+	slog.Debug("Log published to NATS", slog.String("job_id", buildJobLog.JobID), slog.String("subject", subject))
 
 	return nil
 }
