@@ -110,7 +110,7 @@ func (k *Scheduler) ensureEventSub() {
 			slog.Error("NATS connection is nil; cannot subscribe buildjob events")
 			return
 		}
-		// Queue subscription to avoid multiple schedulers processing the same event in case multi-replica deployment
+		// Queue subscription to avoid multiple schedulers processing the same event in case of multi-replica deployment
 		sub, err := k.nc.QueueSubscribe("buildjob.events.*", "hades-scheduler", k.handleBuildJobEvent)
 		if err != nil {
 			slog.Error("Failed to subscribe buildjob.events.*", "error", err)
