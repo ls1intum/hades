@@ -6,5 +6,5 @@ use (
 	./HadesAPI
 	./HadesScheduler
 	./shared
-	HadesScheduler/HadesOperator
+	./HadesScheduler/HadesOperator
 )
