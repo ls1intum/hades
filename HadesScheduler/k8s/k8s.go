@@ -194,8 +194,16 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 		return
 	}
 
-	buildJobName := event["buildJob"].(string)
-	status := event["status"].(string)
+	buildJobName, ok := event["buildJob"].(string)
+	if !ok {
+		log.Printf("BuildJob event missing or invalid 'buildJob' field: %v", event["buildJob"])
+		return
+	}
+	status, ok := event["status"].(string)
+	if !ok {
+		log.Printf("BuildJob event missing or invalid 'status' field: %v", event["status"])
+		return
+	}
 
 	switch status {
 	case "pod_running":
