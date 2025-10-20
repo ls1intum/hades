@@ -231,7 +231,11 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 	case "completed":
 		// Stop log streaming if it's active
 		if cancel, ok := k.activeStreams.LoadAndDelete(buildJobName); ok {
-			cancel.(context.CancelFunc)()
+			if cf, ok := cancel.(context.CancelFunc); ok {
+				cf()
+			} else {
+				log.Printf("Expected context.CancelFunc in activeStreams for %s, got %T", buildJobName, cancel)
+			}
 		}
 		log.Printf("BuildJob %s completed: %v", buildJobName, event["succeeded"])
 	}
