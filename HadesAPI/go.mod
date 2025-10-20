@@ -7,7 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/ls1intum/hades/shared v0.0.0
-	github.com/nats-io/nats.go v1.46.1
+	github.com/nats-io/nats.go v1.47.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.39.0
