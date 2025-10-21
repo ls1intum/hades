@@ -31,7 +31,7 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 
 	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
 
-	// Resolve actual pod name using jobID
+	// Resolve pod name using jobID
 	podName, err := pl.resolvePodName(ctx)
 	if err != nil {
 		return err
@@ -46,6 +46,10 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 	// Wait for init containers
 	for _, initContainer := range p.Spec.InitContainers {
 		if err := pl.waitForContainer(ctx, podName, initContainer.Name, true); err != nil {
+			if errors.Is(err, context.Canceled) {
+				slog.Debug("Init container processing cancelled", "job_id", pl.jobID)
+				return ctx.Err()
+			}
 			return err
 		}
 	}
@@ -53,6 +57,10 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 	// Wait for regular container (dummy)
 	for _, container := range p.Spec.Containers {
 		if err := pl.waitForContainer(ctx, podName, container.Name, false); err != nil {
+			if errors.Is(err, context.Canceled) {
+				slog.Debug("Container processing cancelled", "job_id", pl.jobID)
+				return ctx.Err()
+			}
 			return err
 		}
 	}
@@ -99,7 +107,7 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, con
 				slog.String("pod_name", podName),
 				slog.String("container_name", containerName),
 			)
-			return nil
+			return context.Canceled
 		}
 		return fmt.Errorf("timeout waiting for container %s: %v", containerName, err)
 	}
@@ -115,6 +123,7 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, con
 	if err := pl.processContainerLogs(ctx, podName, containerName); err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
 			slog.Debug("processContainerLogs canceled (expected)", "pod_name", podName, "container_name", containerName)
+			return context.Canceled
 		} else {
 			slog.Error("Warning: failed to process logs", "pod_name", podName, "container_name", containerName, "error", err)
 		}
@@ -139,6 +148,11 @@ func (pl PodLogReader) processContainerLogs(ctx context.Context, podName string,
 	}
 	buildJobLog.JobID = pl.jobID
 	publisher := log.NewNATSPublisher(pl.nc)
+
+	if ctx.Err() == context.Canceled {
+		return context.Canceled
+	}
+
 	return publisher.PublishLogs(buildJobLog)
 }
 
@@ -155,7 +169,7 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, con
 	if err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
 			slog.Debug("Log stream canceled (expected on job completion)", "pod", podName, "container", containerName)
-			return new(bytes.Buffer), new(bytes.Buffer), nil
+			return new(bytes.Buffer), new(bytes.Buffer), context.Canceled
 		}
 		return nil, nil, fmt.Errorf("getting container logs: %w", err)
 	}
@@ -180,12 +194,12 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, con
 func (pl PodLogReader) resolvePodName(ctx context.Context) (string, error) {
 	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
 
-	// if we have a pod name, we're done'
+	// if we have a pod name, return
 	if p, err := cli.Get(ctx, pl.jobID, metav1.GetOptions{}); err == nil {
 		return p.Name, nil
 	}
 
-	// otherwise, we need to find the pod name by looking at the job name
+	// else: find the pod name by looking at the job name
 	jobName := fmt.Sprintf("buildjob-%s", pl.jobID)
 	if lst, err := cli.List(ctx, metav1.ListOptions{
 		LabelSelector: "job-name=" + jobName,

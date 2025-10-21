@@ -225,7 +225,7 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 		if cancel, ok := k.activeStreams.LoadAndDelete(buildJobName); ok {
 			cancel.(context.CancelFunc)()
 		}
-		log.Printf("BuildJob %s completed: %v", buildJobName, event["succeeded"])
+		log.Printf("BuildJob %s completed, succeeded %v", buildJobName, event["succeeded"])
 	}
 }
 

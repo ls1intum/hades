@@ -94,9 +94,8 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "completed", map[string]any{
 				"succeeded": succeeded,
 				"message":   msg,
-				"jobName":   jobName,
 			})
-			log.Info("BuildJob event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
+			log.Info("BuildJob completed event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
 
 			if err := r.setStatusCompleted(ctx, req.NamespacedName, succeeded, msg); err != nil {
 				if apierrors.IsConflict(err) {
@@ -110,23 +109,21 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
 		}
 
-		// Job is running, publish "running" event
-		r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "pod_running", map[string]any{
-			"jobName":   jobName,
-			"podName":   bj.Status.PodName,
-			"namespace": bj.Namespace,
-		})
-		log.Info("BuildJob event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
+		// if bj.Status.Phase != "Running" {
+		// Job starting to run - publish event
+		r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "pod_running", map[string]any{})
+		log.Info("BuildJob running event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
 
-		// Build is still running, set the status to be "running"
-		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
-			if apierrors.IsConflict(err) {
-				return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
-			}
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+		// Build is not done, set the status to be "running"
+		// if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
+		// 	if apierrors.IsConflict(err) {
+		// 		return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+		// 	}
+		// 	return ctrl.Result{}, err
+		// }
+		// return ctrl.Result{}, nil
 	}
+	// }
 	if !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, err
 	}
