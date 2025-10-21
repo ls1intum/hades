@@ -110,7 +110,7 @@ func (k *Scheduler) ensureEventSub() {
 			slog.Error("NATS connection is nil; cannot subscribe buildjob events")
 			return
 		}
-		// Queue subscription to avoid multiple schedulers processing the same event in case multi-replica deployment
+		// Queue subscription to avoid multiple schedulers processing the same event in case of multi-replica deployment
 		sub, err := k.nc.QueueSubscribe("buildjob.events.*", "hades-scheduler", k.handleBuildJobEvent)
 		if err != nil {
 			slog.Error("Failed to subscribe buildjob.events.*", "error", err)
@@ -194,8 +194,16 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 		return
 	}
 
-	buildJobName := event["buildJob"].(string)
-	status := event["status"].(string)
+	buildJobName, ok := event["buildJob"].(string)
+	if !ok {
+		log.Printf("BuildJob event missing or invalid 'buildJob' field: %v", event["buildJob"])
+		return
+	}
+	status, ok := event["status"].(string)
+	if !ok {
+		log.Printf("BuildJob event missing or invalid 'status' field: %v", event["status"])
+		return
+	}
 
 	switch status {
 	case "pod_running":
@@ -223,7 +231,11 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 	case "completed":
 		// Stop log streaming if it's active
 		if cancel, ok := k.activeStreams.LoadAndDelete(buildJobName); ok {
-			cancel.(context.CancelFunc)()
+			if cf, ok := cancel.(context.CancelFunc); ok {
+				cf()
+			} else {
+				log.Printf("Expected context.CancelFunc in activeStreams for %s, got %T", buildJobName, cancel)
+			}
 		}
 		log.Printf("BuildJob %s completed, succeeded %v", buildJobName, event["succeeded"])
 	}
