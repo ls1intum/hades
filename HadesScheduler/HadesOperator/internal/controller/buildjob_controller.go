@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -140,9 +141,14 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// 3.3 Create Job in Kubernetes as Pod
 	log.Info("Creating Job for BuildJob", "job", k8sJob.Name)
+
 	if err := r.Create(ctx, k8sJob); err != nil {
-		log.Error(err, "cannot create Job")
-		return ctrl.Result{}, err
+		if apierrors.IsAlreadyExists(err) {
+			slog.Debug("Job already exists, ", "job", k8sJob.Name)
+		} else {
+			log.Error(err, "cannot create Job")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// 3.4 Update CR Status → Running
