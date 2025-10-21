@@ -11,7 +11,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-const NatsLogSubject = "hades.logs"
+const NatsLogSubject = "hades.logs.%s"
 const StreamName = "HADES_JOB_LOGS"
 
 type LogPublisher interface {
@@ -44,7 +44,7 @@ func NewHadesLogProducer(nc *nats.Conn) (*HadesLogProducer, error) {
 
 	s, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:       StreamName,
-		Subjects:   []string{fmt.Sprintf("%s.*", NatsLogSubject)},
+		Subjects:   []string{fmt.Sprintf(NatsLogSubject, "*")},
 		Storage:    jetstream.FileStorage,
 		Retention:  jetstream.LimitsPolicy,
 		Duplicates: 1 * time.Minute, // Disallow duplicates for 1 minute
@@ -101,7 +101,7 @@ func (hlp *HadesLogProducer) PublishLog(buildJobLog Log) error {
 
 // WatchJobLogs uses JetStream with job-specific consumer
 func (hlc *HadesLogConsumer) WatchJobLogs(ctx context.Context, jobID string, handler func(Log)) error {
-	subject := fmt.Sprintf("%s.%s", NatsLogSubject, jobID)
+	subject := fmt.Sprintf(NatsLogSubject, jobID)
 	consumerName := fmt.Sprintf("job-watcher-%s", jobID)
 
 	// Create a temporary consumer for this specific job

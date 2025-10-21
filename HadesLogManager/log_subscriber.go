@@ -85,8 +85,6 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 		return fmt.Errorf("failed to subscribe to running status: %w", err)
 	}
 
-	subs = append(subs, sub1)
-
 	// Subscribe to completed status - stop watching logs
 	sub2, err := dls.nc.Subscribe(logs.StatusSuccess.Subject(), func(msg *nats.Msg) {
 		jobID, ok := extractJobID(msg)
@@ -99,8 +97,6 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("unable to subscribe to success status: %w", err)
 	}
-
-	subs = append(subs, sub2)
 
 	// Subscribe to failed status - stop watching logs
 	sub3, err := dls.nc.Subscribe(logs.StatusFailed.Subject(), func(msg *nats.Msg) {
@@ -115,7 +111,7 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 		return fmt.Errorf("unable to subscribe to failed status: %w", err)
 	}
 
-	subs = append(subs, sub3)
+	subs = append(subs, sub1, sub2, sub3)
 
 	// Clean up subscriptions when context is done
 	go func() {
@@ -165,7 +161,7 @@ func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 		slog.Info("Starting to watch job logs", "job_id", jobID)
 		err := dls.logConsumer.WatchJobLogs(jobCtx, jobID, func(batchedLog logs.Log) {
 			// Store batched logs in aggregator
-			dls.logAggregator.addLog(batchedLog)
+			dls.logAggregator.AddLog(batchedLog)
 
 			slog.Info("Received batched job logs",
 				"job_id", batchedLog.JobID,

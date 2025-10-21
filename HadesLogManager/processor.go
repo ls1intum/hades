@@ -9,7 +9,7 @@ import (
 )
 
 type LogAggregator interface {
-	addLog(log buildlogs.Log)
+	AddLog(log buildlogs.Log)
 	FlushJobLogs(jobID string) error
 	GetJobLogs(jobID string) []buildlogs.LogEntry
 	GetAllJobs() []string
@@ -62,7 +62,7 @@ func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) 
 //
 // Parameters:
 //   - log: The buildlogs.Log entry to add to the aggregator, must contain a valid JobID
-func (la *NATSLogAggregator) addLog(log buildlogs.Log) {
+func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 	jobID := log.JobID
 	slog.Debug("Start adding log to aggregator", "job_id", jobID)
 
