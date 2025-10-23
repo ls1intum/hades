@@ -67,7 +67,7 @@ func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
 	}
 }
 
-func NewK8sScheduler() *Scheduler {
+func NewK8sScheduler() (*Scheduler, error) {
 	slog.Debug("Initializing Kubernetes scheduler")
 
 	// Load the user provided Kubernetes configuration
@@ -88,11 +88,11 @@ func NewK8sScheduler() *Scheduler {
 		if err != nil {
 			// TODO: This may fail if the namespace already exists - we need to handle that case with a check
 			slog.With("error", err).Info("Failed to create namespace in Kubernetes")
+			return nil, err
 		}
 	}
 
-	// TODO: add slog.Error("Failed to create K8s Scheduler") somewhere
-	return &scheduler
+	return &scheduler, nil
 }
 
 func (k *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
