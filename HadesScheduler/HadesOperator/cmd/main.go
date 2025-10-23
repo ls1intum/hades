@@ -48,7 +48,7 @@ type NSConfig struct {
 }
 
 type OperatorConfig struct {
-	deleteOnComplete string `env:"HADES_DELETE_ON_COMPLETE" envDefault:"true"`
+	DeleteOnComplete string `env:"DELETE_ON_COMPLETE" envDefault:"true"`
 }
 
 func init() {
@@ -76,7 +76,7 @@ func main() {
 	var operatorConfig OperatorConfig
 	utils.LoadConfig(&operatorConfig)
 
-	delOnComplete, _ := strconv.ParseBool(operatorConfig.deleteOnComplete)
+	delOnComplete, _ := strconv.ParseBool(operatorConfig.DeleteOnComplete)
 
 	if nsConfig.WatchNamespace != "" {
 		setupLog.Info("scoping cache to a single namespace", "namespace", nsConfig.WatchNamespace)

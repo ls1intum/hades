@@ -37,7 +37,7 @@ spec:
             {{- if not .Values.hadesOperator.clusterWide }}
             - name: WATCH_NAMESPACE
               value: {{ default .Release.Namespace .Values.hadesOperator.targetNamespace | quote }}
-            - name: HADES_DELETE_ON_COMPLETE
+            - name: DELETE_ON_COMPLETE
               value: {{ .Values.hadesOperator.DeleteOnComplete | quote }}
             {{- end }}
 
