@@ -48,7 +48,7 @@ type NSConfig struct {
 }
 
 type OperatorConfig struct {
-	deleteOnComplete string `env:"HADES_DELETE_ON_COMPLETE" envDefault:"false"`
+	deleteOnComplete string `env:"HADES_DELETE_ON_COMPLETE" envDefault:"true"`
 }
 
 func init() {
