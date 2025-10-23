@@ -57,6 +57,7 @@ hadesOperator:
   leaderElection:
     enabled: true
   targetNamespace: ""
+  DeleteOnComplete: true
 
 rbac:
   hadesScheduler:

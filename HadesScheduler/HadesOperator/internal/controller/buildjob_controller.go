@@ -45,7 +45,8 @@ const conflictRequeueDelay = 200 * time.Millisecond
 // BuildJobReconciler reconciles a BuildJob object
 type BuildJobReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme           *runtime.Scheme
+	DeleteOnComplete bool
 }
 
 // +kubebuilder:rbac:groups=build.hades.tum.de,resources=buildjobs;buildjobs/status;buildjobs/finalizers,verbs=get;list;watch;create;update;patch;delete
@@ -94,6 +95,11 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				return ctrl.Result{}, err
 			}
 
+			// If DeleteOnComplete is false, don't delete the CR, used for debugging
+			if !r.DeleteOnComplete {
+				return ctrl.Result{}, nil
+			}
+
 			// Delete the CR once the job is done
 			policy := metav1.DeletePropagationForeground
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
@@ -115,7 +121,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// ----------------------------- 3. First-time creation -----------------------------
 
 	// 3.1 Create Kubernetes Job (initContainers = bj.Spec.Steps)
-	k8sJob := buildK8sJob(&bj, jobName)
+	k8sJob := buildK8sJob(&bj, jobName, r.DeleteOnComplete)
 
 	// 3.2 Set OwnerReference
 	if err := controllerutil.SetControllerReference(&bj, k8sJob, r.Scheme); err != nil {
@@ -208,7 +214,7 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 }
 
 // buildK8sJob creates a one-time Job with InitContainers that execute each Step in order
-func buildK8sJob(bj *buildv1.BuildJob, jobName string) *batchv1.Job {
+func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool) *batchv1.Job {
 	sharedVolName := "shared"
 	sharedMount := corev1.VolumeMount{Name: sharedVolName, MountPath: "/shared"}
 
@@ -260,8 +266,13 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string) *batchv1.Job {
 		RestartPolicy: corev1.RestartPolicyNever,
 	}
 
-	ttl := int32(30)
+	ttl := (*int32)(nil)
 	backoff := int32(0)
+
+	if !deleteOnComplete {
+		t := int32(3600)
+		ttl = &t
+	}
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -270,7 +281,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string) *batchv1.Job {
 			Labels:    map[string]string{"job-id": bj.Name},
 		},
 		Spec: batchv1.JobSpec{
-			TTLSecondsAfterFinished: &ttl,
+			TTLSecondsAfterFinished: ttl,
 			BackoffLimit:            &backoff,
 			Template: corev1.PodTemplateSpec{
 				Spec: podSpec,
