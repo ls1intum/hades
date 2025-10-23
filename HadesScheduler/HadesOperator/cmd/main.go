@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strconv"
 
 	"github.com/ls1intum/hades/shared/utils"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -50,6 +51,10 @@ type NCConfig struct {
 	NatsConfig utils.NatsConfig
 }
 
+type OperatorConfig struct {
+	deleteOnComplete string `env:"HADES_DELETE_ON_COMPLETE" envDefault:"true"`
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(buildv1.AddToScheme(scheme))
@@ -71,6 +76,11 @@ func main() {
 
 	var nsConfig NSConfig
 	utils.LoadConfig(&nsConfig)
+
+	var operatorConfig OperatorConfig
+	utils.LoadConfig(&operatorConfig)
+
+	delOnComplete, _ := strconv.ParseBool(operatorConfig.deleteOnComplete)
 
 	if nsConfig.WatchNamespace != "" {
 		setupLog.Info("scoping cache to a single namespace", "namespace", nsConfig.WatchNamespace)
@@ -121,9 +131,10 @@ func main() {
 	}
 
 	if err := (&controller.BuildJobReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		NatsConnection: nc,
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		NatsConnection:   nc,
+		DeleteOnComplete: delOnComplete,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
 		os.Exit(1)
