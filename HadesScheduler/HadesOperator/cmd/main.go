@@ -52,7 +52,7 @@ type NCConfig struct {
 }
 
 type OperatorConfig struct {
-	deleteOnComplete string `env:"HADES_DELETE_ON_COMPLETE" envDefault:"true"`
+	DeleteOnComplete string `env:"DELETE_ON_COMPLETE" envDefault:"true"`
 }
 
 func init() {
@@ -66,7 +66,7 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8085", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
@@ -80,7 +80,7 @@ func main() {
 	var operatorConfig OperatorConfig
 	utils.LoadConfig(&operatorConfig)
 
-	delOnComplete, _ := strconv.ParseBool(operatorConfig.deleteOnComplete)
+	delOnComplete, _ := strconv.ParseBool(operatorConfig.DeleteOnComplete)
 
 	if nsConfig.WatchNamespace != "" {
 		setupLog.Info("scoping cache to a single namespace", "namespace", nsConfig.WatchNamespace)
