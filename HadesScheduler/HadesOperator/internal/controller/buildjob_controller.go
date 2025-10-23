@@ -70,7 +70,6 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// ----------------------------- 0b. If being deleted, skip (avoid recreating children) --------
 	if !bj.DeletionTimestamp.IsZero() {
-		log.Info("BuildJob is being deleted; skip reconcile", "name", bj.Name)
 		return ctrl.Result{}, nil
 	}
 
