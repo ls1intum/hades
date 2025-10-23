@@ -38,7 +38,7 @@ spec:
             - name: WATCH_NAMESPACE
               value: {{ default .Release.Namespace .Values.hadesOperator.targetNamespace | quote }}
             - name: HADES_DELETE_ON_COMPLETE
-              value: {{ .Values.hadesOperator.DeleteOnComplete }}
+              value: {{ .Values.hadesOperator.DeleteOnComplete | quote }}
             {{- end }}
 
           livenessProbe:
