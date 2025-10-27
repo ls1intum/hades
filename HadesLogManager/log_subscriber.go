@@ -95,6 +95,8 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 		dls.stopWatchingJobLogs(jobID)
 	})
 	if err != nil {
+		// Clean up sub1
+		sub1.Drain()
 		return fmt.Errorf("unable to subscribe to success status: %w", err)
 	}
 
@@ -108,6 +110,9 @@ func (dls *DynamicLogManager) StartListening(ctx context.Context) error {
 		dls.stopWatchingJobLogs(jobID)
 	})
 	if err != nil {
+		// Clean up sub1 and sub2
+		sub1.Drain()
+		sub2.Drain()
 		return fmt.Errorf("unable to subscribe to failed status: %w", err)
 	}
 
