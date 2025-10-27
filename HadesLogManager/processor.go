@@ -134,7 +134,11 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 	}
 
 	logs := value.([]buildlogs.Log)
-	var allLogEntries []buildlogs.LogEntry
+	totalEntries := 0
+	for _, log := range logs {
+		totalEntries += len(log.Logs)
+	}
+	allLogEntries := make([]buildlogs.LogEntry, 0, totalEntries)
 	for _, log := range logs {
 		allLogEntries = append(allLogEntries, log.Logs...)
 	}
@@ -153,7 +157,7 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 // Returns:
 //   - []string: A slice of all job IDs currently stored in the aggregator
 func (la *NATSLogAggregator) GetAllJobs() []string {
-	jobs := []string{}
+	jobs := make([]string, 0)
 	la.logs.Range(func(key, value any) bool {
 		jobs = append(jobs, key.(string))
 		return true // continue iteration
