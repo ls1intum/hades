@@ -84,9 +84,9 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 
 		// Replace logs if existing
 		if la.logs.CompareAndSwap(jobID, existingLogs, newLogs) {
+			slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", len(newLogs))
 			break
 		}
-		slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", len(newLogs))
 	}
 }
 

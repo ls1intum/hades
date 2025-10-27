@@ -155,11 +155,14 @@ func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 	dls.activeWatchers[jobID] = cancel
 	dls.mu.Unlock()
 
+	ourCancel := cancel
 	// Start watching logs for this job
 	go func() {
 		defer func() {
 			dls.mu.Lock()
-			delete(dls.activeWatchers, jobID)
+			if dls.activeWatchers[jobID] == ourCancel {
+        		delete(dls.activeWatchers, jobID)
+    		}
 			dls.mu.Unlock()
 		}()
 
