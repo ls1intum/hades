@@ -1,0 +1,31 @@
+{{- if .Values.hadesOperator.clusterWide }}
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hades-operator-rolebinding-{{ .Release.Name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.rbac.hadesOperator.serviceAccountName }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ .Values.rbac.hadesOperator.role.name }}
+  apiGroup: rbac.authorization.k8s.io
+
+{{- else }}
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hades-operator-rolebinding-{{ .Release.Name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.rbac.hadesOperator.serviceAccountName }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Values.rbac.hadesOperator.role.name }}
+  apiGroup: rbac.authorization.k8s.io
+
+{{- end }}

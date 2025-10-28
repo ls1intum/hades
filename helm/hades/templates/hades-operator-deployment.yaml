@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "hades-operator"
+spec:
+  replicas: {{ .Values.hadesOperator.replicaCount }}
+  selector:
+    matchLabels:
+      app: hades-operator-selector
+  template:
+    metadata:
+      labels:
+        app: hades-operator-selector
+    spec:
+      serviceAccountName: {{ .Values.rbac.hadesOperator.serviceAccountName }}
+      containers:
+        - name: "hades-operator"
+          image: "{{ .Values.hadesOperator.image.repository }}:{{ .Values.hadesOperator.image.tag }}"
+          imagePullPolicy: {{ .Values.hadesOperator.image.pullPolicy }}
+
+          {{- if .Values.hadesOperator.leaderElection.enabled }}
+          args:
+            - "--leader-elect"
+            - "--health-probe-bind-address=:8081"
+          {{- else }}
+          args:
+            - "--health-probe-bind-address=:8081"
+          {{- end }}
+
+          ports:
+            - name: http
+              containerPort: {{ .Values.hadesOperator.service.targetPort }}
+            - name: healthz
+              containerPort: 8081
+
+          env:
+            {{- if not .Values.hadesOperator.clusterWide }}
+            - name: WATCH_NAMESPACE
+              value: {{ default .Release.Namespace .Values.hadesOperator.targetNamespace | quote }}
+            - name: DELETE_ON_COMPLETE
+              value: {{ .Values.hadesOperator.DeleteOnComplete | quote }}
+            {{- end }}
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: healthz
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          resources:
+            limits:
+              cpu: {{ .Values.hadesOperator.resources.limits.cpu | quote }}
+              memory: {{ .Values.hadesOperator.resources.limits.memory | quote }}
+            requests:
+              cpu: {{ .Values.hadesOperator.resources.requests.cpu | quote }}
+              memory: {{ .Values.hadesOperator.resources.requests.memory | quote }}
