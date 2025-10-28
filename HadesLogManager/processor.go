@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 	"time"
@@ -46,7 +47,7 @@ type AggregatorConfig struct {
 //
 // Returns:
 //   - LogAggregator: A new instance ready to aggregate logs
-func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
+func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
 	la := &NATSLogAggregator{
 		hlc:       hlc,
 		logs:      sync.Map{},
@@ -58,8 +59,14 @@ func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) 
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			la.cleanupCompletedJobs()
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Info("Stopping log aggregator cleanup goroutine")
+				return
+			case <-ticker.C:
+				la.cleanupCompletedJobs()
+			}
 		}
 	}()
 

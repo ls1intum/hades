@@ -49,12 +49,11 @@ func main() {
 	// Create log aggregator for batching and API access
 	var aggregatorConfig AggregatorConfig
 	utils.LoadConfig(&aggregatorConfig)
-	logAggregator := NewLogAggregator(consumer, aggregatorConfig)
+	ctx, cancel := context.WithCancel(context.Background())
+	logAggregator := NewLogAggregator(ctx, consumer, aggregatorConfig)
 
 	// Create dynamic log manager
 	dynamicManager := NewDynamicLogManager(nc, consumer, logAggregator)
-
-	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Set up OS signal handling for graceful shutdown
@@ -96,7 +95,7 @@ func main() {
 	slog.Info("Received shutdown signal, starting graceful shutdown...")
 	cancel()
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer shutdownCancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("API server shutdown failed", "error", err)
