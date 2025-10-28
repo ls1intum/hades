@@ -23,6 +23,7 @@ type DynamicLogManager struct {
 	logConsumer    *logs.HadesLogConsumer
 	logAggregator  LogAggregator
 	activeWatchers map[string]context.CancelFunc // jobID -> cancel function
+	activeContexts map[string]context.Context
 	mu             sync.RWMutex
 }
 
@@ -43,6 +44,7 @@ func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, agg
 		logConsumer:    logConsumer,
 		logAggregator:  aggregator,
 		activeWatchers: make(map[string]context.CancelFunc),
+		activeContexts: make(map[string]context.Context),
 	}
 }
 
@@ -152,17 +154,18 @@ func (dls *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 
 	// Create new context for this job
 	jobCtx, cancel := context.WithCancel(ctx)
+	dls.activeContexts[jobID] = jobCtx
 	dls.activeWatchers[jobID] = cancel
 	dls.mu.Unlock()
 
-	ourCancel := cancel
 	// Start watching logs for this job
 	go func() {
 		defer func() {
 			dls.mu.Lock()
-			if dls.activeWatchers[jobID] == ourCancel {
-        		delete(dls.activeWatchers, jobID)
-    		}
+			if dls.activeContexts[jobID] == jobCtx {
+				delete(dls.activeWatchers, jobID)
+				delete(dls.activeContexts, jobID)
+			}
 			dls.mu.Unlock()
 		}()
 
@@ -198,13 +201,10 @@ func (dls *DynamicLogManager) stopWatchingJobLogs(jobID string) {
 	cancel, exists := dls.activeWatchers[jobID]
 	if exists {
 		delete(dls.activeWatchers, jobID)
+		delete(dls.activeContexts, jobID)
 		slog.Info("Stopping log watch", "job_id", jobID)
 		cancel()
 
-		// if err := dls.logAggregator.FlushJobLogs(jobID); err != nil {
-		// 	slog.Error("Failed to flush logs for completed job",
-		// 		"job_id", jobID,
-		// 		"error", err)
-		// }
+		dls.logAggregator.MarkJobCompleted(jobID)
 	}
 }

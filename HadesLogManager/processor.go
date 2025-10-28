@@ -13,6 +13,7 @@ type LogAggregator interface {
 	FlushJobLogs(jobID string) error
 	GetJobLogs(jobID string) []buildlogs.LogEntry
 	GetAllJobs() []string
+	MarkJobCompleted(jobID string)
 }
 
 // NATSLogAggregator implements LogAggregator using NATS JetStream for log consumption
@@ -22,17 +23,18 @@ type LogAggregator interface {
 // The aggregator maintains logs per job ID and automatically trims old logs to prevent
 // memory overflow.
 type NATSLogAggregator struct {
-	hlc    *buildlogs.HadesLogConsumer
-	logs   sync.Map // jobID (string) -> []buildlogs.Log
-	config AggregatorConfig
+	hlc       *buildlogs.HadesLogConsumer
+	logs      sync.Map // jobID (string) -> []buildlogs.Log
+	completed sync.Map // jobID (string) -> time.Time (completion time)
+	config    AggregatorConfig
 }
 
 // AggregatorConfig defines the configuration parameters for log aggregation behavior.
-// It controls batching size, flush intervals, and memory limits per job.
+// It controls batching size, retention time, and memory limits per job.
 type AggregatorConfig struct {
-	BatchSize     int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
-	FlushInterval time.Duration `env:"LOG_FLUSH_INTERVAL" envDefault:"30s"`
-	MaxJobLogs    int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
+	BatchSize  int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
+	Retention  time.Duration `env:"LOG_RETENTION" envDefault:"1hr"`
+	MaxJobLogs int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
 }
 
 // NewLogAggregator creates a new NATS-based LogAggregator instance with the specified configuration.
@@ -45,11 +47,23 @@ type AggregatorConfig struct {
 // Returns:
 //   - LogAggregator: A new instance ready to aggregate logs
 func NewLogAggregator(hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
-	return &NATSLogAggregator{
-		hlc:    hlc,
-		logs:   sync.Map{},
-		config: config,
+	la := &NATSLogAggregator{
+		hlc:       hlc,
+		logs:      sync.Map{},
+		completed: sync.Map{},
+		config:    config,
 	}
+
+	// start background cleanup goroutine
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			la.cleanupCompletedJobs()
+		}
+	}()
+
+	return la
 }
 
 // addLog adds a new log entry to the aggregator for the specified job.
@@ -107,11 +121,32 @@ func (la *NATSLogAggregator) FlushJobLogs(jobID string) error {
 	}
 
 	logs := value.([]buildlogs.Log)
-	slog.Info("Flushing completed job logs", "job_id", jobID, "log_count", len(logs))
-
-	// TODO: Send logs to Adapter
-
+	slog.Info("Flushed job logs", "job_id", jobID, "log_count", len(logs))
+	la.completed.Delete(jobID)
 	return nil
+}
+
+func (la *NATSLogAggregator) MarkJobCompleted(jobID string) {
+	la.completed.Store(jobID, time.Now())
+	slog.Info("Marked job as completed, will flush after retention", "job_id", jobID, "retention", la.config.Retention)
+}
+
+func (la *NATSLogAggregator) cleanupCompletedJobs() {
+	now := time.Now()
+
+	la.completed.Range(func(key, value any) bool {
+		jobID := key.(string)
+		completedAt := value.(time.Time)
+
+		if now.Sub(completedAt) >= la.config.Retention {
+			slog.Debug("Retention expired, flushing job logs", "job_id", jobID)
+
+			if err := la.FlushJobLogs(jobID); err != nil {
+				slog.Error("Failed to flush logs during cleanup", "job_id", jobID, "error", err)
+			}
+		}
+		return true
+	})
 }
 
 // API methods
