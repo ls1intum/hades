@@ -24,7 +24,7 @@ jobs:
       - name: Test with Go
         run: go test ./${{ matrix.directory }}/... -json > TestResults-${{ matrix.directory }}.json
       - name: Upload Go test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Go-results-${{ matrix.directory }}
           path: TestResults-${{ matrix.directory }}.json
