@@ -95,7 +95,7 @@ func main() {
 	slog.Info("Received shutdown signal, starting graceful shutdown...")
 	cancel()
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 30*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("API server shutdown failed", "error", err)

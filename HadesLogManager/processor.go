@@ -34,7 +34,7 @@ type NATSLogAggregator struct {
 // It controls batching size, retention time, and memory limits per job.
 type AggregatorConfig struct {
 	BatchSize  int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
-	Retention  time.Duration `env:"LOG_RETENTION" envDefault:"1hr"`
+	Retention  time.Duration `env:"LOG_RETENTION" envDefault:"1h"`
 	MaxJobLogs int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
 }
 
