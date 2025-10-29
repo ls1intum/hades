@@ -2,11 +2,15 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"log/slog"
+	"sync"
 
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
+	"github.com/nats-io/nats.go"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -19,10 +23,14 @@ import (
 
 type Scheduler struct {
 	// TODO: This may be problematic - We need to clarify how to access the cluster with the service account and find a solution that is compatible with both modes
-	k8sClient   *kubernetes.Clientset
-	dynClient   dynamic.Interface
-	namespace   string
-	useOperator bool
+	k8sClient     *kubernetes.Clientset
+	dynClient     dynamic.Interface
+	namespace     string
+	useOperator   bool
+	nc            *nats.Conn
+	activeStreams sync.Map // buildJobName -> cancel function
+	subOnce       sync.Once
+	eventSub      *nats.Subscription
 }
 
 type K8sConfig struct {
@@ -59,7 +67,7 @@ func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
 	}
 }
 
-func NewK8sScheduler() Scheduler {
+func NewK8sScheduler() (*Scheduler, error) {
 	slog.Debug("Initializing Kubernetes scheduler")
 
 	// Load the user provided Kubernetes configuration
@@ -80,10 +88,37 @@ func NewK8sScheduler() Scheduler {
 		if err != nil {
 			// TODO: This may fail if the namespace already exists - we need to handle that case with a check
 			slog.With("error", err).Info("Failed to create namespace in Kubernetes")
+			return nil, err
 		}
 	}
 
-	return scheduler
+	return &scheduler, nil
+}
+
+func (k *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
+	if nc != nil {
+		k.nc = nc
+	} else {
+		slog.Warn("NATS connection is nil, logs will not be published")
+	}
+	return k
+}
+
+func (k *Scheduler) ensureEventSub() {
+	k.subOnce.Do(func() {
+		if k.nc == nil {
+			slog.Error("NATS connection is nil; cannot subscribe buildjob events")
+			return
+		}
+		// Queue subscription to avoid multiple schedulers processing the same event in case of multi-replica deployment
+		sub, err := k.nc.QueueSubscribe("buildjob.events.*", "hades-scheduler", k.handleBuildJobEvent)
+		if err != nil {
+			slog.Error("Failed to subscribe buildjob.events.*", "error", err)
+			return
+		}
+		k.eventSub = sub
+		slog.Info("Subscribed to buildjob.events.* (queue=hades-scheduler)")
+	})
 }
 
 // Create a Kubernetes clientset based on the provided configuration
@@ -126,6 +161,12 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 			}
 		}
 
+		kcs, err := kubernetes.NewForConfig(rc)
+		if err != nil {
+			slog.Error("Failed to create typed clientset", "error", err)
+			return Scheduler{}
+		}
+
 		dyn, err := dynamic.NewForConfig(rc)
 		if err != nil {
 			slog.Error("Failed to create dynamic client", "error", err)
@@ -133,6 +174,7 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 		}
 
 		return Scheduler{
+			k8sClient:   kcs,
 			dynClient:   dyn,
 			namespace:   k8sCfg.K8sNamespace,
 			useOperator: true,
@@ -144,9 +186,65 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 	}
 }
 
-func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
+// Event received from Operator
+func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
+	var event map[string]any
+	if err := json.Unmarshal(msg.Data, &event); err != nil {
+		log.Printf("Failed to unmarshal BuildJob event: %v", err)
+		return
+	}
+
+	buildJobName, ok := event["buildJob"].(string)
+	if !ok {
+		log.Printf("BuildJob event missing or invalid 'buildJob' field: %v", event["buildJob"])
+		return
+	}
+	status, ok := event["status"].(string)
+	if !ok {
+		log.Printf("BuildJob event missing or invalid 'status' field: %v", event["status"])
+		return
+	}
+
+	switch status {
+	case "pod_running":
+		if _, exists := k.activeStreams.Load(buildJobName); exists {
+			return
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		k.activeStreams.Store(buildJobName, cancel)
+
+		logreader := PodLogReader{
+			k8sClient: k.k8sClient,
+			namespace: k.namespace,
+			jobID:     buildJobName,
+			nc:        k.nc,
+		}
+
+		slog.Info("Starting log reader", "buildJob", buildJobName)
+		go func() {
+			defer k.activeStreams.Delete(buildJobName)
+			if err := logreader.waitForAllContainers(ctx); err != nil {
+				slog.Error("Log reader exited with error", "buildJob", buildJobName, "error", err)
+			}
+		}()
+	case "completed":
+		// Stop log streaming if it's active
+		if cancel, ok := k.activeStreams.LoadAndDelete(buildJobName); ok {
+			if cf, ok := cancel.(context.CancelFunc); ok {
+				cf()
+			} else {
+				log.Printf("Expected context.CancelFunc in activeStreams for %s, got %T", buildJobName, cancel)
+			}
+		}
+		log.Printf("BuildJob %s completed, succeeded %v", buildJobName, event["succeeded"])
+	}
+}
+
+func (k *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	if k.useOperator {
 		slog.Debug("Scheduling job via Operator (creating BuildJob CR)")
+		k.ensureEventSub()
 		return k.createBuildJobCR(ctx, job)
 	}
 
@@ -156,11 +254,12 @@ func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		k8sClient:        k.k8sClient,
 		namespace:        k.namespace,
 		sharedVolumeName: "shared",
+		nc:               k.nc,
 	}
 	return k8sJob.execute(ctx)
 }
 
-func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayload) error {
+func (k *Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayload) error {
 	if k.dynClient == nil {
 		return fmt.Errorf("dynamic client is nil: operator mode not initialized")
 	}

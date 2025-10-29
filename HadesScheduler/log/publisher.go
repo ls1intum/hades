@@ -22,7 +22,6 @@ func NewNATSPublisher(nc *nats.Conn) *NATSPublisher {
 	}
 }
 
-// publish log entries to NATS
 func (np NATSPublisher) PublishLogs(buildJobLog Log) error {
 	if np.nc == nil {
 		slog.Error("Cannot publish logs: nil NATS connection", slog.String("job_id", buildJobLog.JobID))
@@ -41,6 +40,7 @@ func (np NATSPublisher) PublishLogs(buildJobLog Log) error {
 		slog.Error("Failed to publish log to NATS", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
 		return fmt.Errorf("publishing log to NATS: %w", err)
 	}
+	slog.Debug("Log published to NATS", slog.String("job_id", buildJobLog.JobID), slog.String("subject", subject))
 
 	return nil
 }

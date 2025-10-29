@@ -58,8 +58,7 @@ func (s DockerStep) execute(ctx context.Context) error {
 				Target: "/shared",
 			},
 		},
-		LogConfig:  s.containerLogsOptions,
-		AutoRemove: s.DockerProps.containerAutoremove, // Remove the container after it is done only if the config is set to true
+		LogConfig: s.containerLogsOptions,
 	}
 
 	// Limit the resource usage of the containers
@@ -121,10 +120,8 @@ func (s DockerStep) execute(ctx context.Context) error {
 		s.logger.Debug("Container logs written to NATS", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
 	}
 
-	if !s.containerAutoremove {
-		if err := removeContainer(ctx, s.cli, resp.ID); err != nil {
-			s.logger.Error("Failed to cleanup container", slog.Any("error", err), slog.Any("container_id", resp.ID))
-		}
+	if err := removeContainer(ctx, s.cli, resp.ID); err != nil {
+		s.logger.Error("Failed to cleanup container", slog.Any("error", err), slog.Any("container_id", resp.ID))
 	}
 
 	return nil

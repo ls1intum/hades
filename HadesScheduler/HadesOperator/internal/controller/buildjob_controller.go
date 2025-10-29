@@ -18,8 +18,10 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 	"time"
 
@@ -33,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
+	"github.com/nats-io/nats.go"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -46,6 +49,7 @@ const conflictRequeueDelay = 200 * time.Millisecond
 type BuildJobReconciler struct {
 	client.Client
 	Scheme           *runtime.Scheme
+	NatsConnection   *nats.Conn
 	DeleteOnComplete bool
 }
 
@@ -87,6 +91,13 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// Job already exists, check the status of the job
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
+			// Job is done, publish "completed" event
+			r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "completed", map[string]any{
+				"succeeded": succeeded,
+				"message":   msg,
+			})
+			log.Info("BuildJob completed event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
+
 			if err := r.setStatusCompleted(ctx, req.NamespacedName, succeeded, msg); err != nil {
 				if apierrors.IsConflict(err) {
 					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
@@ -104,7 +115,12 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
 		}
 
-		// Build is still running, set the status to be "running"
+		// if bj.Status.Phase != "Running" {
+		// Job starting to run - publish event
+		r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "pod_running", map[string]any{})
+		log.Info("BuildJob running event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
+
+		// Build is not done, set the status to be "running"
 		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
 			if apierrors.IsConflict(err) {
 				return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
@@ -113,6 +129,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		return ctrl.Result{}, nil
 	}
+	// }
 	if !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, err
 	}
@@ -322,4 +339,30 @@ func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string)
 		}
 	}
 	return false, false, ""
+}
+
+func (r *BuildJobReconciler) publishBuildJobEvent(ctx context.Context, buildJobName, namespace, status string, data map[string]any) {
+	log := log.FromContext(ctx)
+	if r.NatsConnection == nil {
+		log.Error(nil, "Cannot publish BuildJob Event: nil NATS Connection", "buildJobName", buildJobName)
+		return
+	}
+
+	event := map[string]any{
+		"buildJob":  buildJobName,
+		"namespace": namespace,
+		"status":    status,
+		"timestamp": time.Now(),
+	}
+
+	// Merge additional data
+	maps.Copy(event, data)
+
+	eventBytes, _ := json.Marshal(event)
+	subject := fmt.Sprintf("buildjob.events.%s", buildJobName)
+
+	if err := r.NatsConnection.Publish(subject, eventBytes); err != nil {
+		// Log but don't fail the reconciliation
+		log.Error(err, "Failed to publish BuildJob event", "subject", subject)
+	}
 }

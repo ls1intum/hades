@@ -47,6 +47,10 @@ type NSConfig struct {
 	WatchNamespace string `env:"WATCH_NAMESPACE"`
 }
 
+type NCConfig struct {
+	NatsConfig utils.NatsConfig
+}
+
 type OperatorConfig struct {
 	DeleteOnComplete string `env:"DELETE_ON_COMPLETE" envDefault:"true"`
 }
@@ -118,9 +122,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	var cfg NCConfig
+	utils.LoadConfig(&cfg)
+	nc, err := utils.SetupNatsConnection(cfg.NatsConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to setup NATS Connection")
+		os.Exit(1)
+	}
+
 	if err := (&controller.BuildJobReconciler{
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
+		NatsConnection:   nc,
 		DeleteOnComplete: delOnComplete,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
