@@ -121,13 +121,13 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Info("BuildJob running event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
 
 		// Build is not done, set the status to be "running"
-		// if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
-		// 	if apierrors.IsConflict(err) {
-		// 		return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
-		// 	}
-		// 	return ctrl.Result{}, err
-		// }
-		// return ctrl.Result{}, nil
+		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+			}
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 	// }
 	if !apierrors.IsNotFound(err) {
