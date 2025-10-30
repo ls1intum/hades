@@ -47,6 +47,7 @@ type BuildJobReconciler struct {
 	client.Client
 	Scheme           *runtime.Scheme
 	DeleteOnComplete bool
+	MaxParallelism   int
 }
 
 // +kubebuilder:rbac:groups=build.hades.tum.de,resources=buildjobs;buildjobs/status;buildjobs/finalizers,verbs=get;list;watch;create;update;patch;delete
@@ -96,12 +97,20 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 			// If DeleteOnComplete is false, don't delete the CR, used for debugging
 			if !r.DeleteOnComplete {
+				// If there is available concurrency, admit one suspended job (optional)
+				_ = r.admitOneSuspendedJob(ctx, bj.Namespace)
 				return ctrl.Result{}, nil
 			}
 
 			// Delete the CR once the job is done
 			policy := metav1.DeletePropagationForeground
-			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
+			if err := r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			// Once a old job is deleted, admit one suspended job
+			_ = r.admitOneSuspendedJob(ctx, bj.Namespace)
+			return ctrl.Result{}, nil
 		}
 
 		// Build is still running, set the status to be "running"
@@ -118,9 +127,15 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// ----------------------------- 3. First-time creation -----------------------------
+	//3.0 check concurrency limit and current active jobs
+	active, err := r.countActiveJobs(ctx, bj.Namespace)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	shouldSuspend := active >= r.MaxParallelism
 
 	// 3.1 Create Kubernetes Job (initContainers = bj.Spec.Steps)
-	k8sJob := buildK8sJob(&bj, jobName, r.DeleteOnComplete)
+	k8sJob := buildK8sJob(&bj, jobName, r.DeleteOnComplete, shouldSuspend)
 
 	// 3.2 Set OwnerReference
 	if err := controllerutil.SetControllerReference(&bj, k8sJob, r.Scheme); err != nil {
@@ -128,7 +143,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 3.3 Create Job in Kubernetes as Pod
-	log.Info("Creating Job for BuildJob", "job", k8sJob.Name)
+	log.Info("Creating Job for BuildJob", "job", k8sJob.Name, "suspend", shouldSuspend)
 
 	if err := r.Create(ctx, k8sJob); err != nil {
 		if apierrors.IsAlreadyExists(err) {
@@ -140,6 +155,21 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 3.4 Update CR Status → Running
+	// 3.4.1 If over concurrency limit, set to Pending and requeue
+	if shouldSuspend {
+		if err := r.setStatusPending(ctx, req.NamespacedName,
+			fmt.Sprintf("Waiting for capacity: active=%d, limit=%d", active, r.MaxParallelism),
+		); err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+			}
+			return ctrl.Result{}, err
+		}
+		// 轻微重排队，避免忙等
+		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+	}
+
+	//3.4.2 Otherwise, set to Running
 	if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
 		if apierrors.IsConflict(err) {
 			return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
@@ -212,8 +242,33 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 	})
 }
 
+// setStatusPending marks BuildJob.Status as Pending with a message.
+// Uses optimistic concurrency (RetryOnConflict).
+func (r *BuildJobReconciler) setStatusPending(ctx context.Context, nn types.NamespacedName, msg string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &buildv1.BuildJob{}
+		if err := r.Get(ctx, nn, latest); err != nil {
+			return client.IgnoreNotFound(err)
+		}
+		if latest.DeletionTimestamp != nil {
+			return nil
+		}
+		if latest.Status.Phase == "Pending" {
+			return nil
+		}
+		base := latest.DeepCopy()
+		now := metav1.Now()
+		latest.Status.Phase = "Pending"
+		latest.Status.Message = msg
+		if latest.Status.StartTime == nil {
+			latest.Status.StartTime = &now
+		}
+		return r.Status().Patch(ctx, latest, client.MergeFrom(base))
+	})
+}
+
 // buildK8sJob creates a one-time Job with InitContainers that execute each Step in order
-func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool) *batchv1.Job {
+func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, suspend bool) *batchv1.Job {
 	sharedVolName := "shared"
 	sharedMount := corev1.VolumeMount{Name: sharedVolName, MountPath: "/shared"}
 
@@ -280,6 +335,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool) *b
 			Labels:    map[string]string{"job-id": bj.Name},
 		},
 		Spec: batchv1.JobSpec{
+			Suspend:                 &suspend,
 			TTLSecondsAfterFinished: ttl,
 			BackoffLimit:            &backoff,
 			Template: corev1.PodTemplateSpec{
@@ -322,4 +378,76 @@ func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string)
 		}
 	}
 	return false, false, ""
+}
+
+func jobDone(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string) {
+	for _, c := range k8sJob.Status.Conditions {
+		switch c.Type {
+		case batchv1.JobComplete:
+			if c.Status == corev1.ConditionTrue {
+				return true, true, c.Message
+			}
+		case batchv1.JobFailed:
+			if c.Status == corev1.ConditionTrue {
+				return true, false, c.Message
+			}
+		}
+	}
+	return false, false, ""
+}
+
+// countActiveJobs counts the number of non-completed, non-suspended Jobs in the given namespace.
+func (r *BuildJobReconciler) countActiveJobs(ctx context.Context, namespace string) (int, error) {
+	var jl batchv1.JobList
+	if err := r.List(ctx, &jl,
+		client.InNamespace(namespace),
+		client.MatchingLabels{"hades.tum.de/managed-by": "hades-operator"},
+	); err != nil {
+		return 0, err
+	}
+	active := 0
+	for _, j := range jl.Items {
+		done, _, _ := jobDone(&j)
+		if done {
+			continue
+		}
+		// Unless the job is completed or suspended, count it as active
+		if j.Spec.Suspend == nil || !*j.Spec.Suspend {
+			active++
+		}
+	}
+	return active, nil
+}
+
+// admitOneSuspendedJob unsuspends the oldest suspended Job in the given namespace, if any.
+func (r *BuildJobReconciler) admitOneSuspendedJob(ctx context.Context, namespace string) error {
+	var jl batchv1.JobList
+	if err := r.List(ctx, &jl,
+		client.InNamespace(namespace),
+		client.MatchingLabels{"hades.tum.de/managed-by": "hades-operator"},
+	); err != nil {
+		return err
+	}
+
+	var oldest *batchv1.Job
+	for i := range jl.Items {
+		j := &jl.Items[i]
+		done, _, _ := jobDone(j)
+		if done {
+			continue
+		}
+		if j.Spec.Suspend != nil && *j.Spec.Suspend {
+			if oldest == nil || j.CreationTimestamp.Before(&oldest.CreationTimestamp) {
+				oldest = j
+			}
+		}
+	}
+	if oldest == nil {
+		return nil
+	}
+
+	base := oldest.DeepCopy()
+	falseVal := false
+	oldest.Spec.Suspend = &falseVal
+	return r.Patch(ctx, oldest, client.MergeFrom(base))
 }

@@ -49,6 +49,7 @@ type NSConfig struct {
 
 type OperatorConfig struct {
 	DeleteOnComplete string `env:"DELETE_ON_COMPLETE" envDefault:"true"`
+	MaxParallelism   string `env:"MAX_PARALLELISM" envDefault:"100"`
 }
 
 func init() {
@@ -77,6 +78,10 @@ func main() {
 	utils.LoadConfig(&operatorConfig)
 
 	delOnComplete, _ := strconv.ParseBool(operatorConfig.DeleteOnComplete)
+	maxParallelism, err := strconv.Atoi(operatorConfig.MaxParallelism)
+	if err != nil || maxParallelism <= 0 {
+		maxParallelism = 100
+	}
 
 	if nsConfig.WatchNamespace != "" {
 		setupLog.Info("scoping cache to a single namespace", "namespace", nsConfig.WatchNamespace)
@@ -122,6 +127,7 @@ func main() {
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
 		DeleteOnComplete: delOnComplete,
+		MaxParallelism:   maxParallelism,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
 		os.Exit(1)
