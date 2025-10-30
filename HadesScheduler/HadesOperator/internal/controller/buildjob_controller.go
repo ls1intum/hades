@@ -42,6 +42,11 @@ import (
 
 const conflictRequeueDelay = 200 * time.Millisecond
 
+const (
+	LabelManagedBy = "hades.tum.de/managed-by"
+	LabelBuildJob  = "hades.tum.de/buildjob"
+)
+
 // BuildJobReconciler reconciles a BuildJob object
 type BuildJobReconciler struct {
 	client.Client
@@ -155,7 +160,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 3.4 Update CR Status → Running
-	// 3.4.1 If over concurrency limit, set to Pending and requeue
+	// 3.4.1 If over the concurrency limit, set to Pending and requeue
 	if shouldSuspend {
 		if err := r.setStatusPending(ctx, req.NamespacedName,
 			fmt.Sprintf("Waiting for capacity: active=%d, limit=%d", active, r.MaxParallelism),
@@ -165,7 +170,6 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 			return ctrl.Result{}, err
 		}
-		// 轻微重排队，避免忙等
 		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 	}
 
@@ -332,7 +336,9 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: bj.Namespace,
-			Labels:    map[string]string{"job-id": bj.Name},
+			Labels: map[string]string{
+				LabelManagedBy: "hades-operator",
+				LabelBuildJob:  bj.Name},
 		},
 		Spec: batchv1.JobSpec{
 			Suspend:                 &suspend,

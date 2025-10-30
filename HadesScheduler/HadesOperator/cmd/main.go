@@ -80,7 +80,8 @@ func main() {
 	delOnComplete, _ := strconv.ParseBool(operatorConfig.DeleteOnComplete)
 	maxParallelism, err := strconv.Atoi(operatorConfig.MaxParallelism)
 	if err != nil || maxParallelism <= 0 {
-		maxParallelism = 100
+		setupLog.Error(err, "invalid MAX_PARALLELISM value; must be a positive integer")
+		os.Exit(1)
 	}
 
 	if nsConfig.WatchNamespace != "" {
