@@ -23,7 +23,7 @@ func (k8sStep *K8sStep) containerSpec() []corev1.Container {
 
 	containerSpec := []corev1.Container{
 		{
-			Name:  k8sStep.step.IDstring(),
+			Name:  k8sStep.step.IDString(),
 			Image: k8sStep.step.Image,
 			VolumeMounts: []corev1.VolumeMount{
 				{
@@ -31,7 +31,7 @@ func (k8sStep *K8sStep) containerSpec() []corev1.Container {
 					MountPath: "/shared",
 				},
 				{
-					Name:      fmt.Sprintf("%s-build-script", k8sStep.step.IDstring()),
+					Name:      fmt.Sprintf("%s-build-script", k8sStep.step.IDString()),
 					MountPath: "/tmp/script",
 				},
 			},
