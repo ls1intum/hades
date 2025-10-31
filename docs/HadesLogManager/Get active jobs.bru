@@ -1,0 +1,15 @@
+meta {
+  name: Get active jobs
+  type: http
+  seq: 4
+}
+
+get {
+  url: http://localhost:8081/jobs
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
