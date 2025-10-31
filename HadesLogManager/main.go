@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,52 +17,92 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+const (
+	shutdownTimeout    = 30 * time.Second
+	natsConnectTimeout = 10 * time.Second
+)
+
+// HadesLogManagerConfig holds the configuration for the log manager
 type HadesLogManagerConfig struct {
 	NatsConfig utils.NatsConfig
 	APIPort    string `env:"API_PORT" envDefault:"8081"`
 }
 
 func main() {
-	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
+	// Setup logging
+	setupLogging()
+
+	// Load configuration
+	var cfg HadesLogManagerConfig
+	utils.LoadConfig(&cfg)
+
+	// Run main application
+	if err := run(cfg); err != nil {
+		slog.Error("Application error", "error", err)
+		os.Exit(1)
+	}
+}
+
+// setupLogging configures the logging level based on environment
+func setupLogging() {
+	if os.Getenv("DEBUG") == "true" {
 		slog.SetLogLoggerLevel(slog.LevelDebug)
 		slog.Warn("DEBUG MODE ENABLED")
 	}
+}
 
-	var cfg HadesLogManagerConfig
-	utils.LoadConfig(&cfg) // Load config from environment
-
+// run contains the main application logic with proper error handling
+func run(cfg HadesLogManagerConfig) error {
 	// Connect to NATS server
-	nc, err := nats.Connect(cfg.NatsConfig.URL)
+	nc, err := connectNATS(cfg.NatsConfig)
 	if err != nil {
-		slog.Error("Failed to connect to NATS", "error", err.Error())
-		return
+		return err
 	}
 	defer nc.Close()
 
-	slog.Info("Connected to NATS server")
-
+	// Create log consumer
 	consumer, err := logs.NewHadesLogConsumer(nc)
 	if err != nil {
-		slog.Error("Failed to create log consumer", "error", err.Error())
-		return
+		return err
 	}
 
-	// Create log aggregator for batching and API access
+	// Create context for application lifecycle
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create log aggregator
 	var aggregatorConfig AggregatorConfig
 	utils.LoadConfig(&aggregatorConfig)
-	ctx, cancel := context.WithCancel(context.Background())
 	logAggregator := NewLogAggregator(ctx, consumer, aggregatorConfig)
 
 	// Create dynamic log manager
 	dynamicManager := NewDynamicLogManager(nc, consumer, logAggregator)
-	defer cancel()
 
-	// Set up OS signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	// Set up graceful shutdown
+	return runWithGracefulShutdown(ctx, cancel, cfg, dynamicManager, logAggregator)
+}
 
-	// WaitGroup to track background goroutines
+// connectNATS establishes connection to NATS server with timeout
+func connectNATS(config utils.NatsConfig) (*nats.Conn, error) {
+	nc, err := nats.Connect(config.URL, nats.Timeout(natsConnectTimeout))
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("Connected to NATS server", "url", config.URL)
+	return nc, nil
+}
+
+// runWithGracefulShutdown starts services and handles graceful shutdown
+func runWithGracefulShutdown(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	cfg HadesLogManagerConfig,
+	dynamicManager LogManager,
+	logAggregator LogAggregator,
+) error {
 	var wg sync.WaitGroup
+	errChan := make(chan error, 2)
 
 	// Start the dynamic log manager
 	wg.Add(1)
@@ -71,39 +112,78 @@ func main() {
 
 		if err := dynamicManager.StartListening(ctx); err != nil {
 			slog.Error("Dynamic log manager failed", "error", err)
+			errChan <- err
 		}
 	}()
 
+	// Start API server
 	router := setupAPIRoute(logAggregator)
 	server := &http.Server{
-		Addr:    ":" + cfg.APIPort,
-		Handler: router,
+		Addr:              ":" + cfg.APIPort,
+		Handler:           router,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// Start API server in background
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		slog.Info("Starting API server", "port", cfg.APIPort)
 
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("API server failed", "error", err)
+			errChan <- err
 		}
 	}()
 
-	<-sigChan
-	slog.Info("Received shutdown signal, starting graceful shutdown...")
+	// Wait for shutdown signal or error
+	return waitForShutdown(ctx, cancel, server, &wg, errChan)
+}
+
+// waitForShutdown waits for OS signal or error and performs graceful shutdown
+func waitForShutdown(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	server *http.Server,
+	wg *sync.WaitGroup,
+	errChan chan error,
+) error {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	var shutdownErr error
+
+	select {
+	case sig := <-sigChan:
+		slog.Info("Received shutdown signal", "signal", sig.String())
+	case err := <-errChan:
+		slog.Error("Error during operation", "error", err)
+		shutdownErr = err
+	}
+
+	// Cancel context to stop background goroutines
+	slog.Info("Starting graceful shutdown...")
 	cancel()
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Shutdown API server with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()
+
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		slog.Error("API server shutdown failed", "error", err)
+		slog.Error("API server shutdown error", "error", err)
+		if shutdownErr == nil {
+			shutdownErr = err
+		}
 	} else {
 		slog.Info("API server shutdown complete")
 	}
 
+	// Wait for all goroutines to finish
 	wg.Wait()
+	slog.Info("Graceful shutdown complete")
+
+	return shutdownErr
 }
 
 func setupAPIRoute(aggregator LogAggregator) *gin.Engine {
