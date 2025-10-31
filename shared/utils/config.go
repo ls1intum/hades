@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -23,20 +24,19 @@ type ExecutorConfig struct {
 	CleanupSharedVolumes bool   `env:"CLEANUP" envDefault:"false"`
 }
 
+// LoadConfig loads configuration from environment variables and .env file
 func LoadConfig(cfg interface{}) {
-	log.Debug("Loading config for: ", "config", cfg)
+	slog.Debug("Loading config", "type", fmt.Sprintf("%T", cfg))
 
-	err := godotenv.Load()
-	if err != nil {
-		log.With("error", err).Warn("Error loading .env file")
+	if err := godotenv.Load(); err != nil {
+		slog.Warn("Error loading .env file", "error", err)
 	}
 
-	err = env.Parse(cfg)
-	if err != nil {
-		log.With("error", err).Error("Error parsing environment variables")
+	if err := env.Parse(cfg); err != nil {
+		slog.Error("Error parsing environment variables", "error", err)
 	}
 
-	log.Debug("Config loaded", "config", cfg)
+	slog.Debug("Config loaded successfully")
 }
 
 func ParseMemoryLimit(limit string) (int64, error) {
