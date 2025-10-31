@@ -15,7 +15,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-const NatsSubject = "hades.jobs"
+const NatsJobSubject = "hades.jobs"
 
 var priorities = []Priority{HighPriority, MediumPriority, LowPriority}
 
@@ -76,7 +76,7 @@ func NewHadesProducer(nc *nats.Conn) (*HadesProducer, error) {
 
 	s, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:       "HADES_JOBS",
-		Subjects:   []string{fmt.Sprintf("%s.*", NatsSubject)},
+		Subjects:   []string{fmt.Sprintf("%s.*", NatsJobSubject)},
 		Storage:    jetstream.FileStorage,
 		Retention:  jetstream.WorkQueuePolicy,
 		Duplicates: 1 * time.Minute, // Disallow duplicates for 1 minute
@@ -239,8 +239,8 @@ func (hc HadesConsumer) DequeueJob(ctx context.Context, processing func(payload 
 					msg_id, err := uuid.FromBytes(msg.Data())
 					if err != nil {
 						slog.Error("Failed to parse message ID", "error", err, "data", string(msg.Data()))
-						
-            if err := msg.Nak(); err != nil {
+
+						if err := msg.Nak(); err != nil {
 							slog.Error("Failed to NAK message after parse error", "error", err, "subject", msg.Subject)
 						}
 						return
