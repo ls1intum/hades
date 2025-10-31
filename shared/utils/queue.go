@@ -177,19 +177,16 @@ func (hp *HadesProducer) EnqueueJobWithPriority(ctx context.Context, queuePayloa
 		slog.Error("Failed to marshal payload", "error", err)
 		return fmt.Errorf("failed to marshal job payload: %w", err)
 	}
-
-	// Publish job reference to the stream
-	_, err = hp.js.PublishAsync(PrioritySubject(priority), queuePayload.ID[:], jetstream.WithMsgID(queuePayload.ID.String()))
-	if err != nil {
-		return fmt.Errorf("failed to publish job to stream: %w", err)
-	}
-
-	// Store full job payload in key-value store
+	// Store full job payload in key-value store first
 	_, err = hp.kv.Put(ctx, queuePayload.ID.String(), bytesPayload)
 	if err != nil {
 		return fmt.Errorf("failed to store job payload in KV store: %w", err)
 	}
-
+	// Publish job reference to the stream (use synchronous publish for guaranteed delivery)
+	_, err = hp.js.Publish(ctx, PrioritySubject(priority), queuePayload.ID[:], jetstream.WithMsgID(queuePayload.ID.String()))
+	if err != nil {
+		return fmt.Errorf("failed to publish job to stream: %w", err)
+	}
 	return nil
 }
 
