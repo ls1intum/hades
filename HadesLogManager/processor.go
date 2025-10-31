@@ -20,13 +20,12 @@ type LogAggregator interface {
 
 // NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
 // It provides thread-safe log aggregation with configurable batching, automatic log rotation,
-// and memory management.
+// and memory management. Thread-safety is provided by sync.Map for all operations.
 type NATSLogAggregator struct {
 	hlc       *buildlogs.HadesLogConsumer
 	logs      sync.Map // jobID (string) -> []buildlogs.Log
 	completed sync.Map // jobID (string) -> time.Time (completion time)
 	config    AggregatorConfig
-	mu        sync.RWMutex // Protects compound operations
 }
 
 // AggregatorConfig defines the configuration parameters for log aggregation behavior.

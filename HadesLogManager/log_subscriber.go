@@ -157,26 +157,29 @@ func (dlm *DynamicLogManager) cleanupSubscriptions(subs []*nats.Subscription) {
 //   - ctx: Parent context for creating the job-specific context
 //   - jobID: Unique identifier for the job to watch logs for
 func (dlm *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID string) {
-	dlm.mu.Lock()
-
-	// Cancel existing watcher if any
-	if watcher, exists := dlm.watchers[jobID]; exists {
-		watcher.cancel()
-	}
-
-	// Create new context for this job
+	// Create new context for this job outside the lock
 	jobCtx, cancel := context.WithCancel(ctx)
+
+	// Minimize critical section - only lock for map operations
+	dlm.mu.Lock()
+	oldWatcher, exists := dlm.watchers[jobID]
 	dlm.watchers[jobID] = watcherState{
 		ctx:    jobCtx,
 		cancel: cancel,
 	}
 	dlm.mu.Unlock()
 
+	// Cancel old watcher outside the lock to avoid potential deadlock
+	if exists {
+		oldWatcher.cancel()
+	}
+
 	// Start watching logs for this job
 	go func() {
 		defer func() {
+			// Use a more efficient cleanup check
 			dlm.mu.Lock()
-			if watcher, exists := dlm.watchers[jobID]; exists && watcher.ctx == jobCtx {
+			if watcher, ok := dlm.watchers[jobID]; ok && watcher.ctx == jobCtx {
 				delete(dlm.watchers, jobID)
 			}
 			dlm.mu.Unlock()
