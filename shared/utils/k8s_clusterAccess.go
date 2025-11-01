@@ -1,4 +1,4 @@
-package k8s
+package utils
 
 import (
 	"os"
@@ -11,12 +11,32 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// K8sConfigServiceaccount is used as configuration if used with a service account
+type K8sConfigServiceaccount struct {
+	K8sConfig
+}
+
+type K8sConfig struct {
+	// K8sNamespace is the namespace in which the jobs should be scheduled (default: hades-executor)
+	// This may change in the future to allow for multiple namespaces
+	K8sNamespace string `env:"K8S_NAMESPACE,notEmpty" envDefault:"hades-executor"`
+
+	// K8sConfigMode is used to determine how the Kubernetes client should be configured ("kubeconfig", "serviceaccount" or "operator")
+	ConfigMode string `env:"K8S_CONFIG_MODE,notEmpty" envDefault:"kubeconfig"`
+}
+
+// K8sConfigKubeconfig is used as configuration if used with a kubeconfig file
+type K8sConfigKubeconfig struct {
+	K8sConfig
+	kubeconfig string `env:"KUBECONFIG"`
+}
+
 // initializeKubeconfig initializes a Kubernetes clientset based on the provided configuration.
 // If the kubeconfig field in the provided configuration is not empty, it will be used as the path to the kubeconfig file.
 // Otherwise, the kubeconfig file will be loaded from the default location in the user's home directory.
 // The function will panic if there is an error creating the Kubernetes clientset or getting the user's home directory.
 // Returns a pointer to the created Kubernetes clientset.
-func initializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
+func InitializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
 
 	var kubeConfig *rest.Config
 
@@ -55,7 +75,7 @@ func initializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
 
 }
 
-func initializeInCluster() *kubernetes.Clientset {
+func InitializeInCluster() *kubernetes.Clientset {
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
 		slog.Error("Failed to load in-cluster config", "error", err)

@@ -6,16 +6,11 @@ import (
 
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
-type LogReader struct {
-	k8sClient *kubernetes.Clientset
-}
+func (r *BuildJobReconciler) resolvePodName(ctx context.Context, bj *buildv1.BuildJob) (string, error) {
 
-func (lr *LogReader) resolvePodName(ctx context.Context, bj *buildv1.BuildJob) (string, error) {
-
-	cli := lr.k8sClient.CoreV1().Pods(bj.Namespace)
+	cli := r.K8sClient.CoreV1().Pods(bj.Namespace)
 
 	// if we have a pod name, return
 	if p, err := cli.Get(ctx, bj.Name, metav1.GetOptions{}); err == nil {
@@ -37,3 +32,6 @@ func (lr *LogReader) resolvePodName(ctx context.Context, bj *buildv1.BuildJob) (
 
 	return "", fmt.Errorf("pod for jobID %s not found yet", bj.Name)
 }
+
+// func (r *BuildJobReconciler) readAndPublishLogs(...) error { }
+// func (r *BuildJobReconciler) publishLogs(...) error { }

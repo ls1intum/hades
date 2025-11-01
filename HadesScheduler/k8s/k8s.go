@@ -33,26 +33,6 @@ type Scheduler struct {
 	eventSub      *nats.Subscription
 }
 
-type K8sConfig struct {
-	// K8sNamespace is the namespace in which the jobs should be scheduled (default: hades-executor)
-	// This may change in the future to allow for multiple namespaces
-	K8sNamespace string `env:"K8S_NAMESPACE,notEmpty" envDefault:"hades-executor"`
-
-	// K8sConfigMode is used to determine how the Kubernetes client should be configured ("kubeconfig", "serviceaccount" or "operator")
-	ConfigMode string `env:"K8S_CONFIG_MODE,notEmpty" envDefault:"kubeconfig"`
-}
-
-// K8sConfigKubeconfig is used as configuration if used with a kubeconfig file
-type K8sConfigKubeconfig struct {
-	K8sConfig
-	kubeconfig string `env:"KUBECONFIG"`
-}
-
-// K8sConfigServiceaccount is used as configuration if used with a service account
-type K8sConfigServiceaccount struct {
-	K8sConfig
-}
-
 type BuildJobGVRConfig struct {
 	Group    string `env:"BUILDJOB_GROUP,notEmpty"    envDefault:"build.hades.tum.de"`
 	Version  string `env:"BUILDJOB_VERSION,notEmpty"  envDefault:"v1"`
@@ -71,7 +51,7 @@ func NewK8sScheduler() (*Scheduler, error) {
 	slog.Debug("Initializing Kubernetes scheduler")
 
 	// Load the user provided Kubernetes configuration
-	var k8sCfg K8sConfig
+	var k8sCfg utils.K8sConfig
 	utils.LoadConfig(&k8sCfg)
 	slog.Debug("Kubernetes config", "config", k8sCfg)
 
@@ -122,27 +102,27 @@ func (k *Scheduler) ensureEventSub() {
 }
 
 // Create a Kubernetes clientset based on the provided configuration
-func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
+func initializeClusterAccess(k8sCfg utils.K8sConfig) Scheduler {
 	switch k8sCfg.ConfigMode {
 	case "kubeconfig":
 		slog.Info("Using kubeconfig for Kubernetes access")
 
-		var K8sConfigKub K8sConfigKubeconfig
+		var K8sConfigKub utils.K8sConfigKubeconfig
 		utils.LoadConfig(&K8sConfigKub)
 
 		return Scheduler{
-			k8sClient: initializeKubeconfig(K8sConfigKub),
+			k8sClient: utils.InitializeKubeconfig(K8sConfigKub),
 			namespace: k8sCfg.K8sNamespace,
 		}
 
 	case "serviceaccount":
 		slog.Info("Using service account for Kubernetes access")
 
-		var K8sConfigSvc K8sConfigServiceaccount
+		var K8sConfigSvc utils.K8sConfigServiceaccount
 		utils.LoadConfig(&K8sConfigSvc)
 
 		return Scheduler{
-			k8sClient: initializeInCluster(),
+			k8sClient: utils.InitializeInCluster(),
 			namespace: k8sCfg.K8sNamespace,
 		}
 	case "operator":
