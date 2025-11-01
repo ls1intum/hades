@@ -80,6 +80,46 @@ type BuildJobStatus struct {
 
 	// Number of retry attempts so far
 	RetryCount int32 `json:"retryCount,omitempty"`
+
+	ContainerStatuses []ContainerStatus `json:"containerStatuses,omitempty"`
+}
+
+// ContainerState represents the runtime state of a container
+// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;Unknown
+type ContainerState string
+
+const (
+	ContainerStatePending   ContainerState = "Pending"
+	ContainerStateRunning   ContainerState = "Running"
+	ContainerStateSucceeded ContainerState = "Succeeded"
+	ContainerStateFailed    ContainerState = "Failed"
+	ContainerStateUnknown   ContainerState = "Unknown"
+)
+
+// ContainerStatus tracks the runtime state of a single container
+type ContainerStatus struct {
+	// Name of the container (e.g., "step-0", "step-1", "buildjob-finalizer")
+	Name string `json:"name"`
+
+	// StepID links back to BuildStep.ID (0 for finalizer container)
+	StepID int32 `json:"stepId"`
+
+	// State of the container
+	State ContainerState `json:"state"`
+
+	// ExitCode if the container has terminated
+	// +optional
+	ExitCode *int32 `json:"exitCode,omitempty"`
+
+	StartedAt  *metav1.Time `json:"startedAt,omitempty"`
+	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`
+
+	// Message provides additional context (error messages, reasons, etc.)
+	// +optional
+	Message string `json:"message,omitempty"`
+
+	// LogsPublished indicates whether logs have been read and published to NATS
+	LogsPublished bool `json:"logsPublished,omitempty"`
 }
 
 // +kubebuilder:object:root=true
