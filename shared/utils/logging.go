@@ -1,17 +1,20 @@
 package utils
 
 import (
-	"context"
 	"log/slog"
+	"os"
 )
+
+// setupLogging configures the logging level based on environment
+func SetupLogging() {
+	if os.Getenv("DEBUG") == "true" {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+		slog.Warn("DEBUG MODE ENABLED")
+	}
+}
 
 // Logger returns the default structured logger
 func Logger() *slog.Logger {
-	return slog.Default()
-}
-
-// LoggerWithContext returns a logger with context values attached
-func LoggerWithContext(ctx context.Context) *slog.Logger {
 	return slog.Default()
 }
 

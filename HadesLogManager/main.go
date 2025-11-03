@@ -30,7 +30,7 @@ type HadesLogManagerConfig struct {
 
 func main() {
 	// Setup logging
-	setupLogging()
+	utils.SetupLogging()
 
 	// Load configuration
 	var cfg HadesLogManagerConfig
@@ -40,14 +40,6 @@ func main() {
 	if err := run(cfg); err != nil {
 		slog.Error("Application error", "error", err)
 		os.Exit(1)
-	}
-}
-
-// setupLogging configures the logging level based on environment
-func setupLogging() {
-	if os.Getenv("DEBUG") == "true" {
-		slog.SetLogLoggerLevel(slog.LevelDebug)
-		slog.Warn("DEBUG MODE ENABLED")
 	}
 }
 
