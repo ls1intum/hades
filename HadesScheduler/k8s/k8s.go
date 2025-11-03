@@ -18,7 +18,6 @@ import (
 )
 
 type Scheduler struct {
-	// TODO: This may be problematic - We need to clarify how to access the cluster with the service account and find a solution that is compatible with both modes
 	k8sClient   *kubernetes.Clientset
 	dynClient   dynamic.Interface
 	namespace   string
