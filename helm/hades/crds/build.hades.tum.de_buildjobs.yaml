@@ -17,7 +17,7 @@ spec:
     - name: v1
       schema:
         openAPIV3Schema:
-          description: BuildJob is the Schema for the buildjobs API.
+          description: BuildJob is the CRD Schema for the buildjobs API used by the Hades under operator mode.
           properties:
             apiVersion:
               description: |-
@@ -39,38 +39,46 @@ spec:
             spec:
               properties:
                 maxRetries:
-                  description: (Optional) Number of times to retry the job on failure
+                  description: |-
+                    Number of times to retry the job on failure. It is recommend to set the value to be 1, 
+                    as the Hades is a CI system and failure indicates that the submitted Job didn't pass the tests,
+                    Therefore retrying more than once is not useful in most scenarios.
                   format: int32
                   minimum: 0
                   type: integer
                 metadata:
                   additionalProperties:
                     type: string
-                  description: Additional metadata (e.g., course ID, submitter, language,
-                    etc.)
+                  description: |-
+                    Additional metadata linked to each buildjob
                   type: object
                 name:
-                  description: Job name, useful for debugging
+                  description: |-
+                    Name of the BuildJob
                   type: string
                 steps:
-                  description: Build steps to be executed sequentially
+                  description: |-
+                    List of steps to execute as part of the BuildJob
                   items:
                     properties:
                       cpuLimit:
                         anyOf:
                           - type: integer
                           - type: string
-                        description: Resource limits (if empty, defaults will be used
-                          from LimitRange/Quota)
+                        description: |-
+                            CPU limit for the step
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                       id:
-                        description: Step ID (must be unique and start from 1)
+                        description: |-
+                            Unique ID of the step, starting from 1 and incrementing by 1 for each
+                            subsequent step
                         format: int32
                         minimum: 1
                         type: integer
                       image:
-                        description: Execution image (required)
+                        description: |-
+                            Container image to use for this step
                         minLength: 1
                         type: string
                       memoryLimit:
@@ -82,14 +90,16 @@ spec:
                       metadata:
                         additionalProperties:
                           type: string
-                        description: Additional metadata like environment variables,
-                          credentials, etc.
+                        description: |-
+                            Additional metadata for the step, like environment variables to be used for the container
                         type: object
                       name:
-                        description: Step name
+                        description: |-
+                            Name of the step
                         type: string
                       script:
-                        description: Script or command to run inside the container
+                        description: |-
+                            (Optional) Script to execute in the container.
                         type: string
                     required:
                       - id
@@ -98,8 +108,8 @@ spec:
                   minItems: 1
                   type: array
                 timeoutSeconds:
-                  description: (Optional) Timeout for the whole job; if exceeded, the
-                    job is marked as failed
+                  description: |- 
+                    (Optional) Timeout for the whole job; if exceeded, the job is marked as failed
                   format: int64
                   minimum: 1
                   type: integer
@@ -112,13 +122,15 @@ spec:
                   format: date-time
                   type: string
                 currentStep:
-                  description: ID of the currently executing step
+                  description: |- 
+                    ID of the currently executing step
                   format: int32
                   type: integer
                 message:
                   type: string
                 phase:
-                  description: Phase of the BuildJob lifecycle
+                  description: |- 
+                    Phase of the BuildJob lifecycle
                   type: string
                   enum:
                     - Pending
@@ -126,11 +138,12 @@ spec:
                     - Succeeded
                     - Failed
                 podName:
-                  description: Name of the Pod/Job created by the Operator, helpful
-                    for troubleshooting
+                  description: |-
+                    Name of the Pod/Job created by the Operator
                   type: string
                 retryCount:
-                  description: Number of retry attempts so far
+                  description: |-
+                    Number of retry attempts so far
                   format: int32
                   type: integer
                 startTime:
