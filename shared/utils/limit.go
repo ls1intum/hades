@@ -1,16 +1,16 @@
 package utils
 
-func FindLimit(x, y int) int {
-	if x == 0 {
+import "cmp"
+
+func FindLimit[T cmp.Ordered](x, y T) T {
+	var zero T
+	if x == zero {
 		return y
 	}
-	if y == 0 {
+	if y == zero {
 		return x
 	}
-	if x < y {
-		return x
-	}
-	return y
+	return min(x, y)
 }
 
 // Gets two memory limits and returns the smaller one as number of bytes
