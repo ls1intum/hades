@@ -1,7 +1,13 @@
 package utils
 
-import "cmp"
+import (
+	"cmp"
+	"log/slog"
+)
 
+// FindLimit returns the minimum of two ordered values, treating zero values as "no limit".
+// If either value is zero, it returns the non-zero value.
+// If both are non-zero, it returns the minimum.
 func FindLimit[T cmp.Ordered](x, y T) T {
 	var zero T
 	if x == zero {
@@ -13,28 +19,29 @@ func FindLimit[T cmp.Ordered](x, y T) T {
 	return min(x, y)
 }
 
-// Gets two memory limits and returns the smaller one as number of bytes
-func FindMemoryLimit(x, y string) int {
-	// Check the global RAM Limit
-	var first_ram_limit int64
+// FindMemoryLimit parses two memory limit strings and returns the effective limit in bytes.
+// It returns the smaller of the two limits, treating empty strings or parse errors as "no limit".
+// This is useful for determining the effective memory limit when both global and local limits exist.
+func FindMemoryLimit(x, y string) int64 {
+	var firstLimit int64
 	if x != "" {
 		bytes, err := ParseMemoryLimit(x)
 		if err != nil {
-			log.With("error", err).Error("Failed to parse global RAM limit", "limit", x)
-			first_ram_limit = 0
+			slog.With("error", err).Error("Failed to parse first memory limit", "limit", x)
 		} else {
-			first_ram_limit = bytes
+			firstLimit = bytes
 		}
 	}
-	var second_ram_limit int64
+
+	var secondLimit int64
 	if y != "" {
 		bytes, err := ParseMemoryLimit(y)
 		if err != nil {
-			log.With("error", err).Error("Failed to parse step RAM limit", "limit", y)
-			second_ram_limit = 0
+			slog.With("error", err).Error("Failed to parse second memory limit", "limit", y)
 		} else {
-			second_ram_limit = bytes
+			secondLimit = bytes
 		}
 	}
-	return FindLimit(int(second_ram_limit), int(first_ram_limit))
+
+	return FindLimit(firstLimit, secondLimit)
 }
