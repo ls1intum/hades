@@ -81,7 +81,7 @@ func (k8sJob K8sJob) configMapSpec() *corev1.ConfigMap {
 
 	for _, step := range k8sJob.Steps {
 		slog.Debug("Creating ConfigMap Data item for step", "id", step.ID)
-		configMap.Data[step.IDstring()] = step.Script
+		configMap.Data[step.IDString()] = step.Script
 	}
 
 	return &configMap
@@ -103,7 +103,7 @@ func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 	// Create a Volume for each build step containing the build script. The build script is stored in a ConfigMap.
 	for _, step := range k.Steps {
 		volumeSpec = append(volumeSpec, corev1.Volume{
-			Name: fmt.Sprintf("%s-build-script", step.IDstring()), // this is the name of the volume that needs to be mounted in a step container
+			Name: fmt.Sprintf("%s-build-script", step.IDString()), // this is the name of the volume that needs to be mounted in a step container
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -111,7 +111,7 @@ func (k K8sJob) volumeSpec(cm corev1.ConfigMap) []corev1.Volume {
 					},
 					Items: []corev1.KeyToPath{
 						{
-							Key:  step.IDstring(),
+							Key:  step.IDString(),
 							Path: "buildscript.sh",
 							Mode: &mode,
 						},

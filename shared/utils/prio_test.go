@@ -6,23 +6,45 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPrioFromInt(t *testing.T) {
+func TestPriorityFromInt(t *testing.T) {
 	tests := []struct {
+		name     string
 		priority int
 		expected Priority
 	}{
-		{10, HighPriority},
-		{5, HighPriority},
-		{4, HighPriority},
-		{3, HighPriority},
-		{2, MediumPriority},
-		{1, LowPriority},
-		{0, LowPriority},
-		{-1, LowPriority},
+		{"very high priority", 10, HighPriority},
+		{"high priority upper bound", 5, HighPriority},
+		{"high priority lower bound plus one", 4, HighPriority},
+		{"high priority lower bound", 3, HighPriority},
+		{"medium priority", 2, MediumPriority},
+		{"low priority upper bound", 1, LowPriority},
+		{"zero priority", 0, LowPriority},
+		{"negative priority", -1, LowPriority},
 	}
 
-	for _, test := range tests {
-		got := PrioFromInt(test.priority)
-		assert.Equal(t, test.expected, got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PriorityFromInt(tt.priority)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestPrioritySubject(t *testing.T) {
+	tests := []struct {
+		name     string
+		priority Priority
+		expected string
+	}{
+		{"high priority subject", HighPriority, "hades.jobs.high"},
+		{"medium priority subject", MediumPriority, "hades.jobs.medium"},
+		{"low priority subject", LowPriority, "hades.jobs.low"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PrioritySubject(tt.priority)
+			assert.Equal(t, tt.expected, got)
+		})
 	}
 }
