@@ -107,6 +107,7 @@ spec:
             - steps
             type: object
           status:
+            type: object
             properties:
               completionTime:
                 format: date-time
@@ -136,7 +137,32 @@ spec:
               startTime:
                 format: date-time
                 type: string
-            type: object
+              containerStatuses:
+                description: ContainerStatuses tracks the runtime state of each container
+                items:
+                  description: ContainerStatus tracks the runtime state of a single container
+                  properties:
+                    name:
+                      type: string
+                    stepId:
+                      format: int32
+                      type: integer
+                    state:
+                      enum:
+                      - Pending
+                      - Running
+                      - Succeeded
+                      - Failed
+                      - Unknown
+                      type: string
+                    logsPublished:
+                      type: boolean
+                  required:
+                  - name
+                  - state
+                  - stepId
+                  type: object
+                type: array
         type: object
     served: true
     storage: true

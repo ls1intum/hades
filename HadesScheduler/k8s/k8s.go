@@ -195,10 +195,10 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 		k.activeStreams.Store(buildJobName, cancel)
 
 		logreader := PodLogReader{
-			k8sClient: k.k8sClient,
-			namespace: k.namespace,
-			jobID:     buildJobName,
-			nc:        k.nc,
+			K8sClient: k.k8sClient,
+			Namespace: k.namespace,
+			JobID:     buildJobName,
+			Nc:        k.nc,
 		}
 
 		slog.Info("Starting log reader", "buildJob", buildJobName)

@@ -107,17 +107,6 @@ type ContainerStatus struct {
 	// State of the container
 	State ContainerState `json:"state"`
 
-	// ExitCode if the container has terminated
-	// +optional
-	ExitCode *int32 `json:"exitCode,omitempty"`
-
-	StartedAt  *metav1.Time `json:"startedAt,omitempty"`
-	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`
-
-	// Message provides additional context (error messages, reasons, etc.)
-	// +optional
-	Message string `json:"message,omitempty"`
-
 	// LogsPublished indicates whether logs have been read and published to NATS
 	LogsPublished bool `json:"logsPublished,omitempty"`
 }

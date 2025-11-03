@@ -18,21 +18,21 @@ import (
 )
 
 type PodLogReader struct {
-	k8sClient *kubernetes.Clientset
-	namespace string
-	jobID     string
-	nc        *nats.Conn
+	K8sClient *kubernetes.Clientset
+	Namespace string
+	JobID     string
+	Nc        *nats.Conn
 }
 
 func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
-	if pl.k8sClient == nil {
+	if pl.K8sClient == nil {
 		return fmt.Errorf("nil k8sClient in PodLogReader: operator mode must also initialize typed clientset")
 	}
 
-	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
+	cli := pl.K8sClient.CoreV1().Pods(pl.Namespace)
 
 	// Resolve pod name using jobID
-	podName, err := pl.resolvePodName(ctx)
+	podName, err := pl.ResolvePodName(ctx)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 	for _, initContainer := range p.Spec.InitContainers {
 		if err := pl.waitForContainer(ctx, podName, initContainer.Name, true); err != nil {
 			if errors.Is(err, context.Canceled) {
-				slog.Debug("Init container processing cancelled", "job_id", pl.jobID)
+				slog.Debug("Init container processing cancelled", "job_id", pl.JobID)
 				return ctx.Err()
 			}
 			return err
@@ -58,7 +58,7 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 	for _, container := range p.Spec.Containers {
 		if err := pl.waitForContainer(ctx, podName, container.Name, false); err != nil {
 			if errors.Is(err, context.Canceled) {
-				slog.Debug("Container processing cancelled", "job_id", pl.jobID)
+				slog.Debug("Container processing cancelled", "job_id", pl.JobID)
 				return ctx.Err()
 			}
 			return err
@@ -71,7 +71,7 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, containerName string, isInitContainer bool) error {
 	var exitCode int32
 
-	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
+	cli := pl.K8sClient.CoreV1().Pods(pl.Namespace)
 
 	err := wait.PollUntilContextTimeout(ctx, 3*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
 		p, err := cli.Get(ctx, podName, metav1.GetOptions{})
@@ -103,7 +103,7 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, con
 	if err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
 			slog.Debug("wait canceled (expected on job completion)",
-				slog.String("job_id", pl.jobID),
+				slog.String("job_id", pl.JobID),
 				slog.String("pod_name", podName),
 				slog.String("container_name", containerName),
 			)
@@ -113,14 +113,14 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, con
 	}
 
 	slog.Debug("Container completed",
-		slog.String("job_id", pl.jobID),
+		slog.String("job_id", pl.JobID),
 		slog.String("pod_name", podName),
 		slog.String("container_name", containerName),
 		slog.Int("exit_code", int(exitCode)),
 	)
 
 	// Process logs upon container completion
-	if err := pl.processContainerLogs(ctx, podName, containerName); err != nil {
+	if err := pl.ProcessContainerLogs(ctx, podName, containerName); err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
 			slog.Debug("processContainerLogs canceled (expected)", "pod_name", podName, "container_name", containerName)
 			return context.Canceled
@@ -136,23 +136,26 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, con
 	return nil
 }
 
-func (pl PodLogReader) processContainerLogs(ctx context.Context, podName string, containerName string) error {
+func (pl PodLogReader) ProcessContainerLogs(ctx context.Context, podName string, containerName string) error {
+	slog.Info("Getting container logs", "pod", podName, "container", containerName)
 	stdout, stderr, err := pl.getContainerLogs(ctx, podName, containerName)
 	if err != nil {
 		return fmt.Errorf("getting container logs: %w", err)
 	}
 
+	slog.Info("Parsing container logs", "pod", podName, "container", containerName)
 	buildJobLog, err := log.ParseContainerLogs(stdout, stderr, containerName)
 	if err != nil {
 		return fmt.Errorf("parsing container logs: %w", err)
 	}
-	buildJobLog.JobID = pl.jobID
-	publisher := log.NewNATSPublisher(pl.nc)
+	buildJobLog.JobID = pl.JobID
+	publisher := log.NewNATSPublisher(pl.Nc)
 
-	if ctx.Err() == context.Canceled {
-		return context.Canceled
-	}
+	// if ctx.Err() == context.Canceled {
+	// 	return context.Canceled
+	// }
 
+	slog.Info("Publishing logs", "pod", podName, "container", containerName)
 	return publisher.PublishLogs(buildJobLog)
 }
 
@@ -164,7 +167,7 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, con
 		Timestamps: true,
 	}
 
-	req := pl.k8sClient.CoreV1().Pods(pl.namespace).GetLogs(podName, &podLogOpts)
+	req := pl.K8sClient.CoreV1().Pods(pl.Namespace).GetLogs(podName, &podLogOpts)
 	logReader, err := req.Stream(ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
@@ -191,16 +194,16 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, con
 	return allLogs, new(bytes.Buffer), nil
 }
 
-func (pl PodLogReader) resolvePodName(ctx context.Context) (string, error) {
-	cli := pl.k8sClient.CoreV1().Pods(pl.namespace)
+func (pl PodLogReader) ResolvePodName(ctx context.Context) (string, error) {
+	cli := pl.K8sClient.CoreV1().Pods(pl.Namespace)
 
 	// if we have a pod name, return
-	if p, err := cli.Get(ctx, pl.jobID, metav1.GetOptions{}); err == nil {
+	if p, err := cli.Get(ctx, pl.JobID, metav1.GetOptions{}); err == nil {
 		return p.Name, nil
 	}
 
 	// else: find the pod name by looking at the job name
-	jobName := fmt.Sprintf("buildjob-%s", pl.jobID)
+	jobName := fmt.Sprintf("buildjob-%s", pl.JobID)
 	if lst, err := cli.List(ctx, metav1.ListOptions{
 		LabelSelector: "job-name=" + jobName,
 	}); err == nil {
@@ -212,5 +215,5 @@ func (pl PodLogReader) resolvePodName(ctx context.Context) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("pod for jobID %s not found yet", pl.jobID)
+	return "", fmt.Errorf("pod for jobID %s not found yet", pl.JobID)
 }

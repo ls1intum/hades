@@ -68,10 +68,10 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 	}
 
 	logreader := PodLogReader{
-		k8sClient: k8sJob.k8sClient,
-		namespace: jobPodSpec.Namespace,
-		jobID:     k8sJob.ID.String(),
-		nc:        k8sJob.nc,
+		K8sClient: k8sJob.k8sClient,
+		Namespace: jobPodSpec.Namespace,
+		JobID:     k8sJob.ID.String(),
+		Nc:        k8sJob.nc,
 	}
 
 	err = logreader.waitForAllContainers(ctx)
