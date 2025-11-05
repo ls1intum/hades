@@ -21,6 +21,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// BuildJobSpec NOTE: BuildJobSpec is intentionally defined separately from the types in shared/payload.
+// While it may duplicate some fields from the payload definitions, we cannot directly
+// use or combine them due to Kubebuilder requirements:
+//  1. CRD types must be defined within this API package (api/v1) for controller-gen.
+//  2. This struct requires Kubebuilder markers (e.g., +kubebuilder:validation:...)
+//     which would improperly pollute the generic 'shared/payload' package.
+//
+// **IMPORTANT**: If the API in 'shared/payload/payload.go' changes,
+// developers must manually review and update BuildJobSpec here to ensure consistency.
 type BuildJobSpec struct {
 	// Job name, useful for debugging
 	Name string `json:"name"`
