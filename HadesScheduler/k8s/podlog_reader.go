@@ -24,6 +24,8 @@ type PodLogReader struct {
 	Nc        *nats.Conn
 }
 
+// Waits for all containers in the pod to complete and processes their logs
+// Currently used in Scheduler mode only
 func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 	if pl.K8sClient == nil {
 		return fmt.Errorf("nil k8sClient in PodLogReader: operator mode must also initialize typed clientset")
@@ -54,7 +56,7 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 		}
 	}
 
-	// Wait for regular container (dummy)
+	// Wait for dummy container
 	for _, container := range p.Spec.Containers {
 		if err := pl.waitForContainer(ctx, podName, container.Name, false); err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -68,6 +70,8 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 	return nil
 }
 
+// Helper function for waitForAllContainers
+// Waits for a specific container to complete by polling and processes its logs
 func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, containerName string, isInitContainer bool) error {
 	var exitCode int32
 
@@ -136,6 +140,9 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, con
 	return nil
 }
 
+// Processes logs for a specific container in the pod
+// Fetches logs, parses them, and publishes to NATS
+// Used in both Scheduler and Operator modes
 func (pl PodLogReader) ProcessContainerLogs(ctx context.Context, podName string, containerName string) error {
 	slog.Info("Getting container logs", "pod", podName, "container", containerName)
 	stdout, stderr, err := pl.getContainerLogs(ctx, podName, containerName)
@@ -151,14 +158,12 @@ func (pl PodLogReader) ProcessContainerLogs(ctx context.Context, podName string,
 	buildJobLog.JobID = pl.JobID
 	publisher := log.NewNATSPublisher(pl.Nc)
 
-	// if ctx.Err() == context.Canceled {
-	// 	return context.Canceled
-	// }
-
 	slog.Info("Publishing logs", "pod", podName, "container", containerName)
 	return publisher.PublishLogs(buildJobLog)
 }
 
+// Helper function for ProcessContainerLogs
+// Fetches logs for a specific container in the pod
 func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, containerName string) (*bytes.Buffer, *bytes.Buffer, error) {
 	// get logs of <container name>
 	podLogOpts := corev1.PodLogOptions{
@@ -190,10 +195,12 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, con
 	}
 
 	// For K8s, you might need to separate stdout/stderr differently
-	// or just treat all logs as stdout
+	// Currently all logs are treated as stdout for simplicity
 	return allLogs, new(bytes.Buffer), nil
 }
 
+// Resolves the pod name for the given JobID
+// Used in both Scheduler and Operator modes
 func (pl PodLogReader) ResolvePodName(ctx context.Context) (string, error) {
 	cli := pl.K8sClient.CoreV1().Pods(pl.Namespace)
 

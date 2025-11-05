@@ -454,7 +454,7 @@ func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string)
 	return false, false, ""
 }
 
-func (r *BuildJobReconciler) publishBuildJobEvent(ctx context.Context, buildJobName, namespace, status string, data map[string]any) {
+func (r *BuildJobReconciler) publishBuildJobEvent(ctx context.Context, buildJobName, status string, data map[string]any) {
 	if r.NatsConnection == nil {
 		slog.Error("Cannot publish BuildJob Event: nil NATS Connection", "buildJobName", buildJobName)
 		return
@@ -462,7 +462,6 @@ func (r *BuildJobReconciler) publishBuildJobEvent(ctx context.Context, buildJobN
 
 	event := map[string]any{
 		"buildJob":  buildJobName,
-		"namespace": namespace,
 		"status":    status,
 		"timestamp": time.Now(),
 	}
