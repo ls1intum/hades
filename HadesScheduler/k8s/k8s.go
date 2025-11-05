@@ -23,14 +23,13 @@ import (
 
 type Scheduler struct {
 	// TODO: This may be problematic - We need to clarify how to access the cluster with the service account and find a solution that is compatible with both modes
-	k8sClient     *kubernetes.Clientset
-	dynClient     dynamic.Interface
-	namespace     string
-	useOperator   bool
-	nc            *nats.Conn
-	activeStreams sync.Map // buildJobName -> cancel function
-	subOnce       sync.Once
-	eventSub      *nats.Subscription
+	k8sClient   *kubernetes.Clientset
+	dynClient   dynamic.Interface
+	namespace   string
+	useOperator bool
+	nc          *nats.Conn
+	subOnce     sync.Once
+	eventSub    *nats.Subscription
 }
 
 type BuildJobGVRConfig struct {
@@ -187,36 +186,8 @@ func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
 
 	switch status {
 	case "pod_running":
-		if _, exists := k.activeStreams.Load(buildJobName); exists {
-			return
-		}
-
-		ctx, cancel := context.WithCancel(context.Background())
-		k.activeStreams.Store(buildJobName, cancel)
-
-		logreader := PodLogReader{
-			K8sClient: k.k8sClient,
-			Namespace: k.namespace,
-			JobID:     buildJobName,
-			Nc:        k.nc,
-		}
-
-		slog.Info("Starting log reader", "buildJob", buildJobName)
-		go func() {
-			defer k.activeStreams.Delete(buildJobName)
-			if err := logreader.waitForAllContainers(ctx); err != nil {
-				slog.Error("Log reader exited with error", "buildJob", buildJobName, "error", err)
-			}
-		}()
+		log.Printf("BuildJob %s pod is running", buildJobName)
 	case "completed":
-		// Stop log streaming if it's active
-		if cancel, ok := k.activeStreams.LoadAndDelete(buildJobName); ok {
-			if cf, ok := cancel.(context.CancelFunc); ok {
-				cf()
-			} else {
-				log.Printf("Expected context.CancelFunc in activeStreams for %s, got %T", buildJobName, cancel)
-			}
-		}
 		log.Printf("BuildJob %s completed, succeeded %v", buildJobName, event["succeeded"])
 	}
 }
