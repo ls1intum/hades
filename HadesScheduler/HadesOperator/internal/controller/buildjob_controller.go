@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,9 +31,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -56,8 +54,6 @@ type BuildJobReconciler struct {
 // Reconcile ensures the cluster state matches the desired state of a BuildJob.
 // It creates/owns a batch Job, updates BuildJob status, and cleans up on completion.
 func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
 	// ----------------------------- 0. Retrieve the BuildJob instance -----------------------------
 	var bj buildv1.BuildJob
 	if err := r.Get(ctx, req.NamespacedName, &bj); err != nil {
@@ -128,13 +124,13 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 3.3 Create Job in Kubernetes as Pod
-	log.Info("Creating Job for BuildJob", "job", k8sJob.Name)
+	slog.Info("Creating Job for BuildJob", "job", k8sJob.Name)
 
 	if err := r.Create(ctx, k8sJob); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			slog.Debug("Job already exists, ", "job", k8sJob.Name)
 		} else {
-			log.Error(err, "cannot create Job")
+			slog.Error("cannot create Job", "error", err)
 			return ctrl.Result{}, err
 		}
 	}
@@ -154,7 +150,6 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 // setStatusRunning sets BuildJob.Status to "Running", records StartTime and PodName.
 // Uses optimistic concurrency (RetryOnConflict).
 func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.NamespacedName, jobName string) error {
-	logger := log.FromContext(ctx)
 
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		latest := &buildv1.BuildJob{}
@@ -175,7 +170,7 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.Name
 		latest.Status.PodName = jobName
 
 		if err := r.Status().Patch(ctx, latest, client.MergeFrom(base)); err != nil {
-			logger.Error(err, "failed to patch BuildJob status to Running")
+			slog.Error("cannot create Job", "error", err)
 			return err
 		}
 		return nil
