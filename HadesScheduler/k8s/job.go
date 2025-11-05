@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/ls1intum/hades/shared/payload"
+	"github.com/nats-io/nats.go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -17,6 +18,7 @@ type K8sJob struct {
 	k8sClient        *kubernetes.Clientset
 	namespace        string
 	sharedVolumeName string
+	nc               *nats.Conn
 }
 
 // Schedules a Hades Job on the Kubernetes cluster
@@ -63,6 +65,22 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 	if err != nil {
 		slog.With("error", err).Error("Failed to create Pod")
 		return err
+	}
+
+	logreader := PodLogReader{
+		K8sClient: k8sJob.k8sClient,
+		Namespace: jobPodSpec.Namespace,
+		JobID:     k8sJob.ID.String(),
+		Nc:        k8sJob.nc,
+	}
+
+	err = logreader.waitForAllContainers(ctx)
+
+	if err != nil {
+		slog.Error("Failed to write container logs to NATS", slog.Any("error", err), slog.Any("PodSpec", jobPodSpec.Name))
+		return err
+	} else {
+		slog.Debug("Container logs written to NATS", slog.Any("job id", jobPodSpec.Name))
 	}
 
 	return nil

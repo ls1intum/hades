@@ -18,19 +18,23 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 	"time"
 
+	"github.com/ls1intum/hades/hadesScheduler/k8s"
+	"github.com/nats-io/nats.go"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 
@@ -46,6 +50,8 @@ const conflictRequeueDelay = 200 * time.Millisecond
 type BuildJobReconciler struct {
 	client.Client
 	Scheme           *runtime.Scheme
+	K8sClient        *kubernetes.Clientset
+	NatsConnection   *nats.Conn
 	DeleteOnComplete bool
 }
 
@@ -56,7 +62,6 @@ type BuildJobReconciler struct {
 // Reconcile ensures the cluster state matches the desired state of a BuildJob.
 // It creates/owns a batch Job, updates BuildJob status, and cleans up on completion.
 func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
 
 	// ----------------------------- 0. Retrieve the BuildJob instance -----------------------------
 	var bj buildv1.BuildJob
@@ -84,9 +89,21 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	var existingJob batchv1.Job
 	err := r.Get(ctx, client.ObjectKey{Namespace: bj.Namespace, Name: jobName}, &existingJob)
 	if err == nil {
+		// Job already exists check the status of the containers
+		if err := r.updateContainerStatuses(ctx, &bj); err != nil {
+			slog.Error("Failed to update container statuses", "error", err)
+		}
+
 		// Job already exists, check the status of the job
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
+			// Job is done, publish "completed" event
+			// r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "completed", map[string]any{
+			// 	"succeeded": succeeded,
+			// 	"message":   msg,
+			// })
+			// slog.Info("BuildJob completed event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
+
 			if err := r.setStatusCompleted(ctx, req.NamespacedName, succeeded, msg); err != nil {
 				if apierrors.IsConflict(err) {
 					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
@@ -104,7 +121,12 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
 		}
 
-		// Build is still running, set the status to be "running"
+		// if bj.Status.Phase != "Running" {
+		// Job starting to run - publish event
+		// r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "pod_running", map[string]any{})
+		// slog.Info("BuildJob running event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
+
+		// Build is not done, set the status to be "running"
 		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
 			if apierrors.IsConflict(err) {
 				return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
@@ -128,15 +150,20 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 3.3 Create Job in Kubernetes as Pod
-	log.Info("Creating Job for BuildJob", "job", k8sJob.Name)
+	slog.Info("Creating Job for BuildJob", "job", k8sJob.Name)
 
 	if err := r.Create(ctx, k8sJob); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			slog.Debug("Job already exists, ", "job", k8sJob.Name)
 		} else {
-			log.Error(err, "cannot create Job")
+			slog.Error("cannot create Job", "error", err)
 			return ctrl.Result{}, err
 		}
+	}
+
+	// Initialize container statuses
+	if err := r.initializeContainerStatuses(ctx, &bj); err != nil {
+		slog.Error("Failed to initialize container statuses", "error", err)
 	}
 
 	// 3.4 Update CR Status → Running
@@ -147,15 +174,117 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	// r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "pod_running", map[string]any{})
+	// slog.Info("BuildJob running event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
+
 	// Do not requeue; later Job status changes will re-trigger reconciliation
 	return ctrl.Result{}, nil
+}
+
+// initializeContainerStatuses creates Pending status entries for all expected containers
+func (r *BuildJobReconciler) initializeContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) error {
+	slog.Info("Initializing container statuses for BuildJob", "buildJob", bj.Name)
+	statuses := make([]buildv1.ContainerStatus, 0, len(bj.Spec.Steps)+1)
+
+	// Initialize status for each step (init containers)
+	for _, step := range bj.Spec.Steps {
+		statuses = append(statuses, buildv1.ContainerStatus{
+			Name:          fmt.Sprintf("step-%d", step.ID),
+			StepID:        step.ID,
+			State:         buildv1.ContainerStatePending,
+			LogsPublished: false,
+		})
+	}
+
+	// Initialize status for finalizer container
+	statuses = append(statuses, buildv1.ContainerStatus{
+		Name:          "buildjob-finalizer",
+		StepID:        0, // 0 indicates it's not a step
+		State:         buildv1.ContainerStatePending,
+		LogsPublished: false,
+	})
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var fresh buildv1.BuildJob
+		if err := r.Get(ctx, client.ObjectKeyFromObject(bj), &fresh); err != nil {
+			return err
+		}
+		fresh.Status.ContainerStatuses = statuses
+		currentStep := int32(1)
+		fresh.Status.CurrentStep = &currentStep
+		return r.Status().Update(ctx, &fresh)
+	})
+}
+
+func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) error {
+	slog.Info("Updating container statuses for BuildJob", "buildJob", bj.Name)
+
+	pl := k8s.PodLogReader{
+		K8sClient: r.K8sClient,
+		Namespace: bj.Namespace,
+		JobID:     bj.Name,
+		Nc:        r.NatsConnection,
+	}
+
+	podName, err := pl.ResolvePodName(ctx)
+	if err != nil {
+		slog.Error("Failed to resolve pod name", "error", err)
+		return err
+	}
+
+	slog.Info("============DEBUG============")
+	slog.Info("cached podName", "podName", bj.Status.PodName)
+	slog.Info("resolved podName", "podName", podName)
+	slog.Info("============DEBUG============")
+
+	p, err := r.K8sClient.CoreV1().Pods(bj.Namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var fresh buildv1.BuildJob
+		if err := r.Get(ctx, client.ObjectKeyFromObject(bj), &fresh); err != nil {
+			return err
+		}
+
+		// Build map of current statuses from container status slice for easy lookup
+		statusMap := make(map[string]buildv1.ContainerStatus)
+		for _, cs := range fresh.Status.ContainerStatuses {
+			statusMap[cs.Name] = cs
+		}
+
+		// Update init container statuses (build steps)
+		for _, initCS := range p.Status.InitContainerStatuses {
+			statusMap[initCS.Name] = r.updateContainerStateMap(ctx, bj, p, statusMap, initCS)
+		}
+
+		// Update regular container statuses (finalizer)
+		for _, containerCS := range p.Status.ContainerStatuses {
+			statusMap[containerCS.Name] = r.updateContainerStateMap(ctx, bj, p, statusMap, containerCS)
+		}
+
+		// Determine current step
+		currentStep := r.determineCurrentStep(p, len(bj.Spec.Steps))
+
+		// Convert map back to slice
+		newStatuses := make([]buildv1.ContainerStatus, 0, len(statusMap))
+		for _, cs := range statusMap {
+			newStatuses = append(newStatuses, cs)
+		}
+
+		// Update BuildJob status
+
+		fresh.Status.ContainerStatuses = newStatuses
+		fresh.Status.CurrentStep = &currentStep
+		fresh.Status.PodName = p.Name
+		return r.Status().Update(ctx, &fresh)
+	})
 }
 
 // setStatusRunning sets BuildJob.Status to "Running", records StartTime and PodName.
 // Uses optimistic concurrency (RetryOnConflict).
 func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.NamespacedName, jobName string) error {
-	logger := log.FromContext(ctx)
-
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		latest := &buildv1.BuildJob{}
 		if err := r.Get(ctx, nn, latest); err != nil {
@@ -175,7 +304,7 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.Name
 		latest.Status.PodName = jobName
 
 		if err := r.Status().Patch(ctx, latest, client.MergeFrom(base)); err != nil {
-			logger.Error(err, "failed to patch BuildJob status to Running")
+			slog.Error("Failed to patch BuildJob status to Running", "error", err)
 			return err
 		}
 		return nil
@@ -322,4 +451,28 @@ func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string)
 		}
 	}
 	return false, false, ""
+}
+
+func (r *BuildJobReconciler) publishBuildJobEvent(ctx context.Context, buildJobName, status string, data map[string]any) {
+	if r.NatsConnection == nil {
+		slog.Error("Cannot publish BuildJob Event: nil NATS Connection", "buildJobName", buildJobName)
+		return
+	}
+
+	event := map[string]any{
+		"buildJob":  buildJobName,
+		"status":    status,
+		"timestamp": time.Now(),
+	}
+
+	// Merge additional data
+	maps.Copy(event, data)
+
+	eventBytes, _ := json.Marshal(event)
+	subject := fmt.Sprintf("buildjob.events.%s", buildJobName)
+
+	if err := r.NatsConnection.Publish(subject, eventBytes); err != nil {
+		// Log but don't fail the reconciliation
+		slog.Error("Failed to publish BuildJob event", "subject", subject, "error", err)
+	}
 }

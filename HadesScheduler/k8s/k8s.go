@@ -7,6 +7,7 @@ import (
 
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
+	"github.com/nats-io/nats.go"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -22,6 +23,7 @@ type Scheduler struct {
 	dynClient dynamic.Interface
 	namespace string
 	config    K8sConfig
+	nc        *nats.Conn
 }
 
 type K8sConfig struct {
@@ -50,7 +52,7 @@ type BuildJobGVRConfig struct {
 	Resource string `env:"BUILDJOB_RESOURCE,notEmpty" envDefault:"buildjobs"`
 }
 
-func NewK8sScheduler() Scheduler {
+func NewK8sScheduler() (*Scheduler, error) {
 	slog.Debug("Initializing Kubernetes scheduler")
 
 	// Load the user provided Kubernetes configuration
@@ -71,10 +73,20 @@ func NewK8sScheduler() Scheduler {
 		if err != nil {
 			// TODO: This may fail if the namespace already exists - we need to handle that case with a check
 			slog.With("error", err).Info("Failed to create namespace in Kubernetes")
+			return nil, err
 		}
 	}
 
-	return scheduler
+	return &scheduler, nil
+}
+
+func (k *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
+	if nc != nil {
+		k.nc = nc
+	} else {
+		slog.Warn("NATS connection is nil, logs will not be published")
+	}
+	return k
 }
 
 // Create a Kubernetes clientset based on the provided configuration

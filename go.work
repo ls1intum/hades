@@ -4,6 +4,6 @@ use (
 	./HadesAPI
 	./HadesLogManager
 	./HadesScheduler
-	./shared
 	./HadesScheduler/HadesOperator
+	./shared
 )

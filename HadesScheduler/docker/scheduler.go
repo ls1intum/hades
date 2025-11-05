@@ -17,7 +17,6 @@ import (
 
 type DockerEnvConfig struct {
 	DockerHost           string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
-	ContainerAutoremove  bool   `env:"DOCKER_CONTAINER_AUTOREMOVE" envDefault:"false"`
 	DockerScriptExecutor string `env:"DOCKER_SCRIPT_EXECUTOR" envDefault:"/bin/bash -c"`
 	CPU_limit            uint   `env:"DOCKER_CPU_LIMIT"`    // Number of CPUs - e.g. '6'
 	MEMORY_limit         string `env:"DOCKER_MEMORY_LIMIT"` // RAM usage in g or m  - e.g. '4g'
@@ -25,7 +24,6 @@ type DockerEnvConfig struct {
 
 type DockerProps struct {
 	scriptExecutor       string
-	containerAutoremove  bool
 	cpu_limit            uint
 	memory_limit         string
 	volumeName           string
@@ -43,19 +41,18 @@ func NewDockerScheduler() (*Scheduler, error) {
 	utils.LoadConfig(&dockerCfg)
 	slog.Debug("Docker config", "config", dockerCfg)
 
-	var err error
 	// Create a new Docker client
 	cli, err := client.NewClientWithOpts(client.WithHost(dockerCfg.DockerHost), client.WithAPIVersionNegotiation())
 	if err != nil {
 		slog.Error("Failed to create Docker client", slog.Any("error", err))
+		return nil, err
 	}
 	return &Scheduler{
 		cli: cli,
 		DockerProps: DockerProps{
-			scriptExecutor:      dockerCfg.DockerScriptExecutor,
-			containerAutoremove: dockerCfg.ContainerAutoremove,
-			cpu_limit:           dockerCfg.CPU_limit,
-			memory_limit:        dockerCfg.MEMORY_limit,
+			scriptExecutor: dockerCfg.DockerScriptExecutor,
+			cpu_limit:      dockerCfg.CPU_limit,
+			memory_limit:   dockerCfg.MEMORY_limit,
 		},
 	}, nil
 }
