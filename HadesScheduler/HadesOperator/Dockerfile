@@ -17,7 +17,8 @@ COPY ./shared ./shared
 
 # Build the Go application
 WORKDIR /app/HadesScheduler/HadesOperator
-RUN go mod tidy -v \ CGO_ENABLED=0 GOOS=linux go build -o manager ./cmd/main.go
+RUN go mod tidy -v \
+ && CGO_ENABLED=0 GOOS=linux go build -o manager ./cmd/main.go
 
 # Start a new stage for the minimal runtime container
 FROM gcr.io/distroless/static-debian12
