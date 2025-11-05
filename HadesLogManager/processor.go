@@ -23,9 +23,15 @@ type LogAggregator interface {
 // and memory management. Thread-safety is provided by sync.Map for all operations.
 type NATSLogAggregator struct {
 	hlc       *buildlogs.HadesLogConsumer
-	logs      sync.Map // jobID (string) -> []buildlogs.Log
+	logs      sync.Map // jobID (string) -> logsVersion
 	completed sync.Map // jobID (string) -> time.Time (completion time)
 	config    AggregatorConfig
+}
+
+// wrapper stored in sync.Map: comparable (uint64 + pointer)
+type logsVersion struct {
+	ver uint64
+	ptr *[]buildlogs.Log
 }
 
 // AggregatorConfig defines the configuration parameters for log aggregation behavior.
@@ -93,12 +99,13 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 
 	// Use LoadOrStore and CompareAndSwap for thread-safe updates
 	for {
-		value, _ := la.logs.LoadOrStore(log.JobID, []buildlogs.Log{})
-		existingLogs := value.([]buildlogs.Log)
+		value, _ := la.logs.LoadOrStore(log.JobID, logsVersion{ver: 0, ptr: &[]buildlogs.Log{}})
+		old := value.(logsVersion)
+		existing := *old.ptr
 
 		// Create new slice with appended log
-		newLogs := make([]buildlogs.Log, len(existingLogs), len(existingLogs)+1)
-		copy(newLogs, existingLogs)
+		newLogs := make([]buildlogs.Log, len(existing), len(existing)+1)
+		copy(newLogs, existing)
 		newLogs = append(newLogs, log)
 
 		// Trim if needed
@@ -110,8 +117,11 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 				"trimmed_count", trimStart)
 		}
 
+		newPtr := &newLogs
+		newVal := logsVersion{ver: old.ver + 1, ptr: newPtr}
+
 		// Atomically swap if the value hasn't changed
-		if la.logs.CompareAndSwap(log.JobID, existingLogs, newLogs) {
+		if la.logs.CompareAndSwap(log.JobID, old, newVal) {
 			slog.Debug("Added log to aggregator",
 				"job_id", log.JobID,
 				"total_batches", len(newLogs))
@@ -136,7 +146,8 @@ func (la *NATSLogAggregator) FlushJobLogs(jobID string) error {
 		return nil
 	}
 
-	logs := value.([]buildlogs.Log)
+	v := value.(logsVersion)
+	logs := *v.ptr
 	slog.Info("Flushed job logs",
 		"job_id", jobID,
 		"batch_count", len(logs))
@@ -198,7 +209,8 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 		return []buildlogs.LogEntry{}
 	}
 
-	logs := value.([]buildlogs.Log)
+	v := value.(logsVersion)
+	logs := *v.ptr
 
 	// Pre-calculate total size for efficient allocation
 	totalEntries := 0
