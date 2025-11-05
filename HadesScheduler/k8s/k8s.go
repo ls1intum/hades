@@ -18,11 +18,10 @@ import (
 )
 
 type Scheduler struct {
-	// TODO: This may be problematic - We need to clarify how to access the cluster with the service account and find a solution that is compatible with both modes
-	k8sClient   *kubernetes.Clientset
-	dynClient   dynamic.Interface
-	namespace   string
-	useOperator bool
+	k8sClient *kubernetes.Clientset
+	dynClient dynamic.Interface
+	namespace string
+	config    K8sConfig
 }
 
 type K8sConfig struct {
@@ -51,14 +50,6 @@ type BuildJobGVRConfig struct {
 	Resource string `env:"BUILDJOB_RESOURCE,notEmpty" envDefault:"buildjobs"`
 }
 
-func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    c.Group,
-		Version:  c.Version,
-		Resource: c.Resource,
-	}
-}
-
 func NewK8sScheduler() Scheduler {
 	slog.Debug("Initializing Kubernetes scheduler")
 
@@ -74,7 +65,7 @@ func NewK8sScheduler() Scheduler {
 	// TODO: Check cluster connection and print cluster nodes to log
 
 	// Add the namespace to the scheduler, ignore if we are using the operator mode
-	if !scheduler.useOperator && scheduler.k8sClient != nil {
+	if k8sCfg.ConfigMode != "operator" && scheduler.k8sClient != nil {
 		slog.Info("Creating namespace in Kubernetes")
 		_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
 		if err != nil {
@@ -90,62 +81,74 @@ func NewK8sScheduler() Scheduler {
 func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 	switch k8sCfg.ConfigMode {
 	case "kubeconfig":
-		slog.Info("Using kubeconfig for Kubernetes access")
-
-		var K8sConfigKub K8sConfigKubeconfig
-		utils.LoadConfig(&K8sConfigKub)
-
-		return Scheduler{
-			k8sClient: initializeKubeconfig(K8sConfigKub),
-			namespace: k8sCfg.K8sNamespace,
-		}
-
+		return initializeKubeconfigAccess(k8sCfg)
 	case "serviceaccount":
-		slog.Info("Using service account for Kubernetes access")
-
-		var K8sConfigSvc K8sConfigServiceaccount
-		utils.LoadConfig(&K8sConfigSvc)
-
-		return Scheduler{
-			k8sClient: initializeInCluster(),
-			namespace: k8sCfg.K8sNamespace,
-		}
+		return initializeServiceAccountAccess(k8sCfg)
 	case "operator":
-		slog.Info("Using operator mode (dynamic client)")
-		rc, err := rest.InClusterConfig()
-		if err != nil {
-			slog.Warn("InClusterConfig failed, fallback to KUBECONFIG", "error", err)
-			kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-				&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
-				&clientcmd.ConfigOverrides{},
-			)
-			rc, err = kubeconfig.ClientConfig()
-			if err != nil {
-				slog.Error("Failed to build rest.Config for operator mode", "error", err)
-				return Scheduler{}
-			}
-		}
-
-		dyn, err := dynamic.NewForConfig(rc)
-		if err != nil {
-			slog.Error("Failed to create dynamic client", "error", err)
-			return Scheduler{}
-		}
-
-		return Scheduler{
-			dynClient:   dyn,
-			namespace:   k8sCfg.K8sNamespace,
-			useOperator: true,
-		}
-
+		return initializeOperatorAccess(k8sCfg)
 	default:
 		slog.Error("Invalid Kubernetes config mode specified", "config_mode", k8sCfg.ConfigMode)
 		return Scheduler{}
 	}
 }
 
+func initializeKubeconfigAccess(k8sCfg K8sConfig) Scheduler {
+	slog.Info("Using kubeconfig for Kubernetes access")
+
+	var K8sConfigKub K8sConfigKubeconfig
+	utils.LoadConfig(&K8sConfigKub)
+
+	return Scheduler{
+		k8sClient: initializeKubeconfig(K8sConfigKub),
+		namespace: k8sCfg.K8sNamespace,
+		config:    k8sCfg,
+	}
+}
+
+func initializeServiceAccountAccess(k8sCfg K8sConfig) Scheduler {
+	slog.Info("Using service account for Kubernetes access")
+
+	var K8sConfigSvc K8sConfigServiceaccount
+	utils.LoadConfig(&K8sConfigSvc)
+
+	return Scheduler{
+		k8sClient: initializeInCluster(),
+		namespace: k8sCfg.K8sNamespace,
+		config:    k8sCfg,
+	}
+}
+
+func initializeOperatorAccess(k8sCfg K8sConfig) Scheduler {
+	slog.Info("Using operator mode (dynamic client)")
+	rc, err := rest.InClusterConfig()
+	if err != nil {
+		slog.Warn("InClusterConfig failed, fallback to KUBECONFIG", "error", err)
+		kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
+			&clientcmd.ConfigOverrides{},
+		)
+		rc, err = kubeconfig.ClientConfig()
+		if err != nil {
+			slog.Error("Failed to build rest.Config for operator mode", "error", err)
+			return Scheduler{}
+		}
+	}
+
+	dyn, err := dynamic.NewForConfig(rc)
+	if err != nil {
+		slog.Error("Failed to create dynamic client", "error", err)
+		return Scheduler{}
+	}
+
+	return Scheduler{
+		dynClient: dyn,
+		namespace: k8sCfg.K8sNamespace,
+		config:    k8sCfg,
+	}
+}
+
 func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
-	if k.useOperator {
+	if k.config.ConfigMode == "operator" {
 		slog.Debug("Scheduling job via Operator (creating BuildJob CR)")
 		return k.createBuildJobCR(ctx, job)
 	}
@@ -158,6 +161,14 @@ func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		sharedVolumeName: "shared",
 	}
 	return k8sJob.execute(ctx)
+}
+
+func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    c.Group,
+		Version:  c.Version,
+		Resource: c.Resource,
+	}
 }
 
 func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayload) error {

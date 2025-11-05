@@ -34,7 +34,30 @@ hadesScheduler:
       cpu: "200m"
       memory: "256Mi"
   executor: "k8s"
-  configMode: "serviceaccount"
+  configMode: "operator"
+
+hadesOperator:
+  image:
+    repository: ghcr.io/ls1intum/hades/hades-operator
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+  clusterWide: false
+  leaderElection:
+    enabled: true
+  targetNamespace: ""
+  DeleteOnComplete: true
 
 hadesOperator:
   image:
