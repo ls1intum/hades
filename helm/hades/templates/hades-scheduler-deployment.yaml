@@ -12,7 +12,7 @@ spec:
       labels:
         app: hades-scheduler-selector
     spec:
-      serviceAccountName: {{ .Values.rbac.serviceAccountName }}
+      serviceAccountName: {{ .Values.rbac.hadesScheduler.serviceAccountName }}
       containers:
         - name: "hades-scheduler"
           image: "{{ .Values.hadesScheduler.image.repository }}:{{ .Values.hadesScheduler.image.tag }}"

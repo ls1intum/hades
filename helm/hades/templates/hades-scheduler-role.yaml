@@ -1,7 +1,8 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: hades-scheduler-role
+  name: {{ .Values.rbac.hadesScheduler.role.name }}
+  namespace: {{ .Release.Namespace }}
 rules:
   - apiGroups: [""]
     resources: ["configmaps", "pods"]
@@ -9,3 +10,6 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: ["build.hades.tum.de"]
+    resources: ["buildjobs", "buildjobs/status", "buildjobs/finalizers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

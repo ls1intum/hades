@@ -1,0 +1,63 @@
+{{- if .Values.hadesOperator.clusterWide }}
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Values.rbac.hadesOperator.role.name }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps","pods","secrets"]
+    verbs: ["get","list","watch","create","update","patch","delete"]
+
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create","patch","update"]
+
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get","list","watch","create","update","patch","delete"]
+
+  - apiGroups: ["build.hades.tum.de"]
+    resources: ["buildjobs","buildjobs/status","buildjobs/finalizers"]
+    verbs: ["get","list","watch","create","update","patch","delete"]
+
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get","list","watch","create","update","patch"]
+
+{{- else }}
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.rbac.hadesOperator.role.name }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps","pods","secrets"]
+    verbs: ["get","list","watch","create","update","patch","delete"]
+
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create","patch","update"]
+
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get","list","watch","create","update","patch","delete"]
+
+  - apiGroups: ["build.hades.tum.de"]
+    resources: ["buildjobs","buildjobs/status","buildjobs/finalizers"]
+    verbs: ["get","list","watch","create","update","patch","delete"]
+
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get","list","watch","create","update","patch"]
+
+{{- end }}
