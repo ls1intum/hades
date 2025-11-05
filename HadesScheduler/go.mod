@@ -9,7 +9,7 @@ replace github.com/ls1intum/hades/shared => ../shared
 require (
 	github.com/docker/docker v28.5.1+incompatible
 	github.com/ls1intum/hades/shared v0.0.0-20250610091423-ecd369d566e9
-	github.com/nats-io/nats.go v1.46.1
+	github.com/nats-io/nats.go v1.47.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.39.0
 )
