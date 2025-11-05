@@ -38,8 +38,7 @@ The Hades Operator is designed to:
 ```
 Alternative, run
 ```sh
-  helm upgrade --install hades ./helm/hades -n hades --create-namespace \
-      --set hadesScheduler.configMode=operator \
+  helm upgrade --install hades ./helm/hades -n hades --create-namespace --set hadesScheduler.configMode=operator
 ```
 > **NOTE**: These commands will install the project within the hades namespace.
 

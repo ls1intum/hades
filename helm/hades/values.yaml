@@ -34,7 +34,7 @@ hadesScheduler:
       cpu: "200m"
       memory: "256Mi"
   executor: "k8s"
-  configMode: "serviceaccount"
+  configMode: "operator"
 
 hadesOperator:
   image:
