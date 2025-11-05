@@ -98,11 +98,11 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
 			// Job is done, publish "completed" event
-			r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "completed", map[string]any{
-				"succeeded": succeeded,
-				"message":   msg,
-			})
-			slog.Info("BuildJob completed event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
+			// r.publishBuildJobEvent(ctx, bj.Name, bj.Namespace, "completed", map[string]any{
+			// 	"succeeded": succeeded,
+			// 	"message":   msg,
+			// })
+			// slog.Info("BuildJob completed event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
 
 			if err := r.setStatusCompleted(ctx, req.NamespacedName, succeeded, msg); err != nil {
 				if apierrors.IsConflict(err) {
@@ -233,42 +233,49 @@ func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *bu
 		return err
 	}
 
+	slog.Info("============DEBUG============")
+	slog.Info("cached podName", "podName", bj.Status.PodName)
+	slog.Info("resolved podName", "podName", podName)
+	slog.Info("============DEBUG============")
+
 	p, err := r.K8sClient.CoreV1().Pods(bj.Namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
 
-	// Build map of current statuses from container status slice for easy lookup
-	statusMap := make(map[string]buildv1.ContainerStatus)
-	for _, cs := range bj.Status.ContainerStatuses {
-		statusMap[cs.Name] = cs
-	}
-
-	// Update init container statuses (build steps)
-	for _, initCS := range p.Status.InitContainerStatuses {
-		statusMap[initCS.Name] = r.updateContainerStateMap(ctx, bj, p, statusMap, initCS)
-	}
-
-	// Update regular container statuses (finalizer)
-	for _, containerCS := range p.Status.ContainerStatuses {
-		statusMap[containerCS.Name] = r.updateContainerStateMap(ctx, bj, p, statusMap, containerCS)
-	}
-
-	// Determine current step
-	currentStep := r.determineCurrentStep(p, len(bj.Spec.Steps))
-
-	// Convert map back to slice
-	newStatuses := make([]buildv1.ContainerStatus, 0, len(statusMap))
-	for _, cs := range statusMap {
-		newStatuses = append(newStatuses, cs)
-	}
-
-	// Update BuildJob status
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var fresh buildv1.BuildJob
 		if err := r.Get(ctx, client.ObjectKeyFromObject(bj), &fresh); err != nil {
 			return err
 		}
+
+		// Build map of current statuses from container status slice for easy lookup
+		statusMap := make(map[string]buildv1.ContainerStatus)
+		for _, cs := range fresh.Status.ContainerStatuses {
+			statusMap[cs.Name] = cs
+		}
+
+		// Update init container statuses (build steps)
+		for _, initCS := range p.Status.InitContainerStatuses {
+			statusMap[initCS.Name] = r.updateContainerStateMap(ctx, bj, p, statusMap, initCS)
+		}
+
+		// Update regular container statuses (finalizer)
+		for _, containerCS := range p.Status.ContainerStatuses {
+			statusMap[containerCS.Name] = r.updateContainerStateMap(ctx, bj, p, statusMap, containerCS)
+		}
+
+		// Determine current step
+		currentStep := r.determineCurrentStep(p, len(bj.Spec.Steps))
+
+		// Convert map back to slice
+		newStatuses := make([]buildv1.ContainerStatus, 0, len(statusMap))
+		for _, cs := range statusMap {
+			newStatuses = append(newStatuses, cs)
+		}
+
+		// Update BuildJob status
+
 		fresh.Status.ContainerStatuses = newStatuses
 		fresh.Status.CurrentStep = &currentStep
 		fresh.Status.PodName = p.Name
