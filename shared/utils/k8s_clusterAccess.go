@@ -36,7 +36,7 @@ type K8sConfigKubeconfig struct {
 // Otherwise, the kubeconfig file will be loaded from the default location in the user's home directory.
 // The function will panic if there is an error creating the Kubernetes clientset or getting the user's home directory.
 // Returns a pointer to the created Kubernetes clientset.
-func InitializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
+func initializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
 
 	var kubeConfig *rest.Config
 
@@ -75,7 +75,7 @@ func InitializeKubeconfig(k8sCfg K8sConfigKubeconfig) *kubernetes.Clientset {
 
 }
 
-func InitializeInCluster() *kubernetes.Clientset {
+func initializeInCluster() *kubernetes.Clientset {
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
 		slog.Error("Failed to load in-cluster config", "error", err)

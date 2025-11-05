@@ -151,15 +151,20 @@ func (pl PodLogReader) ProcessContainerLogs(ctx context.Context, podName string,
 	}
 
 	slog.Info("Parsing container logs", "pod", podName, "container", containerName)
-	buildJobLog, err := log.ParseContainerLogs(stdout, stderr, containerName)
+	parser := log.NewStdLogParser(stdout, stderr)
+	buildJobLog, err := parser.ParseContainerLogs(containerName, pl.JobID)
 	if err != nil {
 		return fmt.Errorf("parsing container logs: %w", err)
 	}
+
 	buildJobLog.JobID = pl.JobID
-	publisher := log.NewNATSPublisher(pl.Nc)
+	publisher, err := log.NewNATSPublisher(pl.Nc)
+	if err != nil {
+		return fmt.Errorf("creating nats publisher: %w", err)
+	}
 
 	slog.Info("Publishing logs", "pod", podName, "container", containerName)
-	return publisher.PublishLogs(buildJobLog)
+	return publisher.PublishLog(buildJobLog)
 }
 
 // Helper function for ProcessContainerLogs
