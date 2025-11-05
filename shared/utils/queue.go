@@ -15,16 +15,19 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-const NatsSubject = "hades.jobs"
+var (
+	// priorities defines the order in which job queues are checked (high to low)
+	priorities = []Priority{HighPriority, MediumPriority, LowPriority}
+)
 
-var priorities = []Priority{HighPriority, MediumPriority, LowPriority}
-
+// HadesProducer manages job publishing to the NATS queue system.
 type HadesProducer struct {
 	natsConnection *nats.Conn
 	js             jetstream.JetStream
 	kv             jetstream.KeyValue
 }
 
+// HadesConsumer manages job consumption from the NATS queue system with priority handling.
 type HadesConsumer struct {
 	natsConnection *nats.Conn
 	concurrency    uint
@@ -32,7 +35,8 @@ type HadesConsumer struct {
 	kv             jetstream.KeyValue
 }
 
-// SetupNatsConnection creates a connection to NATS server
+// SetupNatsConnection creates a connection to the NATS server with the provided configuration.
+// It configures timeouts, reconnection behavior, and optional authentication/TLS.
 func SetupNatsConnection(config NatsConfig) (*nats.Conn, error) {
 	opts := []nats.Option{
 		nats.Name("HadesAPI"),
@@ -65,7 +69,8 @@ func SetupNatsConnection(config NatsConfig) (*nats.Conn, error) {
 	return nc, nil
 }
 
-// SetupNatsJetStream creates a JetStream connection for persistent message delivery
+// NewHadesProducer creates a new job producer with JetStream support.
+// It initializes the job stream and key-value store for job metadata.
 func NewHadesProducer(nc *nats.Conn) (*HadesProducer, error) {
 	ctx := context.Background()
 	js, err := jetstream.New(nc)
@@ -76,7 +81,7 @@ func NewHadesProducer(nc *nats.Conn) (*HadesProducer, error) {
 
 	s, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:       "HADES_JOBS",
-		Subjects:   []string{fmt.Sprintf("%s.*", NatsSubject)},
+		Subjects:   []string{fmt.Sprintf("%s.*", natsSubjectBase)},
 		Storage:    jetstream.FileStorage,
 		Retention:  jetstream.WorkQueuePolicy,
 		Duplicates: 1 * time.Minute, // Disallow duplicates for 1 minute
@@ -104,6 +109,8 @@ func NewHadesProducer(nc *nats.Conn) (*HadesProducer, error) {
 	}, nil
 }
 
+// NewHadesConsumer creates a new job consumer with priority queue support.
+// The concurrency parameter controls the maximum number of jobs processed simultaneously.
 func NewHadesConsumer(nc *nats.Conn, concurrency uint) (*HadesConsumer, error) {
 	ctx := context.Background()
 	js, err := jetstream.New(nc)
@@ -147,34 +154,47 @@ func NewHadesConsumer(nc *nats.Conn, concurrency uint) (*HadesConsumer, error) {
 	}, nil
 }
 
-func (hp HadesProducer) EnqueueMediumJob(ctx context.Context, queuePayloud payload.QueuePayload) error {
-	return hp.EnqueueJobWithPriority(ctx, queuePayloud, MediumPriority)
+// EnqueueHighJob adds a job to the high-priority queue.
+func (hp *HadesProducer) EnqueueHighJob(ctx context.Context, queuePayload payload.QueuePayload) error {
+	return hp.EnqueueJobWithPriority(ctx, queuePayload, HighPriority)
 }
 
-func (hp HadesProducer) EnqueueHighJob(ctx context.Context, queuePayloud payload.QueuePayload) error {
-	return hp.EnqueueJobWithPriority(ctx, queuePayloud, HighPriority)
+// EnqueueMediumJob adds a job to the medium-priority queue.
+func (hp *HadesProducer) EnqueueMediumJob(ctx context.Context, queuePayload payload.QueuePayload) error {
+	return hp.EnqueueJobWithPriority(ctx, queuePayload, MediumPriority)
 }
 
-func (hp HadesProducer) EnqueueLowJob(ctx context.Context, queuePayloud payload.QueuePayload) error {
-	return hp.EnqueueJobWithPriority(ctx, queuePayloud, LowPriority)
+// EnqueueLowJob adds a job to the low-priority queue.
+func (hp *HadesProducer) EnqueueLowJob(ctx context.Context, queuePayload payload.QueuePayload) error {
+	return hp.EnqueueJobWithPriority(ctx, queuePayload, LowPriority)
 }
 
-func (hp HadesProducer) EnqueueJobWithPriority(ctx context.Context, queuePayloud payload.QueuePayload, priority Priority) error {
-	bytesPayload, err := json.Marshal(queuePayloud)
+// EnqueueJobWithPriority adds a job to the queue with the specified priority.
+// The job payload is stored in the key-value store and a reference is published to the stream.
+func (hp *HadesProducer) EnqueueJobWithPriority(ctx context.Context, queuePayload payload.QueuePayload, priority Priority) error {
+	bytesPayload, err := json.Marshal(queuePayload)
 	if err != nil {
 		slog.Error("Failed to marshal payload", "error", err)
-		return err
+		return fmt.Errorf("failed to marshal job payload: %w", err)
 	}
-	_, err = hp.js.PublishAsync(PrioritySubject(priority), queuePayloud.ID[:], jetstream.WithMsgID(queuePayloud.ID.String()))
+	// Store full job payload in key-value store first
+	_, err = hp.kv.Put(ctx, queuePayload.ID.String(), bytesPayload)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to store job payload in KV store: %w", err)
 	}
-
-	_, err = hp.kv.Put(ctx, queuePayloud.ID.String(), bytesPayload)
-	return err
+	// Publish job reference to the stream (use synchronous publish for guaranteed delivery)
+	_, err = hp.js.Publish(ctx, PrioritySubject(priority), queuePayload.ID[:], jetstream.WithMsgID(queuePayload.ID.String()))
+	if err != nil {
+		return fmt.Errorf("failed to publish job to stream: %w", err)
+	}
+	return nil
 }
 
-func (hc HadesConsumer) DequeueJob(ctx context.Context, processing func(payload payload.QueuePayload)) {
+// DequeueJob continuously processes jobs from the queue in priority order.
+// It spawns worker goroutines up to the configured concurrency limit and processes
+// jobs using the provided processing function. Processing continues until the context
+// is cancelled.
+func (hc *HadesConsumer) DequeueJob(ctx context.Context, processing func(payload payload.QueuePayload)) {
 	// Create a worker pool with limited concurrency
 	numWorkers := hc.concurrency
 	sem := make(chan struct{}, numWorkers)
@@ -235,8 +255,8 @@ func (hc HadesConsumer) DequeueJob(ctx context.Context, processing func(payload 
 					}
 					slog.Debug("Found message", "subject", msg.Subject, "priority", priority)
 
-					// Get the UUID from the ticket
-					msg_id, err := uuid.FromBytes(msg.Data())
+					// Get the UUID from the message data
+					msgID, err := uuid.FromBytes(msg.Data())
 					if err != nil {
 						slog.Error("Failed to parse message ID", "error", err, "data", string(msg.Data()))
 
@@ -246,12 +266,12 @@ func (hc HadesConsumer) DequeueJob(ctx context.Context, processing func(payload 
 						return
 					}
 
-					entry, err := hc.kv.Get(ctx, msg_id.String())
+					entry, err := hc.kv.Get(ctx, msgID.String())
 					if err != nil {
-						slog.Error("Failed to get message from KeyValue store", "error", err, "id", msg_id.String())
+						slog.Error("Failed to get message from KeyValue store", "error", err, "id", msgID.String())
 
 						if err := msg.Nak(); err != nil {
-							slog.Error("Failed to NAK message after KV store error", "error", err, "id", msg_id.String())
+							slog.Error("Failed to NAK message after KV store error", "error", err, "id", msgID.String())
 						}
 						return
 					}

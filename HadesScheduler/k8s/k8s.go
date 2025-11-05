@@ -2,15 +2,11 @@ package k8s
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
-	"sync"
 
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
-	"github.com/nats-io/nats.go"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -22,14 +18,30 @@ import (
 )
 
 type Scheduler struct {
-	// TODO: This may be problematic - We need to clarify how to access the cluster with the service account and find a solution that is compatible with both modes
-	k8sClient   *kubernetes.Clientset
-	dynClient   dynamic.Interface
-	namespace   string
-	useOperator bool
-	nc          *nats.Conn
-	subOnce     sync.Once
-	eventSub    *nats.Subscription
+	k8sClient *kubernetes.Clientset
+	dynClient dynamic.Interface
+	namespace string
+	config    K8sConfig
+}
+
+type K8sConfig struct {
+	// K8sNamespace is the namespace in which the jobs should be scheduled (default: hades-executor)
+	// This may change in the future to allow for multiple namespaces
+	K8sNamespace string `env:"K8S_NAMESPACE,notEmpty" envDefault:"hades-executor"`
+
+	// K8sConfigMode is used to determine how the Kubernetes client should be configured ("kubeconfig", "serviceaccount" or "operator")
+	ConfigMode string `env:"K8S_CONFIG_MODE,notEmpty" envDefault:"kubeconfig"`
+}
+
+// K8sConfigKubeconfig is used as configuration if used with a kubeconfig file
+type K8sConfigKubeconfig struct {
+	K8sConfig
+	kubeconfig string `env:"KUBECONFIG"`
+}
+
+// K8sConfigServiceaccount is used as configuration if used with a service account
+type K8sConfigServiceaccount struct {
+	K8sConfig
 }
 
 type BuildJobGVRConfig struct {
@@ -38,19 +50,11 @@ type BuildJobGVRConfig struct {
 	Resource string `env:"BUILDJOB_RESOURCE,notEmpty" envDefault:"buildjobs"`
 }
 
-func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    c.Group,
-		Version:  c.Version,
-		Resource: c.Resource,
-	}
-}
-
-func NewK8sScheduler() (*Scheduler, error) {
+func NewK8sScheduler() Scheduler {
 	slog.Debug("Initializing Kubernetes scheduler")
 
 	// Load the user provided Kubernetes configuration
-	var k8sCfg utils.K8sConfig
+	var k8sCfg K8sConfig
 	utils.LoadConfig(&k8sCfg)
 	slog.Debug("Kubernetes config", "config", k8sCfg)
 
@@ -61,141 +65,91 @@ func NewK8sScheduler() (*Scheduler, error) {
 	// TODO: Check cluster connection and print cluster nodes to log
 
 	// Add the namespace to the scheduler, ignore if we are using the operator mode
-	if !scheduler.useOperator && scheduler.k8sClient != nil {
+	if k8sCfg.ConfigMode != "operator" && scheduler.k8sClient != nil {
 		slog.Info("Creating namespace in Kubernetes")
 		_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
 		if err != nil {
 			// TODO: This may fail if the namespace already exists - we need to handle that case with a check
 			slog.With("error", err).Info("Failed to create namespace in Kubernetes")
-			return nil, err
 		}
 	}
 
-	return &scheduler, nil
-}
-
-func (k *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
-	if nc != nil {
-		k.nc = nc
-	} else {
-		slog.Warn("NATS connection is nil, logs will not be published")
-	}
-	return k
-}
-
-func (k *Scheduler) ensureEventSub() {
-	k.subOnce.Do(func() {
-		if k.nc == nil {
-			slog.Error("NATS connection is nil; cannot subscribe buildjob events")
-			return
-		}
-		// Queue subscription to avoid multiple schedulers processing the same event in case of multi-replica deployment
-		sub, err := k.nc.QueueSubscribe("buildjob.events.*", "hades-scheduler", k.handleBuildJobEvent)
-		if err != nil {
-			slog.Error("Failed to subscribe buildjob.events.*", "error", err)
-			return
-		}
-		k.eventSub = sub
-		slog.Info("Subscribed to buildjob.events.* (queue=hades-scheduler)")
-	})
+	return scheduler
 }
 
 // Create a Kubernetes clientset based on the provided configuration
-func initializeClusterAccess(k8sCfg utils.K8sConfig) Scheduler {
+func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 	switch k8sCfg.ConfigMode {
 	case "kubeconfig":
-		slog.Info("Using kubeconfig for Kubernetes access")
-
-		var K8sConfigKub utils.K8sConfigKubeconfig
-		utils.LoadConfig(&K8sConfigKub)
-
-		return Scheduler{
-			k8sClient: utils.InitializeKubeconfig(K8sConfigKub),
-			namespace: k8sCfg.K8sNamespace,
-		}
-
+		return initializeKubeconfigAccess(k8sCfg)
 	case "serviceaccount":
-		slog.Info("Using service account for Kubernetes access")
-
-		var K8sConfigSvc utils.K8sConfigServiceaccount
-		utils.LoadConfig(&K8sConfigSvc)
-
-		return Scheduler{
-			k8sClient: utils.InitializeInCluster(),
-			namespace: k8sCfg.K8sNamespace,
-		}
+		return initializeServiceAccountAccess(k8sCfg)
 	case "operator":
-		slog.Info("Using operator mode (dynamic client)")
-		rc, err := rest.InClusterConfig()
-		if err != nil {
-			slog.Warn("InClusterConfig failed, fallback to KUBECONFIG", "error", err)
-			kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-				&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
-				&clientcmd.ConfigOverrides{},
-			)
-			rc, err = kubeconfig.ClientConfig()
-			if err != nil {
-				slog.Error("Failed to build rest.Config for operator mode", "error", err)
-				return Scheduler{}
-			}
-		}
-
-		kcs, err := kubernetes.NewForConfig(rc)
-		if err != nil {
-			slog.Error("Failed to create typed clientset", "error", err)
-			return Scheduler{}
-		}
-
-		dyn, err := dynamic.NewForConfig(rc)
-		if err != nil {
-			slog.Error("Failed to create dynamic client", "error", err)
-			return Scheduler{}
-		}
-
-		return Scheduler{
-			k8sClient:   kcs,
-			dynClient:   dyn,
-			namespace:   k8sCfg.K8sNamespace,
-			useOperator: true,
-		}
-
+		return initializeOperatorAccess(k8sCfg)
 	default:
 		slog.Error("Invalid Kubernetes config mode specified", "config_mode", k8sCfg.ConfigMode)
 		return Scheduler{}
 	}
 }
 
-// Event received from Operator
-func (k *Scheduler) handleBuildJobEvent(msg *nats.Msg) {
-	var event map[string]any
-	if err := json.Unmarshal(msg.Data, &event); err != nil {
-		log.Printf("Failed to unmarshal BuildJob event: %v", err)
-		return
-	}
+func initializeKubeconfigAccess(k8sCfg K8sConfig) Scheduler {
+	slog.Info("Using kubeconfig for Kubernetes access")
 
-	buildJobName, ok := event["buildJob"].(string)
-	if !ok {
-		log.Printf("BuildJob event missing or invalid 'buildJob' field: %v", event["buildJob"])
-		return
-	}
-	status, ok := event["status"].(string)
-	if !ok {
-		log.Printf("BuildJob event missing or invalid 'status' field: %v", event["status"])
-		return
-	}
+	var K8sConfigKub K8sConfigKubeconfig
+	utils.LoadConfig(&K8sConfigKub)
 
-	switch status {
-	case "pod_running":
-		log.Printf("BuildJob %s pod is running", buildJobName)
-	case "completed":
-		log.Printf("BuildJob %s completed, succeeded %v", buildJobName, event["succeeded"])
+	return Scheduler{
+		k8sClient: initializeKubeconfig(K8sConfigKub),
+		namespace: k8sCfg.K8sNamespace,
+		config:    k8sCfg,
 	}
 }
 
-func (k *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
-	if k.useOperator {
+func initializeServiceAccountAccess(k8sCfg K8sConfig) Scheduler {
+	slog.Info("Using service account for Kubernetes access")
+
+	var K8sConfigSvc K8sConfigServiceaccount
+	utils.LoadConfig(&K8sConfigSvc)
+
+	return Scheduler{
+		k8sClient: initializeInCluster(),
+		namespace: k8sCfg.K8sNamespace,
+		config:    k8sCfg,
+	}
+}
+
+func initializeOperatorAccess(k8sCfg K8sConfig) Scheduler {
+	slog.Info("Using operator mode (dynamic client)")
+	rc, err := rest.InClusterConfig()
+	if err != nil {
+		slog.Warn("InClusterConfig failed, fallback to KUBECONFIG", "error", err)
+		kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			&clientcmd.ClientConfigLoadingRules{ExplicitPath: clientcmd.RecommendedHomeFile},
+			&clientcmd.ConfigOverrides{},
+		)
+		rc, err = kubeconfig.ClientConfig()
+		if err != nil {
+			slog.Error("Failed to build rest.Config for operator mode", "error", err)
+			return Scheduler{}
+		}
+	}
+
+	dyn, err := dynamic.NewForConfig(rc)
+	if err != nil {
+		slog.Error("Failed to create dynamic client", "error", err)
+		return Scheduler{}
+	}
+
+	return Scheduler{
+		dynClient: dyn,
+		namespace: k8sCfg.K8sNamespace,
+		config:    k8sCfg,
+	}
+}
+
+func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
+	if k.config.ConfigMode == "operator" {
 		slog.Debug("Scheduling job via Operator (creating BuildJob CR)")
-		k.ensureEventSub()
 		return k.createBuildJobCR(ctx, job)
 	}
 
@@ -205,12 +159,19 @@ func (k *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) e
 		k8sClient:        k.k8sClient,
 		namespace:        k.namespace,
 		sharedVolumeName: "shared",
-		nc:               k.nc,
 	}
 	return k8sJob.execute(ctx)
 }
 
-func (k *Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayload) error {
+func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    c.Group,
+		Version:  c.Version,
+		Resource: c.Resource,
+	}
+}
+
+func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayload) error {
 	if k.dynClient == nil {
 		return fmt.Errorf("dynamic client is nil: operator mode not initialized")
 	}

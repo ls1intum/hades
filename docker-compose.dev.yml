@@ -3,6 +3,8 @@
 version: '3.7'
 services:
   hadesAPI:
+    ports:
+      - "8081:8081"
     environment:
       - NATS_URL=nats://nats:4222
       - DEBUG=true

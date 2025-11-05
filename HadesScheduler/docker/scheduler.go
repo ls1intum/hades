@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
@@ -58,9 +59,14 @@ func NewDockerScheduler() (*Scheduler, error) {
 
 func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 	if nc != nil {
-		d.publisher = log.NewNATSPublisher(nc)
+		publisher, err := log.NewNATSPublisher(nc)
+		if err != nil {
+			slog.Error("Failed to create NATS publisher", slog.Any("error", err))
+		} else {
+			d.publisher = *publisher
+		}
 	} else {
-		slog.Warn("NATS connection is nil, logs will not be published")
+		slog.Warn("NATS connection is nil, logs nor status will be published")
 	}
 	return d
 }
@@ -91,12 +97,24 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		QueuePayload: job,
 		publisher:    d.publisher,
 	}
+
+	//block to send status first before execution
+	if err := d.publisher.PublishJobStatus(buildlogs.StatusRunning, job.ID.String()); err != nil {
+		job_logger.Warn("failed to publish success status", slog.Any("error", err))
+	}
+
 	err := docker_job.execute(ctx)
 	if err != nil {
+		if err := d.publisher.PublishJobStatus(buildlogs.StatusFailed, job.ID.String()); err != nil {
+			job_logger.Warn("failed to publish success status", slog.Any("error", err))
+		}
 		job_logger.Error("Failed to execute job", slog.Any("error", err))
 		return err
 	}
 
+	if err := d.publisher.PublishJobStatus(buildlogs.StatusSuccess, job.ID.String()); err != nil {
+		job_logger.Warn("failed to publish success status", slog.Any("error", err))
+	}
 	job_logger.Debug("Job executed successfully", slog.Any("job_id", job.ID))
 
 	// Delete the shared volume after the job is done

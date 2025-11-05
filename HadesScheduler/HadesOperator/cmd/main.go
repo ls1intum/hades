@@ -52,7 +52,7 @@ type NCConfig struct {
 }
 
 type OperatorConfig struct {
-	DeleteOnComplete string `env:"DELETE_ON_COMPLETE" envDefault:"false"`
+	DeleteOnComplete string `env:"DELETE_ON_COMPLETE" envDefault:"true"`
 }
 
 func init() {
@@ -65,10 +65,15 @@ func init() {
 func main() {
 	var enableLeaderElection bool
 	var probeAddr string
+	var enableDevMode bool
 
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8085", "The address the probe endpoint binds to.")
+	if os.Getenv("DEV_MODE") == "true" {
+		enableDevMode = true
+	}
+
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8083", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
-	opts := zap.Options{Development: true}
+	opts := zap.Options{Development: enableDevMode}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
