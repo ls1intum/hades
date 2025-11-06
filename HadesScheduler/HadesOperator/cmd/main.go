@@ -22,6 +22,7 @@ import (
 	"strconv"
 
 	"github.com/ls1intum/hades/shared/utils"
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -121,23 +122,26 @@ func main() {
 	// if you are doing or is intended to do any operation such as perform cleanups
 	// after the manager stops then its usage might be unsafe.
 	// LeaderElectionReleaseOnCancel: true,
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
+	cfg := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(cfg, mgrOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	var cfg NCConfig
+	var natsConfig NCConfig
 	utils.LoadConfig(&cfg)
-	nc, err := utils.SetupNatsConnection(cfg.NatsConfig)
+	nc, err := utils.SetupNatsConnection(natsConfig.NatsConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to setup NATS Connection")
 		os.Exit(1)
 	}
 
-	var k8sConfig utils.K8sConfigKubeconfig
-	utils.LoadConfig(&k8sConfig)
-	kcs := utils.InitializeKubeconfig(k8sConfig)
+	kcs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		setupLog.Error(err, "unable to init kubernetes clientset")
+		os.Exit(1)
+	}
 
 	if err := (&controller.BuildJobReconciler{
 		Client:           mgr.GetClient(),
