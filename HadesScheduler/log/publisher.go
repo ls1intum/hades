@@ -40,7 +40,7 @@ func NewNATSPublisher(nc *nats.Conn) (*NATSPublisher, error) {
 }
 
 // PublishJobStatus publishes a job status change to NATS.
-// The status is published to the subject "hades.status.{status}".
+// The status is published to the subject "hades.jobstatus.{status}".
 func (np *NATSPublisher) PublishJobStatus(ctx context.Context, status logs.JobStatus, jobID string) error {
 	if jobID == "" {
 		return fmt.Errorf("empty job ID")

@@ -2,13 +2,119 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 	"github.com/ls1intum/hades/hadesScheduler/k8s"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// helper: build a configured PodLogReader for the given namespace/job.
+func (r *BuildJobReconciler) podLogReader(namespace, jobID string) k8s.PodLogReader {
+	return k8s.PodLogReader{
+		K8sClient: r.K8sClient,
+		Namespace: namespace,
+		JobID:     jobID,
+		Nc:        r.NatsConnection,
+	}
+}
+
+// initializeContainerStatuses creates Pending status entries for all expected containers
+func (r *BuildJobReconciler) initializeContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) error {
+	slog.Info("Initializing container statuses for BuildJob", "buildJob", bj.Name)
+	statuses := make([]buildv1.ContainerStatus, 0, len(bj.Spec.Steps)+1)
+
+	// Initialize status for each step (init containers)
+	for _, step := range bj.Spec.Steps {
+		statuses = append(statuses, buildv1.ContainerStatus{
+			Name:          fmt.Sprintf("step-%d", step.ID),
+			StepID:        step.ID,
+			State:         buildv1.ContainerStatePending,
+			LogsPublished: false,
+		})
+	}
+
+	// Initialize status for finalizer container
+	statuses = append(statuses, buildv1.ContainerStatus{
+		Name:          "buildjob-finalizer",
+		StepID:        0, // 0 indicates it's not a step
+		State:         buildv1.ContainerStatePending,
+		LogsPublished: false,
+	})
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var fresh buildv1.BuildJob
+		if err := r.Get(ctx, client.ObjectKeyFromObject(bj), &fresh); err != nil {
+			return err
+		}
+		fresh.Status.ContainerStatuses = statuses
+		currentStep := int32(1)
+		fresh.Status.CurrentStep = &currentStep
+		return r.Status().Update(ctx, &fresh)
+	})
+}
+
+func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) error {
+	slog.Info("Updating container statuses for BuildJob", "buildJob", bj.Name)
+
+	pl := r.podLogReader(bj.Namespace, bj.Name)
+
+	podName, err := pl.ResolvePodName(ctx)
+	if err != nil {
+		slog.Error("Failed to resolve pod name", "error", err)
+		return err
+	}
+
+	p, err := r.K8sClient.CoreV1().Pods(bj.Namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var fresh buildv1.BuildJob
+		if err := r.Get(ctx, client.ObjectKeyFromObject(bj), &fresh); err != nil {
+			return err
+		}
+
+		// Build map of current statuses from container status slice for easy lookup
+		statusMap := make(map[string]buildv1.ContainerStatus)
+		for _, cs := range fresh.Status.ContainerStatuses {
+			statusMap[cs.Name] = cs
+		}
+
+		// Update init container statuses (build steps)
+		for _, initCS := range p.Status.InitContainerStatuses {
+			statusMap[initCS.Name] = r.updateContainerStateMap(ctx, bj, p, statusMap, initCS)
+		}
+
+		// Update regular container statuses (finalizer)
+		for _, containerCS := range p.Status.ContainerStatuses {
+			statusMap[containerCS.Name] = r.updateContainerStateMap(ctx, bj, p, statusMap, containerCS)
+		}
+
+		// Determine current step
+		currentStep := r.determineCurrentStep(p, len(bj.Spec.Steps))
+
+		// Convert map back to slice
+		newStatuses := make([]buildv1.ContainerStatus, 0, len(statusMap))
+		for _, cs := range statusMap {
+			newStatuses = append(newStatuses, cs)
+		}
+
+		// Update BuildJob status
+
+		fresh.Status.ContainerStatuses = newStatuses
+		fresh.Status.CurrentStep = &currentStep
+		fresh.Status.PodName = p.Name
+		return r.Status().Update(ctx, &fresh)
+	})
+}
+
+// updateContainerStateMap updates the ContainerStatus for a specific container in the status map
 func (r *BuildJobReconciler) updateContainerStateMap(ctx context.Context, bj *buildv1.BuildJob, p *corev1.Pod, statusMap map[string]buildv1.ContainerStatus, containerState corev1.ContainerStatus) buildv1.ContainerStatus {
 	cs := statusMap[containerState.Name]
 
@@ -19,12 +125,7 @@ func (r *BuildJobReconciler) updateContainerStateMap(ctx context.Context, bj *bu
 		if !cs.LogsPublished {
 			slog.Info("Container terminated, reading logs", "container", cs.Name)
 
-			pl := k8s.PodLogReader{
-				K8sClient: r.K8sClient,
-				Namespace: p.Namespace,
-				JobID:     bj.Name,
-				Nc:        r.NatsConnection,
-			}
+			pl := r.podLogReader(bj.Namespace, bj.Name)
 
 			if err := pl.ProcessContainerLogs(ctx, p.Name, cs.Name); err != nil {
 				slog.Error("Failed to read/publish logs", "container", cs.Name, "error", err)

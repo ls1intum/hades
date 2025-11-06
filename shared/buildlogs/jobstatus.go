@@ -12,7 +12,7 @@ const (
 	StatusStopped JobStatus = "stopped"
 )
 
-const StatusSubjectFormat = "hades.status.%s"
+const StatusSubjectFormat = "hades.jobstatus.%s"
 
 // Optional: Add helper methods
 func (js JobStatus) String() string {

@@ -21,6 +21,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/utils"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -130,10 +131,16 @@ func main() {
 	}
 
 	var natsConfig NCConfig
-	utils.LoadConfig(&cfg)
+	utils.LoadConfig(&natsConfig)
 	nc, err := utils.SetupNatsConnection(natsConfig.NatsConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to setup NATS Connection")
+		os.Exit(1)
+	}
+
+	publisher, err := log.NewNATSPublisher(nc)
+	if err != nil {
+		setupLog.Error(err, "unable to create NATS publisher")
 		os.Exit(1)
 	}
 
@@ -149,6 +156,7 @@ func main() {
 		K8sClient:        kcs,
 		NatsConnection:   nc,
 		DeleteOnComplete: delOnComplete,
+		Publisher:        *publisher,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
 		os.Exit(1)
