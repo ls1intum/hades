@@ -30,11 +30,11 @@ func TestJobStatus_Subject(t *testing.T) {
 		status JobStatus
 		want   string
 	}{
-		{"queued", StatusQueued, "hades.status.queued"},
-		{"running", StatusRunning, "hades.status.running"},
-		{"success", StatusSuccess, "hades.status.success"},
-		{"failed", StatusFailed, "hades.status.failed"},
-		{"stopped", StatusStopped, "hades.status.stopped"},
+		{"queued", StatusQueued, "hades.jobstatus.queued"},
+		{"running", StatusRunning, "hades.jobstatus.running"},
+		{"success", StatusSuccess, "hades.jobstatus.success"},
+		{"failed", StatusFailed, "hades.jobstatus.failed"},
+		{"stopped", StatusStopped, "hades.jobstatus.stopped"},
 	}
 
 	for _, tt := range tests {
