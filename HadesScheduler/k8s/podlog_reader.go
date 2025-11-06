@@ -164,7 +164,7 @@ func (pl PodLogReader) ProcessContainerLogs(ctx context.Context, podName string,
 	}
 
 	slog.Info("Publishing logs", "pod", podName, "container", containerName)
-	return publisher.PublishLog(buildJobLog)
+	return publisher.PublishLog(buildJobLog, ctx)
 }
 
 // Helper function for ProcessContainerLogs

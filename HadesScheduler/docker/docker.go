@@ -31,7 +31,7 @@ func processContainerLogs(ctx context.Context, client *client.Client, publisher 
 	}
 
 	slog.Debug("Parsed container logs was of", slog.String("jobID", jobID))
-	return publisher.PublishLog(buildJobLog)
+	return publisher.PublishLog(buildJobLog, ctx)
 }
 
 // retrieves and demultiplexes container logs

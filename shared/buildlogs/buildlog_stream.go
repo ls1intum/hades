@@ -77,7 +77,7 @@ func NewHadesLogConsumer(nc *nats.Conn) (*HadesLogConsumer, error) {
 	}, nil
 }
 
-func (hlp *HadesLogProducer) PublishLog(buildJobLog Log) error {
+func (hlp *HadesLogProducer) PublishLog(buildJobLog Log, ctx context.Context) error {
 	if hlp.js == nil {
 		slog.Error("Cannot publish logs: nil JetStream connection", slog.String("job_id", buildJobLog.JobID))
 		return fmt.Errorf("nil JetStream connection")
@@ -90,7 +90,7 @@ func (hlp *HadesLogProducer) PublishLog(buildJobLog Log) error {
 		return fmt.Errorf("marshalling log: %w", err)
 	}
 
-	_, err = hlp.js.Publish(context.Background(), subject, data)
+	_, err = hlp.js.Publish(ctx, subject, data)
 	if err != nil {
 		slog.Error("Failed to publish log to JetStream", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
 		return fmt.Errorf("publishing log to JetStream: %w", err)

@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -9,7 +10,7 @@ import (
 )
 
 type Publisher interface {
-	PublishLog(buildJobLog logs.Log) error
+	PublishLog(buildJobLog logs.Log, ctx context.Context) error
 	PublishJobStatus(status logs.JobStatus, jobID string) error
 }
 
@@ -44,8 +45,8 @@ func (np NATSPublisher) PublishJobStatus(status logs.JobStatus, jobID string) er
 }
 
 // publish log entries to NATS JetStream
-func (np NATSPublisher) PublishLog(buildJobLog logs.Log) error {
-	if err := np.pd.PublishLog(buildJobLog); err != nil {
+func (np NATSPublisher) PublishLog(buildJobLog logs.Log, ctx context.Context) error {
+	if err := np.pd.PublishLog(buildJobLog, ctx); err != nil {
 		return fmt.Errorf("publishing job log: %w", err)
 	}
 	return nil
