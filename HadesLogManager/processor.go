@@ -9,6 +9,7 @@ import (
 	"github.com/ls1intum/hades/shared/buildlogs"
 )
 
+// LogAggregator defines the interface for aggregating and managing job logs
 type LogAggregator interface {
 	AddLog(log buildlogs.Log)
 	FlushJobLogs(jobID string) error
@@ -17,21 +18,23 @@ type LogAggregator interface {
 	MarkJobCompleted(jobID string)
 }
 
-// NATSLogAggregator implements LogAggregator using NATS JetStream for log consumption
-// and in-memory storage for fast log retrieval. It provides thread-safe log aggregation
-// with configurable batching, automatic log rotation, and memory management.
-//
-// The aggregator maintains logs per job ID and automatically trims old logs to prevent
-// memory overflow.
+// NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
+// It provides thread-safe log aggregation with configurable batching, automatic log rotation,
+// and memory management. Thread-safety is provided by sync.Map for all operations.
 type NATSLogAggregator struct {
 	hlc       *buildlogs.HadesLogConsumer
-	logs      sync.Map // jobID (string) -> []buildlogs.Log
+	logs      sync.Map // jobID (string) -> logsVersion
 	completed sync.Map // jobID (string) -> time.Time (completion time)
 	config    AggregatorConfig
 }
 
+// wrapper stored in sync.Map: comparable (uint64 + pointer)
+type logsVersion struct {
+	ver uint64
+	ptr *[]buildlogs.Log
+}
+
 // AggregatorConfig defines the configuration parameters for log aggregation behavior.
-// It controls batching size, retention time, and memory limits per job.
 type AggregatorConfig struct {
 	BatchSize  int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
 	Retention  time.Duration `env:"LOG_RETENTION" envDefault:"1h"`
@@ -39,107 +42,132 @@ type AggregatorConfig struct {
 }
 
 // NewLogAggregator creates a new NATS-based LogAggregator instance with the specified configuration.
-// It initializes the internal log storage and sets up the aggregator ready for use.
+// It starts a background goroutine for periodic cleanup of completed jobs.
 //
 // Parameters:
-//   - hlc: HadesLogConsumer instance for receiving logs from NATS JetStream
+//   - ctx: Context for controlling the lifecycle of background goroutines
+//   - hlc: HadesLogConsumer instance (currently unused but kept for future extensibility)
 //   - config: AggregatorConfig containing batching and limit settings
 //
 // Returns:
 //   - LogAggregator: A new instance ready to aggregate logs
 func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
 	la := &NATSLogAggregator{
-		hlc:       hlc,
-		logs:      sync.Map{},
-		completed: sync.Map{},
-		config:    config,
+		hlc:    hlc,
+		config: config,
 	}
 
-	// start background cleanup goroutine
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				slog.Info("Stopping log aggregator cleanup goroutine")
-				return
-			case <-ticker.C:
-				la.cleanupCompletedJobs()
-			}
-		}
-	}()
+	// Start background cleanup goroutine
+	go la.cleanupLoop(ctx)
 
 	return la
 }
 
-// addLog adds a new log entry to the aggregator for the specified job.
-// It automatically creates a new log slice for new job IDs and trims old logs
-// if the maximum log count per job is exceeded. The trimming keeps only the
-// most recent logs to prevent memory overflow.
-//
-// This method is thread-safe using sync.Map operations and can be called concurrently
-// from multiple goroutines without additional synchronization.
-//
-// Parameters:
-//   - log: The buildlogs.Log entry to add to the aggregator, must contain a valid JobID
-func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
-	jobID := log.JobID
-	slog.Debug("Start adding log to aggregator", "job_id", jobID)
+// cleanupLoop runs periodic cleanup of completed jobs
+func (la *NATSLogAggregator) cleanupLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 
 	for {
-		// Load current logs
-		value, _ := la.logs.LoadOrStore(jobID, []buildlogs.Log{})
-		existingLogs := value.([]buildlogs.Log)
-
-		// Create a new slice (copy + append)
-		newLogs := make([]buildlogs.Log, len(existingLogs), len(existingLogs)+1)
-		copy(newLogs, existingLogs)
-		newLogs = append(newLogs, log)
-
-		// Trim if needed
-		if len(newLogs) > la.config.MaxJobLogs {
-			start := len(newLogs) - la.config.MaxJobLogs
-			newLogs = newLogs[start:]
-		}
-
-		// Replace logs if existing
-		if la.logs.CompareAndSwap(jobID, existingLogs, newLogs) {
-			slog.Debug("Added log to aggregator", "job_id", jobID, "total_logs", len(newLogs))
-			break
+		select {
+		case <-ctx.Done():
+			slog.Info("Stopping log aggregator cleanup goroutine")
+			return
+		case <-ticker.C:
+			la.cleanupCompletedJobs()
 		}
 	}
 }
 
-// FlushJobLogs processes batches of logs where the job has been completed/ failed.
-// Currently, this method only logs the flush operation. Will be extended to
-// send logs to external systems (Adapter).
+// AddLog adds a new log entry to the aggregator for the specified job.
+// It automatically creates a new log slice for new job IDs and trims old logs
+// if the maximum log count per job is exceeded.
+//
+// This method is thread-safe using sync.Map with compare-and-swap operations.
+//
+// Parameters:
+//   - log: The buildlogs.Log entry to add, must contain a valid JobID
+func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
+	if log.JobID == "" {
+		slog.Warn("Attempted to add log with empty job ID")
+		return
+	}
+
+	slog.Debug("Adding log to aggregator",
+		"job_id", log.JobID,
+		"entries", len(log.Logs))
+
+	// Use LoadOrStore and CompareAndSwap for thread-safe updates
+	for {
+		value, _ := la.logs.LoadOrStore(log.JobID, logsVersion{ver: 0, ptr: &[]buildlogs.Log{}})
+		old := value.(logsVersion)
+		existing := *old.ptr
+
+		// Create new slice with appended log
+		newLogs := make([]buildlogs.Log, len(existing), len(existing)+1)
+		copy(newLogs, existing)
+		newLogs = append(newLogs, log)
+
+		// Trim if needed
+		if len(newLogs) > la.config.MaxJobLogs {
+			trimStart := len(newLogs) - la.config.MaxJobLogs
+			newLogs = newLogs[trimStart:]
+			slog.Debug("Trimmed old logs",
+				"job_id", log.JobID,
+				"trimmed_count", trimStart)
+		}
+
+		newPtr := &newLogs
+		newVal := logsVersion{ver: old.ver + 1, ptr: newPtr}
+
+		// Atomically swap if the value hasn't changed
+		if la.logs.CompareAndSwap(log.JobID, old, newVal) {
+			slog.Debug("Added log to aggregator",
+				"job_id", log.JobID,
+				"total_batches", len(newLogs))
+			break
+		}
+		// If swap failed, another goroutine modified the value - retry
+	}
+}
+
+// FlushJobLogs removes logs for a completed job from memory.
+// This is called after the retention period expires to free up memory.
 //
 // Parameters:
 //   - jobID: The unique identifier for the job whose logs should be flushed
 //
 // Returns:
-//   - error: Any error encountered during the flush operation (currently always nil)
+//   - error: Always nil in current implementation
 func (la *NATSLogAggregator) FlushJobLogs(jobID string) error {
 	value, exists := la.logs.LoadAndDelete(jobID)
 	if !exists {
-		slog.Warn("No logs to flush for completed job", "job_id", jobID)
+		slog.Debug("No logs to flush for job", "job_id", jobID)
 		return nil
 	}
 
-	logs := value.([]buildlogs.Log)
-	slog.Info("Flushed job logs", "job_id", jobID, "log_count", len(logs))
+	v := value.(logsVersion)
+	logs := *v.ptr
+	slog.Info("Flushed job logs",
+		"job_id", jobID,
+		"batch_count", len(logs))
+
 	la.completed.Delete(jobID)
 	return nil
 }
 
+// MarkJobCompleted marks a job as completed and schedules it for cleanup after retention period.
 func (la *NATSLogAggregator) MarkJobCompleted(jobID string) {
 	la.completed.Store(jobID, time.Now())
-	slog.Info("Marked job as completed, will flush after retention", "job_id", jobID, "retention", la.config.Retention)
+	slog.Info("Marked job as completed",
+		"job_id", jobID,
+		"retention", la.config.Retention)
 }
 
+// cleanupCompletedJobs removes logs for jobs that have exceeded the retention period.
 func (la *NATSLogAggregator) cleanupCompletedJobs() {
 	now := time.Now()
+	cleanedCount := 0
 
 	la.completed.Range(func(key, value any) bool {
 		jobID := key.(string)
@@ -149,20 +177,26 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 			slog.Debug("Retention expired, flushing job logs", "job_id", jobID)
 
 			if err := la.FlushJobLogs(jobID); err != nil {
-				slog.Error("Failed to flush logs during cleanup", "job_id", jobID, "error", err)
+				slog.Error("Failed to flush logs during cleanup",
+					"job_id", jobID,
+					"error", err)
+			} else {
+				cleanedCount++
 			}
 		}
-		return true
+		return true // Continue iteration
 	})
+
+	if cleanedCount > 0 {
+		slog.Info("Completed log cleanup cycle",
+			"cleaned_jobs", cleanedCount)
+	}
 }
 
-// API methods
-
 // GetJobLogs retrieves all log entries for a specific job ID by flattening
-// the batched logs into a single slice. Returns an empty slice if the job ID
-// is not found in the aggregator.
+// the batched logs into a single slice.
 //
-// This method is thread-safe and uses sync.Map.Load for consistent reads.
+// This method is thread-safe using sync.Map.Load.
 //
 // Parameters:
 //   - jobID: The unique identifier for the job whose logs to retrieve
@@ -175,34 +209,37 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.LogEntry {
 		return []buildlogs.LogEntry{}
 	}
 
-	logs := value.([]buildlogs.Log)
+	v := value.(logsVersion)
+	logs := *v.ptr
+
+	// Pre-calculate total size for efficient allocation
 	totalEntries := 0
 	for _, log := range logs {
 		totalEntries += len(log.Logs)
 	}
+
 	allLogEntries := make([]buildlogs.LogEntry, 0, totalEntries)
 	for _, log := range logs {
 		allLogEntries = append(allLogEntries, log.Logs...)
 	}
+
 	return allLogEntries
 }
 
 // GetAllJobs returns a slice containing all job IDs that currently have logs
-// stored in the aggregator. This method is useful for discovering which jobs
-// are being tracked and have associated log data.
+// stored in the aggregator.
 //
-// The returned slice contains job IDs in no particular order. For large numbers
-// of jobs, consider pagination in the calling code.
-//
-// This method is thread-safe and uses sync.Map.Range for consistent iteration.
+// This method is thread-safe using sync.Map.Range.
 //
 // Returns:
 //   - []string: A slice of all job IDs currently stored in the aggregator
 func (la *NATSLogAggregator) GetAllJobs() []string {
 	jobs := make([]string, 0)
+
 	la.logs.Range(func(key, value any) bool {
 		jobs = append(jobs, key.(string))
-		return true // continue iteration
+		return true // Continue iteration
 	})
+
 	return jobs
 }
