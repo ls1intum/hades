@@ -64,9 +64,9 @@ func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
 	if nc != nil {
 		publisher, err := log.NewNATSPublisher(nc)
 		if err != nil {
-			slog.Error("Failed to create NATS publisher", slog.Any("error", err))
+			slog.Error("Failed to create NATS publisher", "error", err)
 		} else {
-			d.publisher = *publisher
+			d.publisher = publisher
 		}
 	} else {
 		slog.Warn("NATS connection is nil, logs nor status will be published")
@@ -102,23 +102,23 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 	}
 
 	//block to send status first before execution
-	if err := d.publisher.PublishJobStatus(buildlogs.StatusRunning, job.ID.String()); err != nil {
-		job_logger.Warn("failed to publish success status", slog.Any("error", err))
+	if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusRunning, job.ID.String()); err != nil {
+		job_logger.Warn("failed to publish running status", "error", err)
 	}
 
 	err := docker_job.execute(ctx)
 	if err != nil {
-		if err := d.publisher.PublishJobStatus(buildlogs.StatusFailed, job.ID.String()); err != nil {
-			job_logger.Warn("failed to publish success status", slog.Any("error", err))
+		if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusFailed, job.ID.String()); err != nil {
+			job_logger.Warn("failed to publish failed status", "error", err)
 		}
-		job_logger.Error("Failed to execute job", slog.Any("error", err))
+		job_logger.Error("Failed to execute job", "error", err)
 		return err
 	}
 
-	if err := d.publisher.PublishJobStatus(buildlogs.StatusSuccess, job.ID.String()); err != nil {
-		job_logger.Warn("failed to publish success status", slog.Any("error", err))
+	if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusSuccess, job.ID.String()); err != nil {
+		job_logger.Warn("failed to publish success status", "error", err)
 	}
-	job_logger.Debug("Job executed successfully", slog.Any("job_id", job.ID))
+	job_logger.Debug("Job executed successfully", "job_id", job.ID)
 
 	// Delete the shared volume after the job is done
 	defer func() {

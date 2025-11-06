@@ -3,6 +3,7 @@ package buildlogs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -11,51 +12,83 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-const NatsLogSubject = "hades.logs.%s"
-const StreamName = "HADES_JOB_LOGS"
+const (
+	// NatsLogSubject is the NATS subject pattern for job logs
+	NatsLogSubject = "hades.logs.%s"
+	// StreamName is the JetStream stream name for job logs
+	StreamName = "HADES_JOB_LOGS"
+	// Default batch sizes and timeouts
+	defaultBatchSize     = 100
+	defaultBatchTimeout  = 5 * time.Second
+	defaultFetchSize     = 10
+	defaultFetchWaitTime = 100 * time.Millisecond
+	defaultShutdownTime  = 5 * time.Second
+)
 
+var (
+	// ErrNilConnection is returned when NATS connection is nil
+	ErrNilConnection = errors.New("nil NATS connection")
+	// ErrNilJetStream is returned when JetStream context is nil
+	ErrNilJetStream = errors.New("nil JetStream context")
+	// ErrInvalidJobID is returned when job ID is empty or invalid
+	ErrInvalidJobID = errors.New("invalid job ID")
+)
+
+// LogPublisher defines the interface for publishing logs to NATS JetStream
 type LogPublisher interface {
-	PublishLog(buildJobLog Log) error
+	PublishLog(ctx context.Context, buildJobLog Log) error
 }
 
+// LogConsumer defines the interface for consuming logs from NATS JetStream
 type LogConsumer interface {
 	WatchJobLogs(ctx context.Context, jobID string, handler func(Log)) error
 }
 
+// HadesLogProducer handles publishing logs to NATS JetStream
 type HadesLogProducer struct {
 	natsConnection *nats.Conn
 	js             jetstream.JetStream
 }
 
+// HadesLogConsumer handles consuming logs from NATS JetStream
 type HadesLogConsumer struct {
 	natsConnection *nats.Conn
 	js             jetstream.JetStream
-	consumer       jetstream.Consumer
 }
 
-// creates a JetStream connection for persistent log delivery
+// NewHadesLogProducer creates a new log producer with JetStream stream setup.
+// It creates or updates the HADES_JOB_LOGS stream with file storage and 24-hour retention.
+// Returns an error if the NATS connection is nil or stream creation fails.
 func NewHadesLogProducer(nc *nats.Conn) (*HadesLogProducer, error) {
-	ctx := context.Background()
-	js, err := jetstream.New(nc)
-	if err != nil {
-		slog.Error("Failed to create JetStream context", "error", err)
-		return nil, err
+	if nc == nil {
+		return nil, ErrNilConnection
 	}
 
-	s, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+	ctx := context.Background()
+
+	js, err := jetstream.New(nc)
+	if err != nil {
+		return nil, fmt.Errorf("creating JetStream context: %w", err)
+	}
+
+	streamConfig := jetstream.StreamConfig{
 		Name:       StreamName,
 		Subjects:   []string{fmt.Sprintf(NatsLogSubject, "*")},
 		Storage:    jetstream.FileStorage,
 		Retention:  jetstream.LimitsPolicy,
-		Duplicates: 1 * time.Minute, // Disallow duplicates for 1 minute
+		Duplicates: 1 * time.Minute,
 		MaxMsgs:    10000,
-		MaxAge:     24 * time.Hour, // Retain logs for 24 hours by default
-	})
-	if err != nil {
-		slog.Error("Failed to create JetStream stream", "error", err)
-		return nil, err
+		MaxAge:     24 * time.Hour,
 	}
-	slog.Info("Created JetStream stream", "stream", s)
+
+	stream, err := js.CreateOrUpdateStream(ctx, streamConfig)
+	if err != nil {
+		return nil, fmt.Errorf("creating JetStream stream: %w", err)
+	}
+
+	slog.Info("JetStream stream ready",
+		"stream", stream.CachedInfo().Config.Name,
+		"subjects", stream.CachedInfo().Config.Subjects)
 
 	return &HadesLogProducer{
 		natsConnection: nc,
@@ -63,125 +96,180 @@ func NewHadesLogProducer(nc *nats.Conn) (*HadesLogProducer, error) {
 	}, nil
 }
 
+// NewHadesLogConsumer creates a new log consumer for reading logs from JetStream.
+// Returns an error if the NATS connection is nil or JetStream context creation fails.
 func NewHadesLogConsumer(nc *nats.Conn) (*HadesLogConsumer, error) {
+	if nc == nil {
+		return nil, ErrNilConnection
+	}
+
 	js, err := jetstream.New(nc)
 	if err != nil {
-		slog.Error("Failed to create JetStream context", "error", err)
-		return nil, err
+		return nil, fmt.Errorf("creating JetStream context: %w", err)
 	}
 
 	return &HadesLogConsumer{
 		natsConnection: nc,
 		js:             js,
-		consumer:       nil, // You can create a permanent consumer here if needed
 	}, nil
 }
 
-func (hlp *HadesLogProducer) PublishLog(buildJobLog Log) error {
+// PublishLog publishes a log entry to JetStream for the specified job.
+// The log is published to the subject "hades.logs.{jobID}".
+// Returns an error if JetStream is nil, the log is invalid, or publishing fails.
+func (hlp *HadesLogProducer) PublishLog(ctx context.Context, buildJobLog Log) error {
 	if hlp.js == nil {
-		slog.Error("Cannot publish logs: nil JetStream connection", slog.String("job_id", buildJobLog.JobID))
-		return fmt.Errorf("nil JetStream connection")
+		return ErrNilJetStream
 	}
 
-	subject := fmt.Sprintf("%s.%s", NatsLogSubject, buildJobLog.JobID) // "hades.logs.{jobID}"
+	if buildJobLog.JobID == "" {
+		return ErrInvalidJobID
+	}
+
+	subject := fmt.Sprintf(NatsLogSubject, buildJobLog.JobID)
 	data, err := json.Marshal(buildJobLog)
 	if err != nil {
-		slog.Error("Failed to marshal log", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
-		return fmt.Errorf("marshalling log: %w", err)
+		return fmt.Errorf("marshaling log for job %s: %w", buildJobLog.JobID, err)
 	}
 
-	_, err = hlp.js.Publish(context.Background(), subject, data)
-	if err != nil {
-		slog.Error("Failed to publish log to JetStream", slog.String("job_id", buildJobLog.JobID), slog.Any("error", err))
-		return fmt.Errorf("publishing log to JetStream: %w", err)
+	if ctx == nil {
+		ctx = context.Background()
 	}
+
+	_, err = hlp.js.Publish(ctx, subject, data)
+	if err != nil {
+		return fmt.Errorf("publishing log to subject %s: %w", subject, err)
+	}
+
+	slog.Debug("Published log",
+		"job_id", buildJobLog.JobID,
+		"container_id", buildJobLog.ContainerID,
+		"entries", len(buildJobLog.Logs))
 
 	return nil
 }
 
-// WatchJobLogs uses JetStream with job-specific consumer
+// WatchJobLogs subscribes to logs for a specific job and calls the handler for each batch.
+// It creates a job-specific durable consumer and automatically batches log entries for efficiency.
+// The consumer is automatically cleaned up when the context is cancelled.
+// Returns an error if the job ID is invalid or consumer creation fails.
 func (hlc *HadesLogConsumer) WatchJobLogs(ctx context.Context, jobID string, handler func(Log)) error {
+	if jobID == "" {
+		return ErrInvalidJobID
+	}
+
+	if hlc.js == nil {
+		return ErrNilJetStream
+	}
+
 	subject := fmt.Sprintf(NatsLogSubject, jobID)
 	consumerName := fmt.Sprintf("job-watcher-%s", jobID)
 
-	// Create a temporary consumer for this specific job
-	consumer, err := hlc.js.CreateOrUpdateConsumer(ctx, StreamName, jetstream.ConsumerConfig{
+	consumerConfig := jetstream.ConsumerConfig{
 		Name:          consumerName,
 		Durable:       consumerName,
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		FilterSubject: subject, // Only consume messages from this job's subject
+		FilterSubject: subject,
 		DeliverPolicy: jetstream.DeliverAllPolicy,
-	})
+	}
+
+	consumer, err := hlc.js.CreateOrUpdateConsumer(ctx, StreamName, consumerConfig)
 	if err != nil {
-		return fmt.Errorf("creating job consumer: %w", err)
+		return fmt.Errorf("creating consumer for job %s: %w", jobID, err)
 	}
 
 	// Cleanup consumer when done
 	defer func() {
-		deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		deleteCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTime)
 		defer cancel()
+
 		if err := hlc.js.DeleteConsumer(deleteCtx, StreamName, consumerName); err != nil {
-			slog.Error("Failed to delete job consumer", "job_id", jobID, "error", err)
+			slog.Warn("Failed to delete job consumer",
+				"job_id", jobID,
+				"consumer", consumerName,
+				"error", err)
+		} else {
+			slog.Debug("Deleted job consumer",
+				"job_id", jobID,
+				"consumer", consumerName)
 		}
 	}()
 
-	logBatch := make([]LogEntry, 0, 100)         // Batch up to 100 log entries
-	batchTimer := time.NewTimer(5 * time.Second) // Flush batch every 5 seconds
+	slog.Info("Started watching job logs",
+		"job_id", jobID,
+		"subject", subject,
+		"consumer", consumerName)
+
+	return hlc.processBatchedLogs(ctx, consumer, jobID, handler)
+}
+
+// processBatchedLogs handles the batching and processing of log messages from the consumer.
+// It batches log entries for efficiency and calls the handler periodically.
+func (hlc *HadesLogConsumer) processBatchedLogs(ctx context.Context, consumer jetstream.Consumer, jobID string, handler func(Log)) error {
+	const (
+		batchSize    = defaultBatchSize
+		batchTimeout = defaultBatchTimeout
+		fetchSize    = defaultFetchSize
+		fetchWait    = defaultFetchWaitTime
+	)
+
+	logBatch := make([]LogEntry, 0, batchSize)
+	batchTimer := time.NewTimer(batchTimeout)
 	defer batchTimer.Stop()
 
-	slog.Info("Started watching logs for job", "job_id", jobID, "subject", subject)
+	flushBatch := func() {
+		if len(logBatch) > 0 {
+			handler(Log{JobID: jobID, Logs: logBatch})
+			logBatch = logBatch[:0] // Reset batch
+		}
+		batchTimer.Reset(batchTimeout)
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			// Flush remaining logs before stopping
-			if len(logBatch) > 0 {
-				handler(Log{JobID: jobID, Logs: logBatch})
-			}
+			flushBatch() // Flush remaining logs before stopping
 			return ctx.Err()
 
 		case <-batchTimer.C:
-			// Flush batch on timer
-			if len(logBatch) > 0 {
-				handler(Log{JobID: jobID, Logs: logBatch})
-				logBatch = logBatch[:0] // Reset batch
-			}
-			batchTimer.Reset(5 * time.Second)
+			flushBatch()
 
 		default:
-			// Fetch messages
-			batch, err := consumer.FetchNoWait(10) // Fetch up to 10 messages at once
+			batch, err := consumer.FetchNoWait(fetchSize)
 			if err != nil {
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(fetchWait)
 				continue
 			}
 
-			msgs := batch.Messages()
 			hasMessages := false
-
-			for msg := range msgs {
+			for msg := range batch.Messages() {
 				hasMessages = true
+
 				var log Log
 				if err := json.Unmarshal(msg.Data(), &log); err != nil {
-					slog.Error("Failed to unmarshal log", "job_id", jobID, "error", err)
-					msg.Nak()
+					slog.Warn("Failed to unmarshal log message",
+						"job_id", jobID,
+						"error", err)
+					if ackErr := msg.Nak(); ackErr != nil {
+						slog.Warn("Failed to NAK message", "error", ackErr)
+					}
 					continue
 				}
 
-				// Add log entries to batch
 				logBatch = append(logBatch, log.Logs...)
-				msg.Ack()
+
+				if ackErr := msg.Ack(); ackErr != nil {
+					slog.Warn("Failed to ACK message", "error", ackErr)
+				}
 
 				// Flush batch if it gets too large
-				if len(logBatch) >= 100 {
-					handler(Log{JobID: jobID, Logs: logBatch})
-					logBatch = logBatch[:0] // Reset batch
-					batchTimer.Reset(5 * time.Second)
+				if len(logBatch) >= batchSize {
+					flushBatch()
 				}
 			}
 
 			if !hasMessages {
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(fetchWait)
 			}
 		}
 	}
