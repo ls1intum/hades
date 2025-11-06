@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -285,6 +286,12 @@ func (hc *HadesConsumer) DequeueJob(ctx context.Context, processing func(payload
 						}
 						return
 					}
+
+					if job.Metadata == nil {
+						job.Metadata = map[string]string{}
+					}
+					job.Metadata["hades.tum.de/priority"] = strconv.Itoa(PriorityNumeric(priority))
+					job.Metadata["hades.tum.de/priorityName"] = string(priority)
 
 					slog.Info("Processing job", "id", job.ID.String(), "priority", priority, "subject", msg.Subject, "worker", fmt.Sprintf("%d/%d", len(sem), numWorkers))
 

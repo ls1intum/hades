@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,9 +43,12 @@ import (
 
 const conflictRequeueDelay = 200 * time.Millisecond
 
+const defaultPriority = 1
+
 const (
 	LabelManagedBy = "hades.tum.de/managed-by"
 	LabelBuildJob  = "hades.tum.de/buildjob"
+	LabelPriority  = "hades.tum.de/priority"
 )
 
 // BuildJobReconciler reconciles a BuildJob object
@@ -332,13 +336,20 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 		ttl = &t
 	}
 
+	labels := map[string]string{
+		LabelManagedBy: "hades-operator",
+		LabelBuildJob:  bj.Name,
+	}
+
+	if p, ok := bj.Labels[LabelPriority]; ok && strings.TrimSpace(p) != "" {
+		labels[LabelPriority] = p
+	}
+
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: bj.Namespace,
-			Labels: map[string]string{
-				LabelManagedBy: "hades-operator",
-				LabelBuildJob:  bj.Name},
+			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
 			Suspend:                 &suspend,
@@ -430,30 +441,72 @@ func (r *BuildJobReconciler) admitOneSuspendedJob(ctx context.Context, namespace
 	var jl batchv1.JobList
 	if err := r.List(ctx, &jl,
 		client.InNamespace(namespace),
-		client.MatchingLabels{"hades.tum.de/managed-by": "hades-operator"},
+		client.MatchingLabels{LabelManagedBy: "hades-operator"},
 	); err != nil {
 		return err
 	}
 
-	var oldest *batchv1.Job
+	var pick *batchv1.Job
+	bestPri := -1
+
 	for i := range jl.Items {
 		j := &jl.Items[i]
+
 		done, _, _ := jobDone(j)
 		if done {
 			continue
 		}
-		if j.Spec.Suspend != nil && *j.Spec.Suspend {
-			if oldest == nil || j.CreationTimestamp.Before(&oldest.CreationTimestamp) {
-				oldest = j
-			}
+		if j.Spec.Suspend == nil || !*j.Spec.Suspend {
+			continue
+		}
+
+		pri := r.priorityForJob(ctx, j)
+
+		// Pick the highest-priority job, breaking ties by creation timestamp
+		if pick == nil ||
+			pri > bestPri ||
+			(pri == bestPri && j.CreationTimestamp.Before(&pick.CreationTimestamp)) {
+			pick = j
+			bestPri = pri
 		}
 	}
-	if oldest == nil {
+
+	if pick == nil {
 		return nil
 	}
 
-	base := oldest.DeepCopy()
-	falseVal := false
-	oldest.Spec.Suspend = &falseVal
-	return r.Patch(ctx, oldest, client.MergeFrom(base))
+	base := pick.DeepCopy()
+	f := false
+	pick.Spec.Suspend = &f
+
+	log := log.FromContext(ctx)
+	log.Info("Admitting suspended Job", "job", pick.Name, "priority", bestPri)
+
+	return r.Patch(ctx, pick, client.MergeFrom(base))
+}
+
+func (r *BuildJobReconciler) priorityForJob(ctx context.Context, j *batchv1.Job) int {
+	pri := priorityFromLabels(j.Labels, defaultPriority) // default priority is 1 (lowest priority)
+	if pri != defaultPriority {
+		return pri
+	}
+	if bjName, ok := j.Labels[LabelBuildJob]; ok && bjName != "" {
+		var bj buildv1.BuildJob
+		if err := r.Get(ctx, types.NamespacedName{Namespace: j.Namespace, Name: bjName}, &bj); err == nil {
+			return priorityFromLabels(bj.Labels, defaultPriority)
+		}
+	}
+	return 1
+}
+
+func priorityFromLabels(labels map[string]string, defaultVal int) int {
+	if labels == nil {
+		return defaultVal
+	}
+	if s, ok := labels[LabelPriority]; ok {
+		if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && v >= 1 {
+			return v
+		}
+	}
+	return defaultVal
 }

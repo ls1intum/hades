@@ -34,3 +34,14 @@ func PriorityFromInt(priority int) Priority {
 		return MediumPriority
 	}
 }
+
+func PriorityNumeric(p Priority) int {
+	switch p {
+	case HighPriority:
+		return 3
+	case MediumPriority:
+		return 2
+	default:
+		return 1
+	}
+}
