@@ -46,6 +46,10 @@ import (
 
 const conflictRequeueDelay = 200 * time.Millisecond
 
+const PodStatusRunning = "Running"
+const PodStatusSucceeded = "Succeeded"
+const PodStatusFailed = "Failed"
+
 // BuildJobReconciler reconciles a BuildJob object
 type BuildJobReconciler struct {
 	client.Client
@@ -98,10 +102,17 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
 			// Job is done, publish "completed" event
-			r.publishBuildJobEvent(bj.Name, "completed", map[string]any{
-				"succeeded": succeeded,
-				"message":   msg,
-			})
+			if succeeded {
+				r.publishBuildJobEvent(bj.Name, PodStatusSucceeded, map[string]any{
+					"succeeded": succeeded,
+					"message":   msg,
+				})
+			} else {
+				r.publishBuildJobEvent(bj.Name, PodStatusFailed, map[string]any{
+					"succeeded": succeeded,
+					"message":   msg,
+				})
+			}
 			slog.Debug("BuildJob completed event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
 
 			if err := r.setStatusCompleted(ctx, req.NamespacedName, succeeded, msg); err != nil {
@@ -120,10 +131,6 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			policy := metav1.DeletePropagationForeground
 			return ctrl.Result{}, r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy})
 		}
-
-		// Job starting to run - publish event
-		r.publishBuildJobEvent(bj.Name, "pod_running", map[string]any{})
-		slog.Debug("BuildJob running event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
 
 		// Build is not done, set the status to be "running"
 		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
@@ -174,7 +181,8 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	r.publishBuildJobEvent(bj.Name, "pod_running", map[string]any{})
+	// 3.4.1 Publish "running" event
+	r.publishBuildJobEvent(bj.Name, PodStatusRunning, map[string]any{})
 	slog.Debug("BuildJob running event published", "subject", fmt.Sprintf("buildjob.events.%s", bj.Name))
 
 	// Do not requeue; later Job status changes will re-trigger reconciliation
