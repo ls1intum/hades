@@ -171,6 +171,7 @@ func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		k8sClient:        k.k8sClient,
 		namespace:        k.namespace,
 		sharedVolumeName: "shared",
+		nc:               k.nc,
 	}
 	return k8sJob.execute(ctx)
 }
