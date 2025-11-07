@@ -72,6 +72,7 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 
 // Helper function for waitForAllContainers
 // Waits for a specific container to complete by polling and processes its logs
+// Currently used in Scheduler mode only
 func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, containerName string, isInitContainer bool) error {
 	var exitCode int32
 
@@ -168,7 +169,8 @@ func (pl PodLogReader) ProcessContainerLogs(ctx context.Context, podName string,
 }
 
 // Helper function for ProcessContainerLogs
-// Fetches logs for a specific container in the pod
+// Fetches logs for a specific container in the pod using container name
+// Used in both Scheduler and Operator modes
 func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, containerName string) (*bytes.Buffer, *bytes.Buffer, error) {
 	// get logs of <container name>
 	podLogOpts := corev1.PodLogOptions{

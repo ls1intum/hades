@@ -64,7 +64,8 @@ type BuildJobReconciler struct {
 // +kubebuilder:rbac:groups="",resources=pods;events;configmaps;secrets,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile ensures the cluster state matches the desired state of a BuildJob.
-// It creates/owns a batch Job, updates BuildJob status, and cleans up on completion.
+// It creates/owns a batch Job, updates BuildJob status and each ContainerStatus of the BuildJob, and cleans up on completion.
+// Triggers NATS log publishing on ContainerStatus changes, and status publishing on BuildJob status updates.
 func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	// ----------------------------- 0. Retrieve the BuildJob instance -----------------------------
@@ -175,7 +176,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 }
 
 // setStatusRunning sets BuildJob.Status to "Running", records StartTime and PodName.
-// publishes "running" status to NATS.
+// publishes "running" jobstatus to NATS.
 // Uses optimistic concurrency (RetryOnConflict).
 func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.NamespacedName, jobName string, jobID string) error {
 	r.Publisher.PublishJobStatus(ctx, buildlogs.StatusRunning, jobID)
@@ -208,6 +209,7 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.Name
 }
 
 // setStatusCompleted marks BuildJob.Status as Succeeded/Failed and sets CompletionTime/message.
+// publishes "success" or "failed" jobstatus to NATS.
 // Uses optimistic concurrency (RetryOnConflict).
 func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.NamespacedName, jobID string, succeeded bool, msg string) error {
 	if succeeded {

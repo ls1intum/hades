@@ -23,7 +23,7 @@ func (r *BuildJobReconciler) podLogReader(namespace, jobID string) k8s.PodLogRea
 	}
 }
 
-// initializeContainerStatuses creates Pending status entries for all expected containers
+// initializeContainerStatuses creates Pending status entries for all expected containers of the BuildJob
 func (r *BuildJobReconciler) initializeContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) error {
 	slog.Info("Initializing container statuses for BuildJob", "buildJob", bj.Name)
 	statuses := make([]buildv1.ContainerStatus, 0, len(bj.Spec.Steps)+1)
@@ -58,6 +58,7 @@ func (r *BuildJobReconciler) initializeContainerStatuses(ctx context.Context, bj
 	})
 }
 
+// updateContainerStatuses resolves PodName using the BuildJob and updates each BuildJob's container statuses accordingly
 func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) error {
 	slog.Info("Updating container statuses for BuildJob", "buildJob", bj.Name)
 
