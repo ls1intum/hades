@@ -81,7 +81,7 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 	subs = append(subs, sub)
 
 	// Subscribe to completed status - stop watching logs
-	sub, err = dlm.subscribeToStatus(ctx, logs.StatusSuccess, dlm.handleJobCompleted)
+	sub, err = dlm.subscribeToStatus(ctx, logs.StatusSucceeded, dlm.handleJobCompleted)
 	if err != nil {
 		dlm.cleanupSubscriptions(subs)
 		return err

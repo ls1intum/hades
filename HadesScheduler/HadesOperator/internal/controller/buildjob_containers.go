@@ -13,6 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const FinalizerContainerName = "buildjob-finalizer"
+
 // helper: build a configured PodLogReader for the given namespace/job.
 func (r *BuildJobReconciler) podLogReader(namespace, jobID string) k8s.PodLogReader {
 	return k8s.PodLogReader{
@@ -31,7 +33,7 @@ func (r *BuildJobReconciler) initializeContainerStatuses(ctx context.Context, bj
 	// Initialize status for each step (init containers)
 	for _, step := range bj.Spec.Steps {
 		statuses = append(statuses, buildv1.ContainerStatus{
-			Name:          fmt.Sprintf("step-%d", step.ID),
+			Name:          fmt.Sprintf(BuildStepPrefix, step.ID),
 			StepID:        step.ID,
 			State:         buildv1.ContainerStatePending,
 			LogsPublished: false,
@@ -40,7 +42,7 @@ func (r *BuildJobReconciler) initializeContainerStatuses(ctx context.Context, bj
 
 	// Initialize status for finalizer container
 	statuses = append(statuses, buildv1.ContainerStatus{
-		Name:          "buildjob-finalizer",
+		Name:          FinalizerContainerName,
 		StepID:        0, // 0 indicates it's not a step
 		State:         buildv1.ContainerStatePending,
 		LogsPublished: false,

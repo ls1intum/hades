@@ -10,12 +10,15 @@ import (
 	"time"
 
 	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/nats-io/nats.go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 )
+
+const JobNameLabel = "job-name=%s"
 
 type PodLogReader struct {
 	K8sClient *kubernetes.Clientset
@@ -217,9 +220,9 @@ func (pl PodLogReader) ResolvePodName(ctx context.Context) (string, error) {
 	}
 
 	// else: find the pod name by looking at the job name
-	jobName := fmt.Sprintf("buildjob-%s", pl.JobID)
+	jobName := fmt.Sprintf(buildlogs.JobNamePrefix, pl.JobID)
 	if lst, err := cli.List(ctx, metav1.ListOptions{
-		LabelSelector: "job-name=" + jobName,
+		LabelSelector: fmt.Sprintf(JobNameLabel, jobName),
 	}); err == nil {
 		if len(lst.Items) == 1 {
 			return lst.Items[0].Name, nil

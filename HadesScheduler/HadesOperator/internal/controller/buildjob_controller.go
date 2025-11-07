@@ -44,10 +44,7 @@ import (
 )
 
 const conflictRequeueDelay = 200 * time.Millisecond
-
-const PodStatusRunning = "Running"
-const PodStatusSucceeded = "Succeeded"
-const PodStatusFailed = "Failed"
+const BuildStepPrefix = "step-%d"
 
 // BuildJobReconciler reconciles a BuildJob object
 type BuildJobReconciler struct {
@@ -85,12 +82,12 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// ----------------------------- 1. Exit if already processed ----------------------------------
 	// Only process objects that are not marked as "finalized" (i.e., not deleted)
-	if bj.Status.Phase == "Succeeded" || bj.Status.Phase == "Failed" {
+	if bj.Status.Phase == string(buildlogs.StatusSucceeded) || bj.Status.Phase == string(buildlogs.StatusFailed) {
 		return ctrl.Result{}, nil
 	}
 
 	// ----------------------------- 2. Check if the Job already exists ----------------------------
-	jobName := fmt.Sprintf("buildjob-%s", bj.Name)
+	jobName := fmt.Sprintf(buildlogs.JobNamePrefix, bj.Name)
 	var existingJob batchv1.Job
 	err := r.Get(ctx, client.ObjectKey{Namespace: bj.Namespace, Name: jobName}, &existingJob)
 	if err == nil {
@@ -121,7 +118,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		// Build is not done, set the status to be "running"
-		if bj.Status.Phase != "Running" {
+		if bj.Status.Phase != string(buildlogs.StatusRunning) {
 			if err := r.setStatusRunning(ctx, req.NamespacedName, jobName, bj.Name); err != nil {
 				if apierrors.IsConflict(err) {
 					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
@@ -187,13 +184,13 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.Name
 		if latest.DeletionTimestamp != nil {
 			return nil
 		}
-		if latest.Status.Phase == "Running" {
+		if latest.Status.Phase == string(buildlogs.StatusRunning) {
 			return nil
 		}
 
 		base := latest.DeepCopy()
 		now := metav1.Now()
-		latest.Status.Phase = "Running"
+		latest.Status.Phase = string(buildlogs.StatusRunning)
 		latest.Status.StartTime = &now
 		latest.Status.PodName = jobName
 
@@ -227,16 +224,16 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 			return nil
 		}
 
-		if latest.Status.Phase == "Succeeded" || latest.Status.Phase == "Failed" {
+		if latest.Status.Phase == string(buildlogs.StatusSucceeded) || latest.Status.Phase == string(buildlogs.StatusFailed) {
 			return nil
 		}
 
 		base := latest.DeepCopy()
 		now := metav1.Now()
 		if succeeded {
-			latest.Status.Phase = "Succeeded"
+			latest.Status.Phase = string(buildlogs.StatusSucceeded)
 		} else {
-			latest.Status.Phase = "Failed"
+			latest.Status.Phase = string(buildlogs.StatusFailed)
 		}
 		latest.Status.Message = msg
 		latest.Status.CompletionTime = &now
@@ -247,11 +244,11 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 	}
 
 	if succeeded {
-		if err := r.Publisher.PublishJobStatus(ctx, buildlogs.StatusSuccess, jobID); err != nil {
-			slog.Error("Failed to publish job success status", "job_id", jobID, "error", err)
+		if err := r.Publisher.PublishJobStatus(ctx, buildlogs.StatusSucceeded, jobID); err != nil {
+			slog.Error("Failed to publish job succeeded status", "job_id", jobID, "error", err)
 			return err
 		}
-		slog.Info("Published job success status", "job_id", jobID)
+		slog.Info("Published job succeeded status", "job_id", jobID)
 		return nil
 	} else {
 		if err := r.Publisher.PublishJobStatus(ctx, buildlogs.StatusFailed, jobID); err != nil {
@@ -271,7 +268,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool) *b
 	var initCtrs []corev1.Container
 	for _, s := range bj.Spec.Steps {
 		c := corev1.Container{
-			Name:         fmt.Sprintf("step-%d", s.ID),
+			Name:         fmt.Sprintf(BuildStepPrefix, s.ID),
 			Image:        s.Image,
 			Env:          envFromMeta(s.Metadata), // Convert metadata to environment variables
 			VolumeMounts: []corev1.VolumeMount{sharedMount},
@@ -298,7 +295,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool) *b
 
 	// Add a dummy container that runs after all init containers have finished
 	dummy := corev1.Container{
-		Name:         "buildjob-finalizer",
+		Name:         FinalizerContainerName,
 		Image:        "busybox",
 		Command:      []string{"sh", "-c", "echo build finished"},
 		VolumeMounts: []corev1.VolumeMount{sharedMount},
