@@ -148,6 +148,7 @@ spec:
                   minimum: 1
                   type: integer
               required:
+                - name
                 - steps
               type: object
             status:
@@ -158,6 +159,39 @@ spec:
                     Empty if the job is still running or pending.
                   format: date-time
                   type: string
+                containerStatuses:
+                  items:
+                    description: ContainerStatus tracks the runtime state of a single
+                      container
+                    properties:
+                      logsPublished:
+                        description: LogsPublished indicates whether logs have been
+                          read and published to NATS
+                        type: boolean
+                      name:
+                        description: Name of the container (e.g., "step-0", "step-1",
+                          "buildjob-finalizer")
+                        type: string
+                      state:
+                        description: State of the container
+                        enum:
+                          - Pending
+                          - Running
+                          - Succeeded
+                          - Failed
+                          - Unknown
+                        type: string
+                      stepId:
+                        description: StepID links back to BuildStep.ID (0 for finalizer
+                          container)
+                        format: int32
+                        type: integer
+                    required:
+                      - name
+                      - state
+                      - stepId
+                    type: object
+                  type: array
                 currentStep:
                   description: |-
                     ID of the step currently being executed.
@@ -174,15 +208,15 @@ spec:
                     - Running: At least one step is currently executing
                     - Succeeded: All steps completed successfully
                     - Failed: At least one step failed, or the job timed out
-                  type: string
                   enum:
                     - Pending
                     - Running
                     - Succeeded
                     - Failed
+                  type: string
                 podName:
-                  description: |-
-                    Name of the Kubernetes Pod created by the operator to execute this BuildJob.
+                  description: Name of the Kubernetes Pod created by the operator to
+                    execute this BuildJob.
                   type: string
                 retryCount:
                   description: |-
@@ -192,6 +226,7 @@ spec:
                   format: int32
                   type: integer
                 startTime:
+                  description: Timestamp when the BuildJob starts execution
                   format: date-time
                   type: string
               type: object
