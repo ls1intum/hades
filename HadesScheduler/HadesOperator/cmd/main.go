@@ -49,10 +49,6 @@ type NSConfig struct {
 	WatchNamespace string `env:"WATCH_NAMESPACE"`
 }
 
-type NCConfig struct {
-	NatsConfig utils.NatsConfig
-}
-
 type OperatorConfig struct {
 	DeleteOnComplete string `env:"DELETE_ON_COMPLETE" envDefault:"true"`
 }
@@ -130,9 +126,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	var natsConfig NCConfig
+	var natsConfig utils.NatsConfig
 	utils.LoadConfig(&natsConfig)
-	nc, err := utils.SetupNatsConnection(natsConfig.NatsConfig)
+	nc, err := utils.SetupNatsConnection(natsConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to setup NATS Connection")
 		os.Exit(1)
