@@ -179,10 +179,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 // publishes "running" jobstatus to NATS.
 // Uses optimistic concurrency (RetryOnConflict).
 func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.NamespacedName, jobName string, jobID string) error {
-	r.Publisher.PublishJobStatus(ctx, buildlogs.StatusRunning, jobID)
-	slog.Info("Published job running status", "job_id", jobID)
-
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		latest := &buildv1.BuildJob{}
 		if err := r.Get(ctx, nn, latest); err != nil {
 			return client.IgnoreNotFound(err)
@@ -205,22 +202,23 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.Name
 			return err
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	if err := r.Publisher.PublishJobStatus(ctx, buildlogs.StatusRunning, jobID); err != nil {
+		slog.Error("Failed to publish job running status", "job_id", jobID, "error", err)
+		return err
+	}
+	slog.Info("Published job running status", "job_id", jobID)
+	return nil
 }
 
 // setStatusCompleted marks BuildJob.Status as Succeeded/Failed and sets CompletionTime/message.
 // publishes "success" or "failed" jobstatus to NATS.
 // Uses optimistic concurrency (RetryOnConflict).
 func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.NamespacedName, jobID string, succeeded bool, msg string) error {
-	if succeeded {
-		r.Publisher.PublishJobStatus(ctx, buildlogs.StatusSuccess, jobID)
-		slog.Info("Published job success status", "job_id", jobID)
-	} else {
-		r.Publisher.PublishJobStatus(ctx, buildlogs.StatusFailed, jobID)
-		slog.Info("Published job failed status", "job_id", jobID)
-	}
-
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		latest := &buildv1.BuildJob{}
 		if err := r.Get(ctx, nn, latest); err != nil {
 			return client.IgnoreNotFound(err)
@@ -244,7 +242,25 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 		latest.Status.CompletionTime = &now
 
 		return r.Status().Patch(ctx, latest, client.MergeFrom(base))
-	})
+	}); err != nil {
+		return err
+	}
+
+	if succeeded {
+		if err := r.Publisher.PublishJobStatus(ctx, buildlogs.StatusSuccess, jobID); err != nil {
+			slog.Error("Failed to publish job success status", "job_id", jobID, "error", err)
+			return err
+		}
+		slog.Info("Published job success status", "job_id", jobID)
+		return nil
+	} else {
+		if err := r.Publisher.PublishJobStatus(ctx, buildlogs.StatusFailed, jobID); err != nil {
+			slog.Error("Failed to publish job failed status", "job_id", jobID, "error", err)
+			return err
+		}
+		slog.Info("Published job failed status", "job_id", jobID)
+		return nil
+	}
 }
 
 // buildK8sJob creates a one-time Job with InitContainers that execute each Step in order

@@ -60,8 +60,8 @@ func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, agg
 
 // StartListening begins listening for job status changes on NATS subjects and manages
 // log watching accordingly. It subscribes to three status events:
-//   - hades.status.running: Starts log watching for the job
-//   - hades.status.success/failed: Stops log watching for the job
+//   - hades.jobstatus.running: Starts log watching for the job
+//   - hades.jobstatus.success/failed: Stops log watching for the job
 //
 // The method expects job IDs to be sent as string data in NATS messages.
 //
