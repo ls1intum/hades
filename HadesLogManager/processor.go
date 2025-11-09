@@ -214,12 +214,7 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 
 	v := value.(logsVersion)
 	logs := *v.ptr
-
-	totalEntries := len(logs)
-	allLogs := make([]buildlogs.Log, 0, totalEntries)
-	allLogs = append(allLogs, logs...)
-
-	return allLogs
+	return logs
 }
 
 // GetAllJobs returns a slice containing all job IDs that currently have logs
