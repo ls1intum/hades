@@ -215,12 +215,7 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 	v := value.(logsVersion)
 	logs := *v.ptr
 
-	// Pre-calculate total size for efficient allocation
-	totalEntries := 0
-	for _, log := range logs {
-		totalEntries += len(log.Logs)
-	}
-
+	totalEntries := len(logs)
 	allLogs := make([]buildlogs.Log, 0, totalEntries)
 	allLogs = append(allLogs, logs...)
 
