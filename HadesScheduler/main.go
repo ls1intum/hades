@@ -72,7 +72,7 @@ func main() {
 		publisher, err := log.NewNATSPublisher(NatsConnection)
 		if err != nil {
 			slog.Error("Failed to create NATS publisher", "error", err)
-			return
+			os.Exit(1)
 		}
 
 		scheduler, err = docker.NewScheduler(
@@ -85,7 +85,7 @@ func main() {
 		)
 		if err != nil {
 			slog.Error("Failed to create Docker scheduler", "error", err)
-			return
+			os.Exit(1)
 		}
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
