@@ -11,123 +11,113 @@ import (
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/payload"
-	"github.com/ls1intum/hades/shared/utils"
-	"github.com/nats-io/nats.go"
 )
 
-type DockerEnvConfig struct {
-	DockerHost           string `env:"DOCKER_HOST" envDefault:"unix:///var/run/docker.sock"`
-	ContainerAutoremove  bool   `env:"DOCKER_CONTAINER_AUTOREMOVE" envDefault:"false"`
-	DockerScriptExecutor string `env:"DOCKER_SCRIPT_EXECUTOR" envDefault:"/bin/bash -c"`
-	CPU_limit            uint   `env:"DOCKER_CPU_LIMIT"`    // Number of CPUs - e.g. '6'
-	MEMORY_limit         string `env:"DOCKER_MEMORY_LIMIT"` // RAM usage in g or m  - e.g. '4g'
-}
-
-type DockerProps struct {
+type Options struct {
 	scriptExecutor       string
 	containerAutoremove  bool
-	cpu_limit            uint
-	memory_limit         string
+	cpuLimit             uint
+	memoryLimit          string
 	volumeName           string
 	containerLogsOptions container.LogConfig
 }
 
 type Scheduler struct {
-	cli *client.Client
-	DockerProps
+	Options
+	cli       *client.Client
 	publisher log.Publisher
 }
 
-func NewDockerScheduler() (*Scheduler, error) {
-	var dockerCfg DockerEnvConfig
-	utils.LoadConfig(&dockerCfg)
-	slog.Debug("Docker config", "config", dockerCfg)
-
-	var err error
-	// Create a new Docker client
-	cli, err := client.NewClientWithOpts(client.WithHost(dockerCfg.DockerHost), client.WithAPIVersionNegotiation())
+func NewScheduler(options ...DockerOption) (*Scheduler, error) {
+	scheduler, err := NewDefaultScheduler()
 	if err != nil {
-		slog.Error("Failed to create Docker client", slog.Any("error", err))
+		return nil, err
 	}
-	return &Scheduler{
-		cli: cli,
-		DockerProps: DockerProps{
-			scriptExecutor:      dockerCfg.DockerScriptExecutor,
-			containerAutoremove: dockerCfg.ContainerAutoremove,
-			cpu_limit:           dockerCfg.CPU_limit,
-			memory_limit:        dockerCfg.MEMORY_limit,
-		},
-	}, nil
+
+	for _, option := range options {
+		option(scheduler)
+	}
+
+	return scheduler, nil
 }
 
-func (d *Scheduler) SetNatsConnection(nc *nats.Conn) *Scheduler {
-	if nc != nil {
-		publisher, err := log.NewNATSPublisher(nc)
-		if err != nil {
-			slog.Error("Failed to create NATS publisher", "error", err)
-		} else {
-			d.publisher = publisher
-		}
-	} else {
-		slog.Warn("NATS connection is nil, logs nor status will be published")
+func NewDefaultScheduler() (*Scheduler, error) {
+	// Create a new Docker client
+	cli, err := client.NewClientWithOpts(client.WithHost("unix:///var/run/docker.sock"), client.WithAPIVersionNegotiation())
+	if err != nil {
+		slog.Error("Failed to create Docker client", slog.Any("error", err))
+		return nil, err
 	}
-	return d
+
+	defaultOpts := Options{
+		scriptExecutor:      "/bin/bash -c",
+		containerAutoremove: false,
+		cpuLimit:            0,
+		memoryLimit:         "",
+	}
+
+	scheduler := &Scheduler{
+		cli:     cli,
+		Options: defaultOpts,
+	}
+
+	return scheduler, nil
 }
 
 func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
-	var job_logger *slog.Logger
-	var container_logs_options container.LogConfig
+	var jobLogger *slog.Logger
+	var containerLogsOptions container.LogConfig
 
-	job_logger = slog.Default().With(slog.String("job_id", job.ID.String()))
-	container_logs_options = container.LogConfig{}
+	jobLogger = slog.Default().With(slog.String("job_id", job.ID.String()))
+	containerLogsOptions = container.LogConfig{}
 
 	// Create a unique volume name for this job
 	volumeName := fmt.Sprintf("shared-%s", job.ID.String())
 	// Create the shared volume
 	if err := createSharedVolume(ctx, d.cli, volumeName); err != nil {
-		job_logger.Error("Failed to create shared volume", slog.Any("error", err))
+		jobLogger.Error("Failed to create shared volume", slog.Any("error", err))
 		return err
 	}
 
 	// Add created volume to the job's docker config
-	jobDockerConfig := d.DockerProps
+	jobDockerConfig := d.Options
 	jobDockerConfig.volumeName = volumeName
-	jobDockerConfig.containerLogsOptions = container_logs_options
-	docker_job := DockerJob{
+	jobDockerConfig.containerLogsOptions = containerLogsOptions
+	dockerJob := Job{
 		cli:          d.cli,
-		logger:       job_logger,
-		DockerProps:  jobDockerConfig,
+		logger:       jobLogger,
+		Options:      jobDockerConfig,
 		QueuePayload: job,
 		publisher:    d.publisher,
 	}
 
 	//block to send status first before execution
 	if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusRunning, job.ID.String()); err != nil {
-		job_logger.Warn("failed to publish running status", "error", err)
+		jobLogger.Warn("failed to publish running status", "error", err)
 	}
 
-	err := docker_job.execute(ctx)
+	err := dockerJob.execute(ctx)
 	if err != nil {
 		if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusFailed, job.ID.String()); err != nil {
-			job_logger.Warn("failed to publish failed status", "error", err)
+			jobLogger.Warn("failed to publish failed status", "error", err)
 		}
-		job_logger.Error("Failed to execute job", "error", err)
+		jobLogger.Error("Failed to execute job", "error", err)
 		return err
 	}
 
 	if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusSuccess, job.ID.String()); err != nil {
-		job_logger.Warn("failed to publish success status", "error", err)
+		jobLogger.Warn("failed to publish success status", "error", err)
 	}
-	job_logger.Debug("Job executed successfully", "job_id", job.ID)
+	jobLogger.Debug("Job executed successfully", "job_id", job.ID)
 
 	// Delete the shared volume after the job is done
 	defer func() {
 		time.Sleep(500 * time.Millisecond)
 		if err := deleteSharedVolume(ctx, d.cli, volumeName); err != nil {
-			job_logger.Error("Failed to delete shared volume", slog.Any("error", err))
+			jobLogger.Error("Failed to delete shared volume", slog.Any("error", err))
 		}
 
-		job_logger.Info("Volume deleted", slog.Any("volume", volumeName))
+		jobLogger.Info("Volume deleted", slog.Any("volume", volumeName))
 	}()
 
 	return nil

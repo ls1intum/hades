@@ -6,6 +6,7 @@ import (
 
 	"github.com/ls1intum/hades/hadesScheduler/docker"
 	"github.com/ls1intum/hades/hadesScheduler/k8s"
+	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
@@ -14,7 +15,6 @@ import (
 )
 
 var NatsConnection *nats.Conn
-var NatsJetStream nats.JetStreamContext
 
 type JobScheduler interface {
 	ScheduleJob(ctx context.Context, job payload.QueuePayload) error
@@ -65,14 +65,27 @@ func main() {
 	case "docker":
 		slog.Info("Started HadesScheduler in Docker mode")
 
-		dockerScheduler, err := docker.NewDockerScheduler()
+		var dockerCfg docker.EnvConfig
+		utils.LoadConfig(&dockerCfg)
+		slog.Debug("Docker config", "config", dockerCfg)
+
+		publisher, err := log.NewNATSPublisher(NatsConnection)
+		if err != nil {
+			slog.Error("Failed to create NATS publisher", "error", err)
+		}
+
+		scheduler, err = docker.NewScheduler(
+			docker.WithDockerHost(dockerCfg.DockerHost),
+			docker.WithScriptExecutor(dockerCfg.DockerScriptExecutor),
+			docker.WithContainerAutoremove(dockerCfg.ContainerAutoremove),
+			docker.WithCPULimit(dockerCfg.CPULimit),
+			docker.WithMemoryLimit(dockerCfg.MemoryLimit),
+			docker.WithPublisher(publisher),
+		)
 		if err != nil {
 			slog.Error("Failed to create Docker scheduler", "error", err)
 			return
 		}
-
-    scheduler = dockerScheduler.SetNatsConnection(NatsConnection)
-
 	default:
 		slog.Error("Invalid executor specified: ", "executor", executorCfg.Executor)
 		os.Exit(1)
