@@ -72,6 +72,7 @@ func main() {
 		publisher, err := log.NewNATSPublisher(NatsConnection)
 		if err != nil {
 			slog.Error("Failed to create NATS publisher", "error", err)
+			return
 		}
 
 		scheduler, err = docker.NewScheduler(

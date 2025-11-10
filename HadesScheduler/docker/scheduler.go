@@ -57,8 +57,9 @@ func NewDefaultScheduler() (*Scheduler, error) {
 	}
 
 	scheduler := &Scheduler{
-		cli:     cli,
-		Options: defaultOpts,
+		cli:       cli,
+		Options:   defaultOpts,
+		publisher: log.NewNoopPublisher(), // Use no-op publisher by default
 	}
 
 	return scheduler, nil
