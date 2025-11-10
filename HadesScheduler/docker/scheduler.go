@@ -82,6 +82,16 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		return err
 	}
 
+	// Delete the shared volume after the job is done
+	defer func() {
+		time.Sleep(500 * time.Millisecond)
+		if err := deleteSharedVolume(ctx, d.cli, volumeName); err != nil {
+			jobLogger.Error("Failed to delete shared volume", slog.Any("error", err))
+		}
+
+		jobLogger.Info("Volume deleted", slog.Any("volume", volumeName))
+	}()
+
 	// Add created volume to the job's docker config
 	jobDockerConfig := d.Options
 	jobDockerConfig.volumeName = volumeName
@@ -112,16 +122,6 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		jobLogger.Warn("failed to publish success status", "error", err)
 	}
 	jobLogger.Debug("Job executed successfully", "job_id", job.ID)
-
-	// Delete the shared volume after the job is done
-	defer func() {
-		time.Sleep(500 * time.Millisecond)
-		if err := deleteSharedVolume(ctx, d.cli, volumeName); err != nil {
-			jobLogger.Error("Failed to delete shared volume", slog.Any("error", err))
-		}
-
-		jobLogger.Info("Volume deleted", slog.Any("volume", volumeName))
-	}()
 
 	return nil
 }
