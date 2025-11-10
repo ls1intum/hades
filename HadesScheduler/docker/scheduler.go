@@ -35,7 +35,9 @@ func NewScheduler(options ...DockerOption) (*Scheduler, error) {
 	}
 
 	for _, option := range options {
-		option(scheduler)
+		if err := option(scheduler); err != nil {
+			return nil, err
+		}
 	}
 
 	return scheduler, nil
