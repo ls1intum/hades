@@ -18,7 +18,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-const JobNameLabel = "job-name=%s"
+const (
+	JobNameLabel = "job-name=%s"
+	pollInterval = 3 * time.Second
+	pollTimeout  = 10 * time.Minute
+)
 
 type PodLogReader struct {
 	K8sClient *kubernetes.Clientset
@@ -74,14 +78,14 @@ func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
 }
 
 // Helper function for waitForAllContainers
-// Waits for a specific container to complete by polling and processes its logs
+// Waits for a specific container to complete by polling and then processes its logs
 // Currently used in Scheduler mode only
 func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, containerName string, isInitContainer bool) error {
 	var exitCode int32
 
 	cli := pl.K8sClient.CoreV1().Pods(pl.Namespace)
 
-	err := wait.PollUntilContextTimeout(ctx, 3*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, pollInterval, pollTimeout, true, func(ctx context.Context) (bool, error) {
 		p, err := cli.Get(ctx, podName, metav1.GetOptions{})
 		if err != nil {
 			return false, err

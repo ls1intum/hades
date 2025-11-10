@@ -15,6 +15,11 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+const (
+	natsConnectTimeout = 10 * time.Second
+	natsReconnectWait  = 5 * time.Second
+)
+
 var (
 	// priorities defines the order in which job queues are checked (high to low)
 	priorities = []Priority{HighPriority, MediumPriority, LowPriority}
@@ -40,8 +45,8 @@ type HadesConsumer struct {
 func SetupNatsConnection(config NatsConfig) (*nats.Conn, error) {
 	opts := []nats.Option{
 		nats.Name("HadesAPI"),
-		nats.Timeout(10 * time.Second),
-		nats.ReconnectWait(5 * time.Second),
+		nats.Timeout(natsConnectTimeout),
+		nats.ReconnectWait(natsReconnectWait),
 		nats.MaxReconnects(10),
 	}
 
