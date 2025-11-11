@@ -277,8 +277,8 @@ func (hc *HadesConsumer) processJob(
 				"workerID", workerID,
 				"jobID", job.ID.String(),
 				"panic", r)
-			// NAK on panic so job can be retried
-			if err := msg.Nak(); err != nil {
+			// NAK on panic so job can be retried after a delay
+			if err := msg.NakWithDelay(5 * time.Second); err != nil {
 				slog.Error("Failed to NAK message after panic", "error", err)
 			}
 			return
