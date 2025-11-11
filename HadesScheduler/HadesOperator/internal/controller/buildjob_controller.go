@@ -109,7 +109,9 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			// If DeleteOnComplete is false, don't delete the CR, used for debugging
 			if !r.DeleteOnComplete {
 				// If there is available concurrency, admit one suspended job (optional)
-				_ = r.admitOneSuspendedJob(ctx, bj.Namespace)
+				if err := r.admitOneSuspendedJob(ctx, bj.Namespace); err != nil {
+					log.Error(err, "failed to admit suspended job after completion")
+				}
 				return ctrl.Result{}, nil
 			}
 
@@ -120,7 +122,9 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 
 			// Once a old job is deleted, admit one suspended job
-			_ = r.admitOneSuspendedJob(ctx, bj.Namespace)
+			if err := r.admitOneSuspendedJob(ctx, bj.Namespace); err != nil {
+				log.Error(err, "failed to admit suspended job after deletion")
+			}
 			return ctrl.Result{}, nil
 		}
 
