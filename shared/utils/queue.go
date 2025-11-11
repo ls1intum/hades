@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -321,6 +322,14 @@ func (hc *HadesConsumer) parseMessage(ctx context.Context, msg jetstream.Msg) (p
 
 	entry, err := hc.kv.Get(ctx, msgID.String())
 	if err != nil {
+		// Handle missing payload specifically
+		if errors.Is(err, jetstream.ErrKeyNotFound) || errors.Is(err, jetstream.ErrBucketNotFound) {
+			slog.Error("Job payload missing from KeyValue store", "id", msgID.String(), "error", err)
+			if termErr := msg.Term(); termErr != nil {
+				slog.Error("Failed to terminate message after missing payload", "error", termErr, "id", msgID.String())
+			}
+			return job, fmt.Errorf("job payload missing: %w", err)
+		}
 		slog.Error("Failed to get message from KeyValue store", "error", err, "id", msgID.String())
 		// NAK with delay for transient KV errors
 		if nakErr := msg.NakWithDelay(5 * time.Second); nakErr != nil {
