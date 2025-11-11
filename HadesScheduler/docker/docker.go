@@ -16,9 +16,10 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/ls1intum/hades/shared/buildlogs"
 )
 
-func processContainerLogs(ctx context.Context, client *client.Client, publisher log.Publisher, containerID, jobID string) error {
+func processContainerLogs(ctx context.Context, client *client.Client, publisher buildlogs.LogPublisher, containerID, jobID string) error {
 	stdout, stderr, err := getContainerLogs(ctx, client, containerID)
 	if err != nil {
 		return fmt.Errorf("getting container logs: %w", err)

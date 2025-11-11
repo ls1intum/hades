@@ -1,4 +1,4 @@
-package buildlogs
+package buildstatus
 
 import "testing"
 
