@@ -29,7 +29,7 @@ type APISuite struct {
 	router         *gin.Engine
 	natsC          testcontainers.Container
 	natsConnection *nats.Conn
-	hadesProducer  *utils.HadesProducer
+	hadesProducer  utils.JobPublisher
 }
 
 func (suite *APISuite) SetupSuite() {
@@ -71,7 +71,7 @@ func (suite *APISuite) SetupSuite() {
 	}
 
 	// Create producer for tests
-	suite.hadesProducer, err = utils.NewHadesProducer(suite.natsConnection)
+	suite.hadesProducer, err = utils.NewHadesNATSPublisher(suite.natsConnection)
 	if err != nil {
 		log.Fatalf("Failed to create HadesProducer: %v", err)
 	}

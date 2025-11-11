@@ -22,7 +22,7 @@ type HadesAPIConfig struct {
 
 var cfg HadesAPIConfig
 
-var HadesProducer *utils.HadesProducer
+var HadesProducer utils.JobPublisher
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
@@ -40,7 +40,7 @@ func main() {
 	}
 	defer NatsConnection.Close()
 
-	HadesProducer, err = utils.NewHadesProducer(NatsConnection)
+	HadesProducer, err = utils.NewHadesNATSPublisher(NatsConnection)
 	if err != nil {
 		log.Fatalf("Failed to create HadesProducer: %v", err)
 		return
