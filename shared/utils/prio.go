@@ -35,7 +35,7 @@ func PriorityFromInt(priority int) Priority {
 	}
 }
 
-func PriorityNumeric(p Priority) int {
+func PriorityToInt(p Priority) int {
 	switch p {
 	case HighPriority:
 		return 3

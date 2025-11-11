@@ -43,6 +43,8 @@ import (
 
 const conflictRequeueDelay = 200 * time.Millisecond
 
+const requeueDelay = 2 * time.Second
+
 const defaultPriority = 1
 
 const (
@@ -56,7 +58,7 @@ type BuildJobReconciler struct {
 	client.Client
 	Scheme           *runtime.Scheme
 	DeleteOnComplete bool
-	MaxParallelism   int
+	MaxParallelism   uint
 }
 
 // +kubebuilder:rbac:groups=build.hades.tum.de,resources=buildjobs;buildjobs/status;buildjobs/finalizers,verbs=get;list;watch;create;update;patch;delete
@@ -174,7 +176,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: requeueDelay}, nil
 	}
 
 	//3.4.2 Otherwise, set to Running
@@ -414,7 +416,7 @@ func jobDone(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string) {
 }
 
 // countActiveJobs counts the number of non-completed, non-suspended Jobs in the given namespace.
-func (r *BuildJobReconciler) countActiveJobs(ctx context.Context, namespace string) (int, error) {
+func (r *BuildJobReconciler) countActiveJobs(ctx context.Context, namespace string) (uint, error) {
 	var jl batchv1.JobList
 	if err := r.List(ctx, &jl,
 		client.InNamespace(namespace),
@@ -433,7 +435,7 @@ func (r *BuildJobReconciler) countActiveJobs(ctx context.Context, namespace stri
 			active++
 		}
 	}
-	return active, nil
+	return uint(active), nil
 }
 
 // admitOneSuspendedJob unsuspends the oldest suspended Job in the given namespace, if any.
@@ -446,31 +448,7 @@ func (r *BuildJobReconciler) admitOneSuspendedJob(ctx context.Context, namespace
 		return err
 	}
 
-	var pick *batchv1.Job
-	bestPri := -1
-
-	for i := range jl.Items {
-		j := &jl.Items[i]
-
-		done, _, _ := jobDone(j)
-		if done {
-			continue
-		}
-		if j.Spec.Suspend == nil || !*j.Spec.Suspend {
-			continue
-		}
-
-		pri := r.priorityForJob(ctx, j)
-
-		// Pick the highest-priority job, breaking ties by creation timestamp
-		if pick == nil ||
-			pri > bestPri ||
-			(pri == bestPri && j.CreationTimestamp.Before(&pick.CreationTimestamp)) {
-			pick = j
-			bestPri = pri
-		}
-	}
-
+	pick, bestPri := r.pickBestSuspendedJob(ctx, jl.Items)
 	if pick == nil {
 		return nil
 	}
@@ -483,6 +461,28 @@ func (r *BuildJobReconciler) admitOneSuspendedJob(ctx context.Context, namespace
 	log.Info("Admitting suspended Job", "job", pick.Name, "priority", bestPri)
 
 	return r.Patch(ctx, pick, client.MergeFrom(base))
+}
+
+func (r *BuildJobReconciler) pickBestSuspendedJob(ctx context.Context, jobs []batchv1.Job) (*batchv1.Job, int) {
+	var pick *batchv1.Job
+	bestPri := -1
+
+	for i := range jobs {
+		j := &jobs[i]
+
+		done, _, _ := jobDone(j)
+		if done || j.Spec.Suspend == nil || !*j.Spec.Suspend {
+			continue
+		}
+
+		pri := r.priorityForJob(ctx, j)
+		if pick == nil || pri > bestPri || (pri == bestPri && j.CreationTimestamp.Before(&pick.CreationTimestamp)) {
+			pick = j
+			bestPri = pri
+		}
+	}
+
+	return pick, bestPri
 }
 
 func (r *BuildJobReconciler) priorityForJob(ctx context.Context, j *batchv1.Job) int {
