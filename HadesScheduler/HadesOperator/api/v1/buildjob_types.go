@@ -14,6 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// BuildJobSpec NOTE: BuildJobSpec is intentionally defined separately from the types in shared/payload.
+// While it may duplicate some fields from the payload definitions, we cannot directly
+// use or combine them due to Kubebuilder requirements:
+//  1. CRD types must be defined within this API package (api/v1) for controller-gen.
+//  2. This struct requires Kubebuilder markers (e.g., +kubebuilder:validation:...)
+//     which would improperly pollute the generic 'shared/payload' package.
+//
+// **IMPORTANT**: If the API in 'shared/payload/payload.go' changes,
+// developers must manually review and update BuildJobSpec here to ensure consistency.
+
 package v1
 
 import (
@@ -22,70 +32,118 @@ import (
 )
 
 type BuildJobSpec struct {
-	// Job name, useful for debugging
+	// Human-readable name describing this BuildJob's purpose.
+	// Example: "Build and Test Assignment", "Deploy Application"
 	Name string `json:"name"`
 
-	// Additional metadata
+	// Global key-value pairs available to all steps as environment variables.
+	// Use this for configuration shared across all steps, such as repository URLs,
+	// Example: {"GLOBAL": "test", "ENVIRONMENT": "production"}
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	// Build steps to be executed sequentially
+	// Ordered list of execution steps that make up this BuildJob pipeline.
+	// Steps run sequentially according to their ID (1, 2, 3, ...).
+	// Each step runs in its own container and can share data with other steps via mounted volumes.
+	// Typical pipeline: Step 1 clones code, Step 2 builds it, Step 3 runs tests.
 	// +kubebuilder:validation:MinItems=1
 	Steps []BuildStep `json:"steps"`
 
-	// (Optional) Timeout for the whole job; if exceeded, the job is marked as failed
+	// Maximum time (in seconds) allowed for the entire BuildJob to complete.
+	// If this timeout is exceeded, the BuildJob is immediately terminated and marked as Failed.
+	// Useful for preventing stuck jobs from consuming resources indefinitely.
+	// Example: 3600 = 1 hour, 600 = 10 minutes.
 	// +kubebuilder:validation:Minimum=1
 	TimeoutSeconds *int64 `json:"timeoutSeconds,omitempty"`
 
-	// (Optional) Number of times to retry the job on failure
+	// Maximum number of times to retry the entire BuildJob if it fails.
+	// In CI/CD scenarios, a failure typically indicates the code didn't pass tests,
+	// so retrying is usually not beneficial.
 	// +kubebuilder:validation:Minimum=0
 	MaxRetries *int32 `json:"maxRetries,omitempty"`
 }
 
 type BuildStep struct {
-	// Step ID (must be unique and start from 1)
+	// Unique numeric identifier determining execution order. Must start at 1 and increment by 1.
+	// Steps execute in ascending ID order: step with id=1 runs first, then id=2, etc.
+	// This is mandatory and must be unique within the BuildJob.
 	// +kubebuilder:validation:Minimum=1
 	ID int32 `json:"id"`
 
-	// Step name
+	// Descriptive name for this step, shown in logs and UI.
+	// Should clearly indicate what the step does.
+	// Examples: "Clone Repository", "Run Tests", "Build Docker Image"
 	Name string `json:"name,omitempty"`
 
-	// Execution image (required)
+	// Container image to run for this step. Must be a valid Docker image reference.
+	// Can be from any registry (Docker Hub, GHCR, private registry).
 	// +kubebuilder:validation:MinLength=1
 	Image string `json:"image"`
 
-	// Script or command to run inside the container
+	// Optional bash script to execute inside the container.
+	// If provided, this overrides the container image's default entrypoint/command.
+	// The script runs with /bin/sh -c, so you can use shell features like &&, ||, pipes, etc.
+	// Common use: chaining commands like "cd /workspace && npm install && npm test"
+	// Example: "set -e && cd /shared/example && ./gradlew clean test"
 	Script string `json:"script,omitempty"`
 
-	// Additional metadata like environment variables, credentials, etc.
+	// Step-specific key-value pairs injected as environment variables into this step's container.
+	// Use for step-specific configuration like repository URLs, file paths, or credentials.
+	// Variables can reference placeholders (e.g., "{{user}}") that get substituted at runtime.
+	// Examples:
+	// - "REPOSITORY_DIR": "/shared" (where to clone code)
+	// - "HADES_TEST_URL": "{{test_repo}}" (test repository URL)
+	// - "WORKDIR": "/app/build" (working directory path)
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	// Resource limits (if empty, defaults will be used from LimitRange/Quota)
-	CPULimit    *resource.Quantity `json:"cpuLimit,omitempty"`
+	// Maximum CPU resources this step's container can use.
+	// Follows Kubernetes resource quantity format (e.g., "500m" = 0.5 CPU cores, "2" = 2 cores).
+	// Prevents a single step from monopolizing cluster resources.
+	// If not specified, uses cluster defaults.
+	CPULimit *resource.Quantity `json:"cpuLimit,omitempty"`
+
+	// Maximum memory this step's container can use.
+	// Follows Kubernetes resource quantity format (e.g., "512Mi", "2Gi", "1G").
+	// Prevents out-of-memory issues and resource exhaustion.
+	// If not specified, uses cluster defaults.
 	MemoryLimit *resource.Quantity `json:"memoryLimit,omitempty"`
 }
 
 type BuildJobStatus struct {
-	// Pending | Running | Succeeded | Failed
+	// Current lifecycle phase of the BuildJob:
+	// - Pending: Job created but not yet started (waiting for resources or scheduling)
+	// - Running: At least one step is currently executing
+	// - Succeeded: All steps completed successfully
+	// - Failed: At least one step failed, or the job timed out
+	// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed
 	Phase   string `json:"phase,omitempty"`
 	Message string `json:"message,omitempty"`
 
-	// Name of the Pod/Job created by the Operator, helpful for troubleshooting
+	// Name of the Kubernetes Pod created by the operator to execute this BuildJob.
 	PodName string `json:"podName,omitempty"`
 
-	StartTime      *metav1.Time `json:"startTime,omitempty"`
+	// Timestamp when the BuildJob starts execution
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	// Timestamp when the BuildJob finished execution (either successfully or with failure).
+	// Empty if the job is still running or pending.
 	CompletionTime *metav1.Time `json:"completionTime,omitempty"`
 
-	// ID of the currently executing step
+	// ID of the step currently being executed.
+	// For example, if currentStep=2, the operator is running the step with id=2.
+	// This helps track progress through the pipeline.
 	CurrentStep *int32 `json:"currentStep,omitempty"`
 
-	// Number of retry attempts so far
+	// Number of times this BuildJob has been retried after failures.
+	// Increments each time the operator restarts the job due to failure.
+	// When retryCount reaches maxRetries, no further attempts are made.
 	RetryCount int32 `json:"retryCount,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// BuildJob is the Schema for the buildjobs API.
+// BuildJob is the Schema for the buildjobs API in Hades operator mode.
+// A BuildJob represents a multi-step CI/CD pipeline execution, where each step runs in a container.
+// Steps execute sequentially in order of their ID, with shared data passed between steps via volumes.
 type BuildJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
