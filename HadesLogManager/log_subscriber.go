@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	logs "github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/ls1intum/hades/shared/buildstatus"
 	status "github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/nats-io/nats.go"
 )
@@ -109,7 +110,7 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 
 // subscribeToStatus creates a subscription to a job status subject
 func (dlm *DynamicLogManager) subscribeToStatus(ctx context.Context, status status.JobStatus, handler func(context.Context, string)) (*nats.Subscription, error) {
-	return dlm.nc.Subscribe(status.Subject(), func(msg *nats.Msg) {
+	return dlm.nc.Subscribe(buildstatus.StatusSubject(status), func(msg *nats.Msg) {
 		jobID, err := dlm.extractJobID(msg)
 		if err != nil {
 			slog.Warn("Invalid message received",

@@ -48,7 +48,7 @@ func (np *NATSPublisher) PublishStatus(ctx context.Context, jobStatus status.Job
 		return fmt.Errorf("invalid job status: %s", jobStatus)
 	}
 
-	subject := jobStatus.Subject()
+	subject := status.StatusSubject(jobStatus)
 	data := []byte(jobID)
 
 	if err := np.nc.Publish(subject, data); err != nil {

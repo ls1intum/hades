@@ -27,10 +27,6 @@ func (js JobStatus) String() string {
 	return string(js)
 }
 
-func (js JobStatus) Subject() string {
-	return fmt.Sprintf(StatusSubjectFormat, js)
-}
-
 // Optional: Validation
 func (js JobStatus) IsValid() bool {
 	switch js {
@@ -39,4 +35,8 @@ func (js JobStatus) IsValid() bool {
 	default:
 		return false
 	}
+}
+
+func StatusSubject(status JobStatus) string {
+	return fmt.Sprintf(StatusSubjectFormat, status)
 }
