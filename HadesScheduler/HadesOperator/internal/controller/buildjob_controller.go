@@ -53,7 +53,7 @@ type BuildJobReconciler struct {
 	K8sClient        *kubernetes.Clientset
 	NatsConnection   *nats.Conn
 	DeleteOnComplete bool
-	Publisher        log.NATSPublisher
+	Publisher        *log.NATSPublisher
 }
 
 // +kubebuilder:rbac:groups=build.hades.tum.de,resources=buildjobs;buildjobs/status;buildjobs/finalizers,verbs=get;list;watch;create;update;patch;delete

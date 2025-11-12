@@ -11,7 +11,6 @@ import (
 
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/buildlogs"
-	"github.com/nats-io/nats.go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -28,7 +27,7 @@ type PodLogReader struct {
 	K8sClient *kubernetes.Clientset
 	Namespace string
 	JobID     string
-	Nc        *nats.Conn
+	Publisher log.Publisher
 }
 
 // Waits for all containers in the pod to complete and processes their logs
@@ -166,13 +165,8 @@ func (pl PodLogReader) ProcessContainerLogs(ctx context.Context, podName string,
 	}
 
 	buildJobLog.JobID = pl.JobID
-	publisher, err := log.NewNATSPublisher(pl.Nc)
-	if err != nil {
-		return fmt.Errorf("creating nats publisher: %w", err)
-	}
-
 	slog.Info("Publishing logs", "pod", podName, "container", containerName)
-	return publisher.PublishLog(ctx, buildJobLog)
+	return pl.Publisher.PublishLog(ctx, buildJobLog)
 }
 
 // Helper function for ProcessContainerLogs

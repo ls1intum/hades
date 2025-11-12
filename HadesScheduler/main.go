@@ -64,7 +64,7 @@ func main() {
 			slog.Error("Failed to create k8s scheduler", "error", err)
 			os.Exit(1)
 		}
-		scheduler = k8sScheduler.SetNatsConnection(NatsConnection)
+		scheduler = k8sScheduler.SetPublisher(NatsConnection)
 
 	case "docker":
 		slog.Info("Started HadesScheduler in Docker mode")

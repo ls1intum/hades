@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/payload"
-	"github.com/nats-io/nats.go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -18,7 +18,7 @@ type K8sJob struct {
 	k8sClient        *kubernetes.Clientset
 	namespace        string
 	sharedVolumeName string
-	nc               *nats.Conn
+	publisher        log.Publisher
 }
 
 // Schedules a Hades Job on the Kubernetes cluster
@@ -71,7 +71,7 @@ func (k8sJob K8sJob) execute(ctx context.Context) error {
 		K8sClient: k8sJob.k8sClient,
 		Namespace: jobPodSpec.Namespace,
 		JobID:     k8sJob.ID.String(),
-		Nc:        k8sJob.nc,
+		Publisher: k8sJob.publisher,
 	}
 
 	err = logreader.waitForAllContainers(ctx)

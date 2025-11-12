@@ -21,7 +21,7 @@ func (r *BuildJobReconciler) podLogReader(namespace, jobID string) k8s.PodLogRea
 		K8sClient: r.K8sClient,
 		Namespace: namespace,
 		JobID:     jobID,
-		Nc:        r.NatsConnection,
+		Publisher: r.Publisher,
 	}
 }
 

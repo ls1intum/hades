@@ -150,9 +150,8 @@ func main() {
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
 		K8sClient:        kcs,
-		NatsConnection:   nc,
 		DeleteOnComplete: delOnComplete,
-		Publisher:        *publisher,
+		Publisher:        publisher,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
 		os.Exit(1)
