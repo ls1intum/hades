@@ -3,8 +3,16 @@ name: Verify CRD & Deepcopy up-to-date
 on:
   push:
     branches: [ "**" ]
+    paths:
+      - 'HadesScheduler/HadesOperator/api/v1/buildjob_types.go'
+      - 'HadesScheduler/HadesOperator/api/v1/zz_generated.deepcopy.go'
+      - 'helm/hades/crds/build.hades.tum.de_buildjobs.yaml'
   pull_request:
     branches: [ "**" ]
+    paths:
+      - 'HadesScheduler/HadesOperator/api/v1/buildjob_types.go'
+      - 'HadesScheduler/HadesOperator/api/v1/zz_generated.deepcopy.go'
+      - 'helm/hades/crds/build.hades.tum.de_buildjobs.yaml'
 
 jobs:
   verify:
@@ -16,20 +24,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Detect changes on buildjob_types.go
-        id: changes
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            types:
-              - 'HadesScheduler/HadesOperator/api/v1/buildjob_types.go'
-
-      - name: Skip if types unchanged
-        if: steps.changes.outputs.types != 'true'
-        run: |
-          echo "buildjob_types.go not changed. Skipping."
-          exit 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
