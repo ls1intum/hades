@@ -8,11 +8,11 @@ func TestJobStatus_String(t *testing.T) {
 		status JobStatus
 		want   string
 	}{
-		{"queued", StatusQueued, "queued"},
-		{"running", StatusRunning, "running"},
-		{"success", StatusSuccess, "success"},
-		{"failed", StatusFailed, "failed"},
-		{"stopped", StatusStopped, "stopped"},
+		{"Queued", StatusQueued, "Queued"},
+		{"Running", StatusRunning, "Running"},
+		{"Succeeded", StatusSucceeded, "Succeeded"},
+		{"Failed", StatusFailed, "Failed"},
+		{"Stopped", StatusStopped, "Stopped"},
 	}
 
 	for _, tt := range tests {
@@ -30,11 +30,11 @@ func TestJobStatus_Subject(t *testing.T) {
 		status JobStatus
 		want   string
 	}{
-		{"queued", StatusQueued, "hades.status.queued"},
-		{"running", StatusRunning, "hades.status.running"},
-		{"success", StatusSuccess, "hades.status.success"},
-		{"failed", StatusFailed, "hades.status.failed"},
-		{"stopped", StatusStopped, "hades.status.stopped"},
+		{"Queued", StatusQueued, "hades.jobstatus.Queued"},
+		{"Running", StatusRunning, "hades.jobstatus.Running"},
+		{"Succeeded", StatusSucceeded, "hades.jobstatus.Succeeded"},
+		{"Failed", StatusFailed, "hades.jobstatus.Failed"},
+		{"Stopped", StatusStopped, "hades.jobstatus.Stopped"},
 	}
 
 	for _, tt := range tests {
@@ -54,7 +54,7 @@ func TestJobStatus_IsValid(t *testing.T) {
 	}{
 		{"queued is valid", StatusQueued, true},
 		{"running is valid", StatusRunning, true},
-		{"success is valid", StatusSuccess, true},
+		{"succeeded is valid", StatusSucceeded, true},
 		{"failed is valid", StatusFailed, true},
 		{"stopped is valid", StatusStopped, true},
 		{"invalid status", JobStatus("invalid"), false},
