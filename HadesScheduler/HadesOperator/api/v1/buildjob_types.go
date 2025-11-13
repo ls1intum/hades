@@ -14,12 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// NOTE: Once this file is changed, you must run 'make manifests' to update the CRD manifests.
+// Otherwise, the action will fail.
+
 package v1
 
 import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// BuildJobSpec NOTE: BuildJobSpec is intentionally defined separately from the types in shared/payload.
+// While it may duplicate some fields from the payload definitions, we cannot directly
+// use or combine them due to Kubebuilder requirements:
+//  1. CRD types must be defined within this API package (api/v1) for controller-gen.
+//  2. This struct requires Kubebuilder markers (e.g., +kubebuilder:validation:...)
+//     which would improperly pollute the generic 'shared/payload' package.
+//
+// **IMPORTANT**: If the API in 'shared/payload/payload.go' changes,
+// developers must manually review and update BuildJobSpec here to ensure consistency.
 
 type BuildJobSpec struct {
 	// Human-readable name describing this BuildJob's purpose.
@@ -104,6 +117,7 @@ type BuildJobStatus struct {
 	// - Running: At least one step is currently executing
 	// - Succeeded: All steps completed successfully
 	// - Failed: At least one step failed, or the job timed out
+	// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed
 	Phase   string `json:"phase,omitempty"`
 	Message string `json:"message,omitempty"`
 
@@ -130,7 +144,9 @@ type BuildJobStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// BuildJob is the Schema for the buildjobs API.
+// BuildJob is the Schema for the buildjobs API in Hades operator mode.
+// A BuildJob represents a multi-step CI/CD pipeline execution, where each step runs in a container.
+// Steps execute sequentially in order of their ID, with shared data passed between steps via volumes.
 type BuildJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
