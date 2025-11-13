@@ -30,15 +30,10 @@ The Hades Operator is designed to:
 ```sh
   cat ./helm/hades/values.yaml
 ```
-- Modify the value `hadesScheduler.configMode` to be `operator`
 - (Optional) If you want to have the operator to have the Cluster wide access, 
   modify `hadesOperator.clusterWide` top be `true`
 ```sh
   helm upgrade --install hades ./helm/hades -n hades --create-namespace
-```
-Alternative, run
-```sh
-  helm upgrade --install hades ./helm/hades -n hades --create-namespace --set hadesScheduler.configMode=operator
 ```
 > **NOTE**: These commands will install the project within the hades namespace.
 
@@ -48,6 +43,14 @@ You can apply the samples (examples) from the config/sample:
 ```sh
   kubectl apply -k ./HadesScheduler/HadesOperator/config/samples/build_v1_buildjob.yaml
 ```
+
+### Changes in `/api/v1/buildjob_types.go`
+If any changes are made in `/api/v1/buildjob_types.go`, run the following command to regenerate the code:
+```sh
+  make generate
+```
+This command will generate the deepcopy code for the CRD as well as the CRD to be used by the helm chart. If changes are
+made but `make generate` is not executed, a specific GitHub action responding to this will fail.
 
 ## License
 
