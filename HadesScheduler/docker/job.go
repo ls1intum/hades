@@ -10,17 +10,17 @@ import (
 	"github.com/ls1intum/hades/shared/payload"
 )
 
-type DockerJob struct {
+type Job struct {
 	cli    *client.Client
 	logger *slog.Logger
-	DockerProps
+	Options
 	payload.QueuePayload
 	publisher log.Publisher
 }
 
 type jobIDContextKey string
 
-func (d DockerJob) execute(ctx context.Context) error {
+func (d Job) execute(ctx context.Context) error {
 	for _, step := range d.Steps {
 		d.logger.Info("Executing step", slog.Any("step", step))
 
@@ -30,16 +30,16 @@ func (d DockerJob) execute(ctx context.Context) error {
 		maps.Copy(envs, step.Metadata)
 		step.Metadata = envs
 
-		docker_step := DockerStep{
-			cli:         d.cli,
-			logger:      d.logger,
-			DockerProps: d.DockerProps,
-			Step:        step,
-			publisher:   d.publisher,
+		dockerStep := Step{
+			cli:       d.cli,
+			logger:    d.logger,
+			Options:   d.Options,
+			Step:      step,
+			publisher: d.publisher,
 		}
 
 		stepCtx := context.WithValue(ctx, jobIDContextKey("job_id"), d.ID.String())
-		err := docker_step.execute(stepCtx)
+		err := dockerStep.execute(stepCtx)
 		if err != nil {
 			d.logger.Error("Failed to execute step", slog.Any("error", err))
 			return err

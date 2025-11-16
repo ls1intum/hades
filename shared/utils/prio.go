@@ -17,6 +17,11 @@ const (
 	natsSubjectBase = "hades.jobs"
 )
 
+var (
+	// priorities defines the order in which job queues are checked (high to low)
+	priorities = []Priority{HighPriority, MediumPriority, LowPriority}
+)
+
 // PrioritySubject returns the NATS subject for a given priority level.
 func PrioritySubject(p Priority) string {
 	return fmt.Sprintf("%s.%s", natsSubjectBase, p)
