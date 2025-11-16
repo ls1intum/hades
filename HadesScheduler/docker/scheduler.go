@@ -118,7 +118,7 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		return err
 	}
 
-	if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusSuccess, job.ID.String()); err != nil {
+	if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusSucceeded, job.ID.String()); err != nil {
 		jobLogger.Warn("failed to publish success status", "error", err)
 	}
 	jobLogger.Debug("Job executed successfully", "job_id", job.ID)
