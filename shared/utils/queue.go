@@ -222,8 +222,10 @@ func (hc *HadesConsumer) DequeueJob(ctx context.Context, processing func(payload
 // workerLoop handles the fetch-process loop for a single worker
 func (hc *HadesConsumer) workerLoop(ctx context.Context, workerID uint, processing func(payload payload.QueuePayload)) {
 	// Exponential backoff for when no messages are available
-	backoff := 10 * time.Millisecond
+
+	const resetBackoff = 10 * time.Millisecond
 	const maxBackoff = 1 * time.Second
+	backoff := resetBackoff
 
 	for {
 		select {
@@ -249,7 +251,7 @@ func (hc *HadesConsumer) workerLoop(ctx context.Context, workerID uint, processi
 		}
 
 		// Reset backoff on successful fetch
-		backoff = 10 * time.Millisecond
+		backoff = resetBackoff
 
 		// Parse and validate the message
 		job, err := hc.parseMessage(ctx, msg)
