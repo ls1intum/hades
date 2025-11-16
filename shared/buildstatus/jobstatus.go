@@ -9,7 +9,7 @@ type JobStatus string
 
 // StatusPublisher defines the interface for publishing status updates to NATS JetStream
 type StatusPublisher interface {
-	PublishStatus(ctx context.Context, status JobStatus, jobID string) error
+	PublishJobStatus(ctx context.Context, status JobStatus, jobID string) error
 }
 
 const (

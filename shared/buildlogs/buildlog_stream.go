@@ -36,7 +36,7 @@ var (
 
 // LogPublisher defines the interface for publishing logs
 type LogPublisher interface {
-	PublishLog(ctx context.Context, buildJobLog Log) error
+	PublishJobLog(ctx context.Context, buildJobLog Log) error
 }
 
 // LogConsumer defines the interface for consuming logs
