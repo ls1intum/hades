@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -192,117 +193,198 @@ func (hp *HadesProducer) EnqueueJobWithPriority(ctx context.Context, queuePayloa
 
 // DequeueJob continuously processes jobs from the queue in priority order.
 // It spawns worker goroutines up to the configured concurrency limit and processes
-// jobs using the provided processing function. Processing continues until the context
-// is cancelled.
+// jobs using the provided processing function. Workers fetch jobs on-demand to ensure
+// fair distribution across multiple consumer instances.
 func (hc *HadesConsumer) DequeueJob(ctx context.Context, processing func(payload payload.QueuePayload)) {
-	// Create a worker pool with limited concurrency
-	numWorkers := hc.concurrency
-	sem := make(chan struct{}, numWorkers)
-
-	// Create a wait group to track active workers
 	var wg sync.WaitGroup
 
-	// Process messages until context is cancelled
+	// Create workers that fetch their own jobs (pull model instead of push)
+	for i := uint(0); i < hc.concurrency; i++ {
+		wg.Add(1)
+		go func(workerID uint) {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("Worker panic recovered", "workerID", workerID, "panic", r)
+				}
+			}()
+
+			// Each worker continuously fetches and processes jobs
+			hc.workerLoop(ctx, workerID, processing)
+		}(i)
+	}
+
+	// Wait for all workers to complete
+	wg.Wait()
+	slog.Info("All workers finished, dequeue complete")
+}
+
+// workerLoop handles the fetch-process loop for a single worker
+func (hc *HadesConsumer) workerLoop(ctx context.Context, workerID uint, processing func(payload payload.QueuePayload)) {
+	// Exponential backoff for when no messages are available
+
+	const resetBackoff = 10 * time.Millisecond
+	const maxBackoff = 1 * time.Second
+	backoff := resetBackoff
+
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("Context cancelled, stopping message consumption")
-			wg.Wait() // Wait for in-progress workers to complete
+			slog.Info("Context cancelled, worker stopping", "workerID", workerID)
 			return
 		default:
-			// Add a worker to the semaphore
+		}
+
+		// Only fetch when this worker is ready to process
+		msg, priority, found := hc.fetchNextMessage(ctx)
+
+		// If no message was found in any queue, sleep with backoff and retry
+		if !found {
 			select {
-			case sem <- struct{}{}:
-				// Only proceed if we can acquire the semaphore
-				wg.Add(1)
-
-				// Process message in a goroutine
-				go func() {
-					defer wg.Done()
-					defer func() { <-sem }() // Release the semaphore when done
-
-					// Try to fetch a message, starting with highest priority
-					var msg jetstream.Msg
-					var priority Priority
-					var foundMessage bool
-
-					// Check each priority in order until we find a message
-					for _, p := range priorities {
-						consumer := hc.consumers[p]
-						batch, err := consumer.FetchNoWait(1)
-						if err != nil {
-							slog.Error("Failed to fetch message", "error", err, "priority", p)
-							continue
-						}
-
-						// Simplify - if we have a message, use it directly
-						msgs := batch.Messages()
-						if m, ok := <-msgs; ok {
-							slog.Debug("Found message", "subject", m.Subject, "priority", p)
-							msg = m
-							priority = p
-							foundMessage = true
-							break
-						}
-					}
-
-					// If no message was found in any queue, just return and try again
-					if !foundMessage {
-						slog.Debug("No message found in any queue, sleeping")
-						// Sleep briefly to avoid CPU spinning when queues are empty
-						time.Sleep(1 * time.Second)
-						return
-					}
-					slog.Debug("Found message", "subject", msg.Subject, "priority", priority)
-
-					// Get the UUID from the message data
-					msgID, err := uuid.FromBytes(msg.Data())
-					if err != nil {
-						slog.Error("Failed to parse message ID", "error", err, "data", string(msg.Data()))
-
-						if err := msg.Nak(); err != nil {
-							slog.Error("Failed to NAK message after parse error", "error", err, "subject", msg.Subject)
-						}
-						return
-					}
-
-					entry, err := hc.kv.Get(ctx, msgID.String())
-					if err != nil {
-						slog.Error("Failed to get message from KeyValue store", "error", err, "id", msgID.String())
-
-						if err := msg.Nak(); err != nil {
-							slog.Error("Failed to NAK message after KV store error", "error", err, "id", msgID.String())
-						}
-						return
-					}
-					// Process the message
-					var job payload.QueuePayload
-					if err := json.Unmarshal(entry.Value(), &job); err != nil {
-						slog.Error("Failed to unmarshal message payload", "error", err, "data", string(msg.Data()))
-
-						if err := msg.Nak(); err != nil {
-							slog.Error("Failed to NAK message after unmarshal error", "error", err, "data", string(msg.Data()))
-						}
-						return
-					}
-
-					slog.Info("Processing job", "id", job.ID.String(), "priority", priority, "subject", msg.Subject, "worker", fmt.Sprintf("%d/%d", len(sem), numWorkers))
-
-					// Execute the processing function
-					processing(job)
-
-					slog.Info("Finished processing job", "id", job.ID.String(), "priority", priority, "subject", msg.Subject)
-					// Acknowledge after processing
-					if err := msg.Ack(); err != nil {
-						slog.Error("Failed to acknowledge message", "error", err)
-					}
-				}()
+			case <-time.After(backoff):
+				backoff = min(backoff*2, maxBackoff)
+				continue
 			case <-ctx.Done():
-				// Context was cancelled while waiting for a worker slot
-				slog.Info("Context cancelled while waiting for worker")
-				wg.Wait()
+				slog.Info("Context cancelled during backoff", "workerID", workerID)
 				return
 			}
 		}
+
+		// Reset backoff on successful fetch
+		backoff = resetBackoff
+
+		// Parse and validate the message
+		job, err := hc.parseMessage(ctx, msg)
+		if err != nil {
+			// Error already logged in parseMessage
+			continue
+		}
+
+		// Process the job immediately (we have capacity)
+		hc.processJob(workerID, job, msg, priority, processing)
 	}
+}
+
+// processJob handles individual job processing with error recovery
+func (hc *HadesConsumer) processJob(
+	workerID uint,
+	job payload.QueuePayload,
+	msg jetstream.Msg,
+	priority Priority,
+	processing func(payload payload.QueuePayload),
+) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Job processing panic",
+				"workerID", workerID,
+				"jobID", job.ID.String(),
+				"panic", r)
+			// NAK on panic so job can be retried after a delay
+			if err := msg.NakWithDelay(5 * time.Second); err != nil {
+				slog.Error("Failed to NAK message after panic", "error", err)
+			}
+			return
+		}
+	}()
+
+	slog.Info("Worker starting job",
+		"workerID", workerID,
+		"jobID", job.ID.String(),
+		"priority", priority)
+
+	processing(job)
+
+	slog.Info("Worker finished job",
+		"workerID", workerID,
+		"jobID", job.ID.String(),
+		"priority", priority)
+
+	// Acknowledge after successful processing
+	if err := msg.Ack(); err != nil {
+		slog.Error("Failed to acknowledge message",
+			"error", err,
+			"jobID", job.ID.String())
+	}
+}
+
+// parseMessage handles message parsing and validation
+func (hc *HadesConsumer) parseMessage(ctx context.Context, msg jetstream.Msg) (payload.QueuePayload, error) {
+	var job payload.QueuePayload
+
+	// Get the UUID from the message data
+	msgID, err := uuid.FromBytes(msg.Data())
+	if err != nil {
+		slog.Error("Failed to parse message ID", "error", err, "data", string(msg.Data()))
+		// Terminate message on parse error (won't be retried)
+		if termErr := msg.Term(); termErr != nil {
+			slog.Error("Failed to terminate message after parse error", "error", termErr)
+		}
+		return job, fmt.Errorf("parse message ID: %w", err)
+	}
+
+	entry, err := hc.kv.Get(ctx, msgID.String())
+	if err != nil {
+		// Handle missing payload specifically
+		if errors.Is(err, jetstream.ErrKeyNotFound) || errors.Is(err, jetstream.ErrBucketNotFound) {
+			slog.Error("Job payload missing from KeyValue store", "id", msgID.String(), "error", err)
+			if termErr := msg.Term(); termErr != nil {
+				slog.Error("Failed to terminate message after missing payload", "error", termErr, "id", msgID.String())
+			}
+			return job, fmt.Errorf("job payload missing: %w", err)
+		}
+		slog.Error("Failed to get message from KeyValue store", "error", err, "id", msgID.String())
+		// NAK with delay for transient KV errors
+		if nakErr := msg.NakWithDelay(5 * time.Second); nakErr != nil {
+			slog.Error("Failed to NAK message after KV store error", "error", nakErr)
+		}
+		return job, fmt.Errorf("get from KV store: %w", err)
+	}
+
+	if err := json.Unmarshal(entry.Value(), &job); err != nil {
+		slog.Error("Failed to unmarshal message payload", "error", err, "id", msgID.String())
+		// Terminate on unmarshal error (data corruption, won't be retried)
+		if termErr := msg.Term(); termErr != nil {
+			slog.Error("Failed to terminate message after unmarshal error", "error", termErr)
+		}
+		return job, fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	return job, nil
+}
+
+// fetchNextMessage tries to fetch a message in strict priority order
+func (hc *HadesConsumer) fetchNextMessage(ctx context.Context) (jetstream.Msg, Priority, bool) {
+	for _, p := range priorities {
+		consumer := hc.consumers[p]
+
+		// Use FetchNoWait with proper cleanup
+		batch, err := consumer.FetchNoWait(1)
+		if err != nil {
+			// Only log non-timeout errors
+			if err != jetstream.ErrNoMessages {
+				slog.Error("Failed to fetch message", "error", err, "priority", p)
+			}
+			continue
+		}
+
+		// Properly drain the messages channel
+		msgs := batch.Messages()
+		select {
+		case msg, ok := <-msgs:
+			if ok {
+				// Drain any remaining messages (should be none with batch size 1)
+				go func() {
+					for range msgs {
+						// Drain to prevent goroutine leak
+					}
+				}()
+				slog.Debug("Found message", "subject", msg.Subject(), "priority", p)
+				return msg, p, true
+			}
+		case <-ctx.Done():
+			return nil, "", false
+		}
+	}
+
+	return nil, "", false
 }
