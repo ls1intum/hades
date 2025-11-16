@@ -34,14 +34,21 @@ type HadesNATSConsumer struct {
 	kv             jetstream.KeyValue
 }
 
+const (
+	natsName          = "HadesAPI"
+	natsTimeout       = 10 * time.Second
+	natsReconnectWait = 5 * time.Second
+	natsMaxReconnects = 10
+)
+
 // SetupNatsConnection creates a connection to the NATS server with the provided configuration.
 // It configures timeouts, reconnection behavior, and optional authentication/TLS.
 func SetupNatsConnection(config NatsConfig) (*nats.Conn, error) {
 	opts := []nats.Option{
-		nats.Name("HadesAPI"),
-		nats.Timeout(10 * time.Second),
-		nats.ReconnectWait(5 * time.Second),
-		nats.MaxReconnects(10),
+		nats.Name(natsName),
+		nats.Timeout(natsTimeout),
+		nats.ReconnectWait(natsReconnectWait),
+		nats.MaxReconnects(natsMaxReconnects),
 	}
 
 	// Add credentials if provided
