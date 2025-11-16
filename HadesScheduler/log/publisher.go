@@ -16,7 +16,7 @@ func NewNoopPublisher() *NoopPublisher {
 	return &NoopPublisher{}
 }
 
-// PublishLog does nothing and always returns nil
+// PublishJobLog does nothing and always returns nil
 func (np *NoopPublisher) PublishJobLog(ctx context.Context, buildJobLog logs.Log) error {
 	return nil
 }

@@ -114,10 +114,10 @@ func NewHadesLogConsumer(nc *nats.Conn) (*HadesLogConsumer, error) {
 	}, nil
 }
 
-// PublishLog publishes a log entry to JetStream for the specified job.
+// PublishJobLog publishes a log entry to JetStream for the specified job.
 // The log is published to the subject "hades.logs.{jobID}".
 // Returns an error if JetStream is nil, the log is invalid, or publishing fails.
-func (hlp *HadesLogProducer) PublishLog(ctx context.Context, buildJobLog Log) error {
+func (hlp *HadesLogProducer) PublishJobLog(ctx context.Context, buildJobLog Log) error {
 	if hlp.js == nil {
 		return ErrNilJetStream
 	}
