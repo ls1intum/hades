@@ -14,15 +14,15 @@ import (
 	"github.com/ls1intum/hades/shared/utils"
 )
 
-type DockerStep struct {
+type Step struct {
 	cli    *client.Client
 	logger *slog.Logger
-	DockerProps
+	Options
 	payload.Step
 	publisher log.Publisher
 }
 
-func (s DockerStep) execute(ctx context.Context) error {
+func (s Step) execute(ctx context.Context) error {
 	// Pull the images
 	err := pullImages(ctx, s.cli, s.Image)
 	if err != nil {
@@ -35,22 +35,22 @@ func (s DockerStep) execute(ctx context.Context) error {
 		envs = append(envs, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	job_id, ok := ctx.Value(jobIDContextKey("job_id")).(string)
+	jobId, ok := ctx.Value(jobIDContextKey("job_id")).(string)
 	if !ok {
 		return fmt.Errorf("job_id not found in context")
 	}
 
 	// Add the job_id to the container envs
-	envs = append(envs, fmt.Sprintf("UUID=%s", job_id))
+	envs = append(envs, fmt.Sprintf("UUID=%s", jobId))
 
-	container_config := container.Config{
+	containerConfig := container.Config{
 		Image:      s.Image,
 		Env:        envs,
 		WorkingDir: "/shared", // Set the working directory to the shared volume
-		Labels:     map[string]string{"job_id": job_id},
+		Labels:     map[string]string{"job_id": jobId},
 	}
 
-	host_config := container.HostConfig{
+	hostConfig := container.HostConfig{
 		Mounts: []mount.Mount{
 			{
 				Type:   mount.TypeVolume,
@@ -59,29 +59,29 @@ func (s DockerStep) execute(ctx context.Context) error {
 			},
 		},
 		LogConfig:  s.containerLogsOptions,
-		AutoRemove: s.DockerProps.containerAutoremove, // Remove the container after it is done only if the config is set to true
+		AutoRemove: s.Options.containerAutoremove, // Remove the container after it is done only if the config is set to true
 	}
 
 	// Limit the resource usage of the containers
-	cpu_limit := utils.FindLimit(int(s.CPULimit), int(s.DockerProps.cpu_limit))
-	if cpu_limit != 0 {
-		s.logger.Debug("Setting CPU limit to ", "limit", cpu_limit)
-		host_config.Resources.NanoCPUs = int64(float64(cpu_limit) * 1e9)
+	cpuLimit := utils.FindLimit(int(s.CPULimit), int(s.Options.cpuLimit))
+	if cpuLimit != 0 {
+		s.logger.Debug("Setting CPU limit to ", "limit", cpuLimit)
+		hostConfig.Resources.NanoCPUs = int64(float64(cpuLimit) * 1e9)
 	}
-	ram_limit := utils.FindMemoryLimit(s.MemoryLimit, s.DockerProps.memory_limit)
-	if ram_limit != 0 {
-		s.logger.Debug("Setting RAM limit to ", "limit", ram_limit)
-		host_config.Resources.Memory = int64(ram_limit)
+	ramLimit := utils.FindMemoryLimit(s.MemoryLimit, s.Options.memoryLimit)
+	if ramLimit != 0 {
+		s.logger.Debug("Setting RAM limit to ", "limit", ramLimit)
+		hostConfig.Resources.Memory = ramLimit
 	}
 
 	// Create the bash script if there is one
 	if s.Script != "" {
 		// Overwrite the default entrypoint
-		container_config.Entrypoint = strings.Split(s.scriptExecutor, " ")
-		container_config.Entrypoint = append(container_config.Entrypoint, s.Script)
+		containerConfig.Entrypoint = strings.Split(s.scriptExecutor, " ")
+		containerConfig.Entrypoint = append(containerConfig.Entrypoint, s.Script)
 	}
 
-	resp, err := s.cli.ContainerCreate(ctx, &container_config, &host_config, nil, nil, "")
+	resp, err := s.cli.ContainerCreate(ctx, &containerConfig, &hostConfig, nil, nil, "")
 	if err != nil {
 		s.logger.Error("Failed to create container", slog.Any("error", err))
 		return err
@@ -112,7 +112,7 @@ func (s DockerStep) execute(ctx context.Context) error {
 	s.logger.Debug("Container completed", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
 
 	// Write the container logs to NATS
-	err = processContainerLogs(ctx, s.cli, s.publisher, resp.ID, job_id)
+	err = processContainerLogs(ctx, s.cli, s.publisher, resp.ID, jobId)
 
 	if err != nil {
 		s.logger.Error("Failed to write container logs to NATS", slog.Any("error", err), slog.Any("container_id", resp.ID))
