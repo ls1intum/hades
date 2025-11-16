@@ -25,7 +25,7 @@ type HadesSchedulerConfig struct {
 	NatsConfig  utils.NatsConfig
 }
 
-var HadesConsumer *utils.HadesConsumer
+var HadesConsumer utils.JobConsumer
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
@@ -49,7 +49,7 @@ func main() {
 	}
 	defer NatsConnection.Close()
 
-	HadesConsumer, err = utils.NewHadesConsumer(NatsConnection, cfg.Concurrency)
+	HadesConsumer, err = utils.NewHadesNATSConsumer(NatsConnection, cfg.Concurrency)
 	if err != nil {
 		slog.Error("Failed to create Hades consumer", "error", err)
 		os.Exit(1)
