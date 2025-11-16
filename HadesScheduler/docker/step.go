@@ -9,7 +9,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
-	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 )
@@ -19,7 +19,7 @@ type Step struct {
 	logger *slog.Logger
 	Options
 	payload.Step
-	publisher log.Publisher
+	publisher buildlogs.LogPublisher
 }
 
 func (s Step) execute(ctx context.Context) error {

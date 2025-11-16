@@ -6,7 +6,7 @@ import (
 	"maps"
 
 	"github.com/docker/docker/client"
-	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/payload"
 )
 
@@ -15,7 +15,7 @@ type Job struct {
 	logger *slog.Logger
 	Options
 	payload.QueuePayload
-	publisher log.Publisher
+	publisher buildlogs.LogPublisher
 }
 
 type jobIDContextKey string

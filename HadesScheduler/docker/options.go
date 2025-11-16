@@ -4,7 +4,8 @@ import (
 	"fmt"
 
 	"github.com/docker/docker/client"
-	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
 type DockerOption func(*Scheduler) error
@@ -20,12 +21,22 @@ func WithDockerHost(dockerHost string) DockerOption {
 	}
 }
 
-func WithPublisher(publisher log.Publisher) DockerOption {
+func WithLogPublisher(publisher buildlogs.LogPublisher) DockerOption {
 	return func(s *Scheduler) error {
 		if publisher == nil {
 			return fmt.Errorf("nil publisher provided")
 		}
-		s.publisher = publisher
+		s.logPublisher = publisher
+		return nil
+	}
+}
+
+func WithStatusPublisher(publisher buildstatus.StatusPublisher) DockerOption {
+	return func(s *Scheduler) error {
+		if publisher == nil {
+			return fmt.Errorf("nil publisher provided")
+		}
+		s.statusPublisher = publisher
 		return nil
 	}
 }
