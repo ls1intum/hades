@@ -20,7 +20,7 @@ const (
 	StatusStopped   JobStatus = "Stopped"
 )
 
-const NatsJobStatusSubject = "hades.jobstatus.%s"
+const StatusSubjectFormat = "hades.jobstatus.%s"
 
 // Optional: Add helper methods
 func (js JobStatus) String() string {

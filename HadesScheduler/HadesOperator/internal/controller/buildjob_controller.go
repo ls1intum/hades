@@ -35,6 +35,7 @@ import (
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/nats-io/nats.go"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -82,7 +83,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// ----------------------------- 1. Exit if already processed ----------------------------------
 	// Only process objects that are not marked as "finalized" (i.e., not deleted)
-	if bj.Status.Phase == string(buildlogs.StatusSucceeded) || bj.Status.Phase == string(buildlogs.StatusFailed) {
+	if bj.Status.Phase == string(buildstatus.StatusSucceeded) || bj.Status.Phase == string(buildstatus.StatusFailed) {
 		return ctrl.Result{}, nil
 	}
 
@@ -118,7 +119,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		// Build is not done, set the status to be "running"
-		if bj.Status.Phase != string(buildlogs.StatusRunning) {
+		if bj.Status.Phase != string(buildstatus.StatusRunning) {
 			if err := r.setStatusRunning(ctx, req.NamespacedName, jobName, bj.Name); err != nil {
 				if apierrors.IsConflict(err) {
 					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
@@ -184,13 +185,13 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.Name
 		if latest.DeletionTimestamp != nil {
 			return nil
 		}
-		if latest.Status.Phase == string(buildlogs.StatusRunning) {
+		if latest.Status.Phase == string(buildstatus.StatusRunning) {
 			return nil
 		}
 
 		base := latest.DeepCopy()
 		now := metav1.Now()
-		latest.Status.Phase = string(buildlogs.StatusRunning)
+		latest.Status.Phase = string(buildstatus.StatusRunning)
 		latest.Status.StartTime = &now
 		latest.Status.PodName = jobName
 
@@ -203,7 +204,7 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.Name
 		return err
 	}
 
-	if err := r.Publisher.PublishJobStatus(ctx, buildlogs.StatusRunning, jobID); err != nil {
+	if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusRunning, jobID); err != nil {
 		slog.Error("Failed to publish job running status", "job_id", jobID, "error", err)
 		return err
 	}
@@ -224,16 +225,16 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 			return nil
 		}
 
-		if latest.Status.Phase == string(buildlogs.StatusSucceeded) || latest.Status.Phase == string(buildlogs.StatusFailed) {
+		if latest.Status.Phase == string(buildstatus.StatusSucceeded) || latest.Status.Phase == string(buildstatus.StatusFailed) {
 			return nil
 		}
 
 		base := latest.DeepCopy()
 		now := metav1.Now()
 		if succeeded {
-			latest.Status.Phase = string(buildlogs.StatusSucceeded)
+			latest.Status.Phase = string(buildstatus.StatusSucceeded)
 		} else {
-			latest.Status.Phase = string(buildlogs.StatusFailed)
+			latest.Status.Phase = string(buildstatus.StatusFailed)
 		}
 		latest.Status.Message = msg
 		latest.Status.CompletionTime = &now
@@ -244,14 +245,14 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 	}
 
 	if succeeded {
-		if err := r.Publisher.PublishJobStatus(ctx, buildlogs.StatusSucceeded, jobID); err != nil {
+		if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusSucceeded, jobID); err != nil {
 			slog.Error("Failed to publish job succeeded status", "job_id", jobID, "error", err)
 			return err
 		}
 		slog.Info("Published job succeeded status", "job_id", jobID)
 		return nil
 	} else {
-		if err := r.Publisher.PublishJobStatus(ctx, buildlogs.StatusFailed, jobID); err != nil {
+		if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusFailed, jobID); err != nil {
 			slog.Error("Failed to publish job failed status", "job_id", jobID, "error", err)
 			return err
 		}

@@ -18,7 +18,7 @@ type K8sJob struct {
 	k8sClient        *kubernetes.Clientset
 	namespace        string
 	sharedVolumeName string
-	publisher        log.Publisher
+	publisher        log.NATSPublisher
 }
 
 // Schedules a Hades Job on the Kubernetes cluster

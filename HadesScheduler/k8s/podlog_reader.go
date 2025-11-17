@@ -27,7 +27,7 @@ type PodLogReader struct {
 	K8sClient *kubernetes.Clientset
 	Namespace string
 	JobID     string
-	Publisher log.Publisher
+	Publisher log.NATSPublisher
 }
 
 // Waits for all containers in the pod to complete and processes their logs
@@ -166,7 +166,7 @@ func (pl PodLogReader) ProcessContainerLogs(ctx context.Context, podName string,
 
 	buildJobLog.JobID = pl.JobID
 	slog.Info("Publishing logs", "pod", podName, "container", containerName)
-	return pl.Publisher.PublishLog(ctx, buildJobLog)
+	return pl.Publisher.PublishJobLog(ctx, buildJobLog)
 }
 
 // Helper function for ProcessContainerLogs

@@ -24,7 +24,7 @@ type Scheduler struct {
 	dynClient dynamic.Interface
 	namespace string
 	config    K8sConfig
-	publisher log.Publisher
+	publisher log.NATSPublisher
 }
 
 type K8sConfig struct {
@@ -87,7 +87,7 @@ func (k *Scheduler) SetPublisher(nc *nats.Conn) *Scheduler {
 		if err != nil {
 			slog.Error("Failed to create NATS publisher", "error", err)
 		}
-		k.publisher = publisher
+		k.publisher = *publisher
 	} else {
 		slog.Warn("NATS connection is nil, publisher not created, logs will not be published")
 	}
