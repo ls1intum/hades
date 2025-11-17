@@ -6,8 +6,13 @@ import (
 	"log/slog"
 
 	logs "github.com/ls1intum/hades/shared/buildlogs"
+	status "github.com/ls1intum/hades/shared/buildstatus"
+
 	"github.com/nats-io/nats.go"
 )
+
+var _ logs.LogPublisher = (*NATSPublisher)(nil)
+var _ status.StatusPublisher = (*NATSPublisher)(nil)
 
 // NATSPublisher implements Publisher using NATS and JetStream
 type NATSPublisher struct {
@@ -35,37 +40,33 @@ func NewNATSPublisher(nc *nats.Conn) (*NATSPublisher, error) {
 
 // PublishJobStatus publishes a job status change to NATS.
 // The status is published to the subject "hades.status.{status}".
-func (np *NATSPublisher) PublishJobStatus(ctx context.Context, status logs.JobStatus, jobID string) error {
+func (np *NATSPublisher) PublishJobStatus(ctx context.Context, jobStatus status.JobStatus, jobID string) error {
 	if jobID == "" {
 		return fmt.Errorf("empty job ID")
 	}
 
-	if !status.IsValid() {
-		return fmt.Errorf("invalid job status: %s", status)
+	if !jobStatus.IsValid() {
+		return fmt.Errorf("invalid job status: %s", jobStatus)
 	}
 
-	subject := status.Subject()
+	subject := status.StatusSubject(jobStatus)
 	data := []byte(jobID)
 
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	if err := np.nc.Publish(subject, data); err != nil {
-		return fmt.Errorf("publishing job status %s for job %s: %w", status, jobID, err)
+		return fmt.Errorf("publishing job status %s for job %s: %w", jobStatus, jobID, err)
 	}
 
 	slog.Debug("Published job status",
 		"job_id", jobID,
-		"status", status,
+		"status", jobStatus,
 		"subject", subject)
 
 	return nil
 }
 
-// PublishLog publishes log entries to NATS JetStream.
-func (np *NATSPublisher) PublishLog(ctx context.Context, buildJobLog logs.Log) error {
-	if err := np.pd.PublishLog(ctx, buildJobLog); err != nil {
+// PublishJobLog publishes log entries to NATS JetStream.
+func (np *NATSPublisher) PublishJobLog(ctx context.Context, buildJobLog logs.Log) error {
+	if err := np.pd.PublishJobLog(ctx, buildJobLog); err != nil {
 		return fmt.Errorf("publishing job log: %w", err)
 	}
 	return nil

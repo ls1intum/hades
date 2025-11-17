@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	logs "github.com/ls1intum/hades/shared/buildlogs"
+	status "github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/nats-io/nats.go"
 )
 
@@ -74,14 +75,14 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 	subs := make([]*nats.Subscription, 0, 3)
 
 	// Subscribe to running status - start watching logs
-	sub, err := dlm.subscribeToStatus(ctx, logs.StatusRunning, dlm.handleJobRunning)
+	sub, err := dlm.subscribeToStatus(ctx, status.StatusRunning, dlm.handleJobRunning)
 	if err != nil {
 		return err
 	}
 	subs = append(subs, sub)
 
 	// Subscribe to completed status - stop watching logs
-	sub, err = dlm.subscribeToStatus(ctx, logs.StatusSucceeded, dlm.handleJobCompleted)
+	sub, err = dlm.subscribeToStatus(ctx, status.StatusSucceeded, dlm.handleJobCompleted)
 	if err != nil {
 		dlm.cleanupSubscriptions(subs)
 		return err
@@ -89,7 +90,7 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 	subs = append(subs, sub)
 
 	// Subscribe to failed status - stop watching logs
-	sub, err = dlm.subscribeToStatus(ctx, logs.StatusFailed, dlm.handleJobCompleted)
+	sub, err = dlm.subscribeToStatus(ctx, status.StatusFailed, dlm.handleJobCompleted)
 	if err != nil {
 		dlm.cleanupSubscriptions(subs)
 		return err
@@ -107,8 +108,8 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 }
 
 // subscribeToStatus creates a subscription to a job status subject
-func (dlm *DynamicLogManager) subscribeToStatus(ctx context.Context, status logs.JobStatus, handler func(context.Context, string)) (*nats.Subscription, error) {
-	return dlm.nc.Subscribe(status.Subject(), func(msg *nats.Msg) {
+func (dlm *DynamicLogManager) subscribeToStatus(ctx context.Context, jobStatus status.JobStatus, handler func(context.Context, string)) (*nats.Subscription, error) {
+	return dlm.nc.Subscribe(status.StatusSubject(jobStatus), func(msg *nats.Msg) {
 		jobID, err := dlm.extractJobID(msg)
 		if err != nil {
 			slog.Warn("Invalid message received",

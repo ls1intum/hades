@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/ls1intum/hades/shared/payload"
 )
 
@@ -24,8 +25,9 @@ type Options struct {
 
 type Scheduler struct {
 	Options
-	cli       *client.Client
-	publisher log.Publisher
+	cli             *client.Client
+	logPublisher    buildlogs.LogPublisher
+	statusPublisher buildstatus.StatusPublisher
 }
 
 func NewScheduler(options ...DockerOption) (*Scheduler, error) {
@@ -59,9 +61,10 @@ func NewDefaultScheduler() (*Scheduler, error) {
 	}
 
 	scheduler := &Scheduler{
-		cli:       cli,
-		Options:   defaultOpts,
-		publisher: log.NewNoopPublisher(), // Use no-op publisher by default
+		cli:             cli,
+		Options:         defaultOpts,
+		logPublisher:    log.NewNoopPublisher(), // Use no-op publisher by default
+		statusPublisher: log.NewNoopPublisher(), // Use no-op publisher by default
 	}
 
 	return scheduler, nil
@@ -101,24 +104,24 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		logger:       jobLogger,
 		Options:      jobDockerConfig,
 		QueuePayload: job,
-		publisher:    d.publisher,
+		publisher:    d.logPublisher,
 	}
 
 	//block to send status first before execution
-	if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusRunning, job.ID.String()); err != nil {
+	if err := d.statusPublisher.PublishJobStatus(ctx, buildstatus.StatusRunning, job.ID.String()); err != nil {
 		jobLogger.Warn("failed to publish running status", "error", err)
 	}
 
 	err := dockerJob.execute(ctx)
 	if err != nil {
-		if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusFailed, job.ID.String()); err != nil {
+		if err := d.statusPublisher.PublishJobStatus(ctx, buildstatus.StatusFailed, job.ID.String()); err != nil {
 			jobLogger.Warn("failed to publish failed status", "error", err)
 		}
 		jobLogger.Error("Failed to execute job", "error", err)
 		return err
 	}
 
-	if err := d.publisher.PublishJobStatus(ctx, buildlogs.StatusSucceeded, job.ID.String()); err != nil {
+	if err := d.statusPublisher.PublishJobStatus(ctx, buildstatus.StatusSuccess, job.ID.String()); err != nil {
 		jobLogger.Warn("failed to publish success status", "error", err)
 	}
 	jobLogger.Debug("Job executed successfully", "job_id", job.ID)

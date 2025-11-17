@@ -85,7 +85,8 @@ func main() {
 			docker.WithContainerAutoremove(dockerCfg.ContainerAutoremove),
 			docker.WithCPULimit(dockerCfg.CPULimit),
 			docker.WithMemoryLimit(dockerCfg.MemoryLimit),
-			docker.WithPublisher(publisher),
+			docker.WithLogPublisher(publisher),
+			docker.WithStatusPublisher(publisher),
 		)
 		if err != nil {
 			slog.Error("Failed to create Docker scheduler", "error", err)

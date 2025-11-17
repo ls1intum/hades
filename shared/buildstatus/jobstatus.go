@@ -1,8 +1,16 @@
-package buildlogs
+package buildstatus
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type JobStatus string
+
+// StatusPublisher defines the interface for publishing status updates to NATS JetStream
+type StatusPublisher interface {
+	PublishJobStatus(ctx context.Context, status JobStatus, jobID string) error
+}
 
 const (
 	StatusQueued    JobStatus = "Queued"
@@ -14,14 +22,12 @@ const (
 
 const NatsJobStatusSubject = "hades.jobstatus.%s"
 
+// Optional: Add helper methods
 func (js JobStatus) String() string {
 	return string(js)
 }
 
-func (js JobStatus) Subject() string {
-	return fmt.Sprintf(NatsJobStatusSubject, js.String())
-}
-
+// Optional: Validation
 func (js JobStatus) IsValid() bool {
 	switch js {
 	case StatusQueued, StatusRunning, StatusSucceeded, StatusFailed, StatusStopped:
@@ -29,4 +35,8 @@ func (js JobStatus) IsValid() bool {
 	default:
 		return false
 	}
+}
+
+func StatusSubject(status JobStatus) string {
+	return fmt.Sprintf(StatusSubjectFormat, status)
 }
