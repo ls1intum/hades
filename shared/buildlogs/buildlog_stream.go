@@ -23,6 +23,8 @@ const (
 	defaultFetchSize     = 10
 	defaultFetchWaitTime = 100 * time.Millisecond
 	defaultShutdownTime  = 5 * time.Second
+	// JobNamePrefix is the prefix for job names, used in K8s mode
+	JobNamePrefix = "buildjob-%s"
 )
 
 var (
