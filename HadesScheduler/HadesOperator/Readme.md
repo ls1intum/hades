@@ -30,15 +30,10 @@ The Hades Operator is designed to:
 ```sh
   cat ./helm/hades/values.yaml
 ```
-- Modify the value `hadesScheduler.configMode` to be `operator`
 - (Optional) If you want to have the operator to have the Cluster wide access, 
   modify `hadesOperator.clusterWide` top be `true`
 ```sh
   helm upgrade --install hades ./helm/hades -n hades --create-namespace
-```
-Alternative, run
-```sh
-  helm upgrade --install hades ./helm/hades -n hades --create-namespace --set hadesScheduler.configMode=operator
 ```
 > **NOTE**: These commands will install the project within the hades namespace.
 
