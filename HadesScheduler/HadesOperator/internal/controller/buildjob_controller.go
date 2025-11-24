@@ -124,7 +124,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			if !r.DeleteOnComplete {
 				// If there is available concurrency, admit one suspended job (optional)
 				if err := r.admitOneSuspendedJob(ctx, bj.Namespace); err != nil {
-					log.Error(err, "failed to admit suspended job after completion")
+					slog.Error("Failed to admit suspended job after completion", "error", err)
 				}
 				return ctrl.Result{}, nil
 			}
@@ -137,7 +137,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 			// Once a old job is deleted, admit one suspended job
 			if err := r.admitOneSuspendedJob(ctx, bj.Namespace); err != nil {
-				log.Error(err, "failed to admit suspended job after deletion")
+				slog.Error("Failed to admit suspended job after deletion", "error", err)
 			}
 			return ctrl.Result{}, nil
 		}
@@ -510,8 +510,7 @@ func (r *BuildJobReconciler) admitOneSuspendedJob(ctx context.Context, namespace
 	f := false
 	pick.Spec.Suspend = &f
 
-	log := log.FromContext(ctx)
-	log.Info("Admitting suspended Job", "job", pick.Name, "priority", bestPri)
+	slog.Info("Admitting suspended Job", "job", pick.Name, "priority", bestPri)
 
 	return r.Patch(ctx, pick, client.MergeFrom(base))
 }
