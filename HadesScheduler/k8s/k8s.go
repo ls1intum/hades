@@ -198,6 +198,17 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 	utils.LoadConfig(&gvrCfg)
 	buildJobGVR := gvrCfg.ToGVR()
 
+	labels := map[string]interface{}{
+		"hades/job-id": job.ID.String(),
+		"hades/source": "scheduler",
+	}
+
+	if job.Metadata != nil {
+		if v, ok := job.Metadata["hades.tum.de/priority"]; ok && v != "" {
+			labels["hades.tum.de/priority"] = v
+		}
+	}
+
 	// assemble steps
 	steps := make([]map[string]interface{}, 0, len(job.Steps))
 	for _, s := range job.Steps {
@@ -229,10 +240,7 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 			"metadata": map[string]interface{}{
 				"name":      job.ID.String(),
 				"namespace": k.namespace,
-				"labels": map[string]interface{}{
-					"hades/job-id": job.ID.String(),
-					"hades/source": "scheduler",
-				},
+				"labels":    labels,
 			},
 			"spec": map[string]interface{}{
 				"name":     job.Name,
