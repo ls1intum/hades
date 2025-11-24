@@ -49,6 +49,7 @@ type NSConfig struct {
 
 type OperatorConfig struct {
 	DeleteOnComplete string `env:"DELETE_ON_COMPLETE" envDefault:"true"`
+	MaxParallelism   uint   `env:"MAX_PARALLELISM" envDefault:"100"`
 }
 
 func init() {
@@ -56,6 +57,8 @@ func init() {
 	utilruntime.Must(buildv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
+
+const DefaultMaxParallelism = 100
 
 // nolint:gocyclo
 func main() {
@@ -82,6 +85,12 @@ func main() {
 	utils.LoadConfig(&operatorConfig)
 
 	delOnComplete, _ := strconv.ParseBool(operatorConfig.DeleteOnComplete)
+
+	if operatorConfig.MaxParallelism == 0 {
+		setupLog.WithValues("env", "MAX_PARALLELISM").
+			Info("MAX_PARALLELISM is 0 or invalid; falling back to default", "fallback", DefaultMaxParallelism)
+		operatorConfig.MaxParallelism = DefaultMaxParallelism
+	}
 
 	if nsConfig.WatchNamespace != "" {
 		setupLog.Info("scoping cache to a single namespace", "namespace", nsConfig.WatchNamespace)
@@ -127,6 +136,7 @@ func main() {
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
 		DeleteOnComplete: delOnComplete,
+		MaxParallelism:   operatorConfig.MaxParallelism,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
 		os.Exit(1)
