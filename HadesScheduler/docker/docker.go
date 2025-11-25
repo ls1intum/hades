@@ -1,13 +1,11 @@
 package docker
 
 import (
-	"archive/tar"
 	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"sync"
 
 	"github.com/docker/docker/api/types/container"
@@ -16,9 +14,10 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/ls1intum/hades/shared/buildlogs"
 )
 
-func processContainerLogs(ctx context.Context, client *client.Client, publisher log.Publisher, containerID, jobID string) error {
+func processContainerLogs(ctx context.Context, client *client.Client, publisher buildlogs.LogPublisher, containerID, jobID string) error {
 	stdout, stderr, err := getContainerLogs(ctx, client, containerID)
 	if err != nil {
 		return fmt.Errorf("getting container logs: %w", err)
@@ -31,7 +30,7 @@ func processContainerLogs(ctx context.Context, client *client.Client, publisher 
 	}
 
 	slog.Debug("Parsed container logs", "job_id", jobID, "container_id", containerID)
-	return publisher.PublishLog(ctx, buildJobLog)
+	return publisher.PublishJobLog(ctx, buildJobLog)
 }
 
 // retrieves and demultiplexes container logs
@@ -100,50 +99,6 @@ func pullImages(ctx context.Context, client *client.Client, images ...string) er
 		return fmt.Errorf("encountered %d errors while pulling images: %+v", len(errors), errors)
 	}
 
-	return nil
-}
-
-func copyFileToContainer(ctx context.Context, client *client.Client, containerID, srcPath, dstPath string) error {
-	scriptFile, err := os.Open(srcPath)
-	if err != nil {
-		return err
-	}
-	defer scriptFile.Close()
-
-	// Create a buffer to hold the tar archive
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	defer tw.Close()
-
-	// Read the script content
-	scriptContent, err := io.ReadAll(scriptFile)
-	if err != nil {
-		return err
-	}
-
-	// Add the script content to the tar archive
-	tarHeader := &tar.Header{
-		Name: "script.sh",
-		Size: int64(len(scriptContent)),
-		Mode: 0755, // Make sure the script is executable
-	}
-	if err := tw.WriteHeader(tarHeader); err != nil {
-		return err
-	}
-	if _, err := tw.Write(scriptContent); err != nil {
-		return err
-	}
-
-	opts := container.CopyToContainerOptions{
-		AllowOverwriteDirWithFile: false,
-		// CopyUIDGID: true,
-	}
-
-	err = client.CopyToContainer(ctx, containerID, dstPath, &buf, opts)
-	if err != nil {
-		slog.Error("Failed to copy script to container", slog.Any("error", err))
-		return err
-	}
 	return nil
 }
 

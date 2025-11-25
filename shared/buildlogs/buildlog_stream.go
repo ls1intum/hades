@@ -34,23 +34,23 @@ var (
 	ErrInvalidJobID = errors.New("invalid job ID")
 )
 
-// LogPublisher defines the interface for publishing logs to NATS JetStream
+// LogPublisher defines the interface for publishing logs
 type LogPublisher interface {
-	PublishLog(ctx context.Context, buildJobLog Log) error
+	PublishJobLog(ctx context.Context, buildJobLog Log) error
 }
 
-// LogConsumer defines the interface for consuming logs from NATS JetStream
+// LogConsumer defines the interface for consuming logs
 type LogConsumer interface {
 	WatchJobLogs(ctx context.Context, jobID string, handler func(Log)) error
 }
 
-// HadesLogProducer handles publishing logs to NATS JetStream
+// HadesLogProducer handles publishing logs
 type HadesLogProducer struct {
 	natsConnection *nats.Conn
 	js             jetstream.JetStream
 }
 
-// HadesLogConsumer handles consuming logs from NATS JetStream
+// HadesLogConsumer handles consuming logs
 type HadesLogConsumer struct {
 	natsConnection *nats.Conn
 	js             jetstream.JetStream
@@ -114,10 +114,10 @@ func NewHadesLogConsumer(nc *nats.Conn) (*HadesLogConsumer, error) {
 	}, nil
 }
 
-// PublishLog publishes a log entry to JetStream for the specified job.
+// PublishJobLog publishes a log entry to JetStream for the specified job.
 // The log is published to the subject "hades.logs.{jobID}".
 // Returns an error if JetStream is nil, the log is invalid, or publishing fails.
-func (hlp *HadesLogProducer) PublishLog(ctx context.Context, buildJobLog Log) error {
+func (hlp *HadesLogProducer) PublishJobLog(ctx context.Context, buildJobLog Log) error {
 	if hlp.js == nil {
 		return ErrNilJetStream
 	}
