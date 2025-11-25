@@ -52,6 +52,8 @@ If any changes are made in `/api/v1/buildjob_types.go`, run the following comman
 This command will generate the deepcopy code for the CRD as well as the CRD to be used by the helm chart. If changes are
 made but `make generate` is not executed, a specific GitHub action responding to this will fail.
 
+read more about this in the [Makefile Documentation](./makefile-explanation.md).
+
 ## License
 
 Copyright 2025.
