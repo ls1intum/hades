@@ -55,7 +55,7 @@ If this command is not run, or the regenerated files are not committed, the code
 - incorrect Helm installations, 
 - runtime errors in the operator.
 
-read more about this in the [Makefile Documentation](./makefile-explaination.md).
+read more about this in the [Makefile Documentation](makefile-explanation.md).
 
 ---
 

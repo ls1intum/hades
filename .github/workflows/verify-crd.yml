@@ -1,5 +1,8 @@
 name: Verify CRD & Deepcopy up-to-date
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [ "**" ]
