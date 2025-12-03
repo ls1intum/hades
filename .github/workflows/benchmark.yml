@@ -8,6 +8,16 @@ on:
         required: false
         default: "1000"
 
+      mode:
+        type: choice
+        description: "Benchmark mode"
+        required: true
+        options:
+          - docker
+          - jenkins
+          - k8s
+        default: docker
+
 jobs:
   benchmark:
     name: Trigger Benchmark
@@ -17,7 +27,6 @@ jobs:
 
     env:
       BENCHMARK_URL: ${{ vars.BENCHMARK_URL }}
-      HOST: ${{ vars.BENCHMARK_HOST }}
       COUNT: ${{ inputs.count || '1000' }}
       COMMIT_HASH: ${{ github.sha }}
       GH_USER: ${{ secrets.GH_USER }}
@@ -34,11 +43,41 @@ jobs:
             sudo apt-get install -y jq
           fi
 
+      - name: Determine benchmark mode and host
+        id: mode_resolve
+        run: |
+          set -euo pipefail
+          echo "Selected mode: ${{ inputs.mode }}"
+
+          case "${{ inputs.mode }}" in
+            docker)
+              echo "MODE_PATH=hades-docker" >> $GITHUB_ENV
+              echo "BENCHMARK_HOST=${{ vars.DOCKER_HOST }}" >> $GITHUB_ENV
+              ;;
+            k8s)
+              echo "MODE_PATH=hades-k8s" >> $GITHUB_ENV
+              echo "BENCHMARK_HOST=${{ vars.K8S_HOST }}" >> $GITHUB_ENV
+              ;;
+            jenkins)
+              echo "MODE_PATH=jenkins" >> $GITHUB_ENV
+              echo "BENCHMARK_HOST=${{ vars.JENKINS_HOST }}" >> $GITHUB_ENV
+              echo "JENKINS_USER=${{ secrets.JENKINS_USER }}" >> $GITHUB_ENV
+              echo "JENKINS_TOKEN=${{ secrets.JENKINS_TOKEN }}" >> $GITHUB_ENV
+              echo "JENKINS_JOB_PATH=${{ vars.JENKINS_JOB_PATH }}" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "::error::Unknown mode"
+              exit 1
+          esac
+
+          echo "Resolved MODE_PATH=$MODE_PATH"
+          echo "Resolved BENCHMARK_HOST=$BENCHMARK_HOST"
+
       - name: Validate required settings
         run: |
           set -euo pipefail
           missing=0
-          for v in BENCHMARK_URL HOST; do
+          for v in BENCHMARK_URL BENCHMARK_HOST; do
             if [ -z "${!v:-}" ]; then
               echo "::error title=Missing $v::Environment variable '$v' is empty. Check repo/org variables/secrets."
               missing=1
@@ -57,14 +96,9 @@ jobs:
           fi
           [ "$missing" -eq 0 ]
 
-      - name: Trigger Benchmark for commit
+      - name: Prepare payload
+        id: payload
         run: |
-          set -euo pipefail
-          echo "Triggering benchmark for commit $COMMIT_HASH (count=$COUNT, host=$HOST)"
-
-          # URL-encode the host param (handles :// and /)
-          ENCODED_HOST="$(printf '%s' "$HOST" | jq -sRr @uri)"
-
           payload="$(
             jq -n \
               --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -125,10 +159,30 @@ jobs:
               }'
           )"
 
-          # send the payload to the benchmark server with retry
-          echo "$payload" | curl -sS --fail-with-body --retry 3 --retry-delay 2 --max-time 120 \
-            -X POST "${BENCHMARK_URL}?count=${COUNT}&commit_hash=${COMMIT_HASH}&host=${ENCODED_HOST}" \
+          echo "$payload" > payload.json
+          echo "Payload prepared."
+
+      - name: Trigger Benchmark for commit
+        run: |
+          set -euo pipefail
+
+          URL="${BENCHMARK_URL}/${MODE_PATH}"
+
+          # Encode host
+          ENCODED_HOST="$(printf '%s' "$BENCHMARK_HOST" | jq -sRr @uri)"
+
+          # Construct mode-specific query parameters
+          if [ "$MODE_PATH" = "jenkins" ]; then
+            QUERY="host=${ENCODED_HOST}&user=${JENKINS_USER}&api_token=${JENKINS_TOKEN}&job_path=${JENKINS_JOB_PATH}&use_parameters=true&count=${COUNT}&commit_hash=${COMMIT_HASH}"
+          else
+            QUERY="host=${ENCODED_HOST}&count=${COUNT}&commit_hash=${COMMIT_HASH}"
+          fi
+
+          echo "POST ${URL}?${QUERY}"
+
+          curl -sS --fail-with-body --retry 3 --retry-delay 2 --max-time 120 \
+            -X POST "${URL}?${QUERY}" \
             -H "Content-Type: application/json" \
-            --data-binary @-
+            --data-binary @payload.json
 
           echo "Benchmark trigger accepted."
