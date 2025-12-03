@@ -59,8 +59,12 @@ func main() {
 	switch executorCfg.Executor {
 	case "k8s":
 		slog.Info("Started HadesScheduler in Kubernetes mode")
-		scheduler = k8s.NewK8sScheduler()
-		//TODO: implement scheduler fail handling dito to docker scheduler
+		k8sScheduler, err := k8s.NewK8sScheduler()
+		if err != nil {
+			slog.Error("Failed to create k8s scheduler", "error", err)
+			os.Exit(1)
+		}
+		scheduler = k8sScheduler.SetPublisher(NatsConnection)
 
 	case "docker":
 		slog.Info("Started HadesScheduler in Docker mode")

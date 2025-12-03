@@ -27,13 +27,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
+	"github.com/ls1intum/hades/hadesScheduler/log"
+	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/ls1intum/hades/shared/buildstatus"
+	"github.com/nats-io/nats.go"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -42,6 +46,7 @@ import (
 )
 
 const conflictRequeueDelay = 200 * time.Millisecond
+const BuildStepPrefix = "step-%d"
 
 const requeueDelay = 2 * time.Second
 
@@ -57,7 +62,10 @@ const (
 type BuildJobReconciler struct {
 	client.Client
 	Scheme           *runtime.Scheme
+	K8sClient        *kubernetes.Clientset
+	NatsConnection   *nats.Conn
 	DeleteOnComplete bool
+	Publisher        *log.NATSPublisher
 	MaxParallelism   uint
 }
 
@@ -66,9 +74,9 @@ type BuildJobReconciler struct {
 // +kubebuilder:rbac:groups="",resources=pods;events;configmaps;secrets,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile ensures the cluster state matches the desired state of a BuildJob.
-// It creates/owns a batch Job, updates BuildJob status, and cleans up on completion.
+// It creates/owns a batch Job, updates BuildJob status and each ContainerStatus of the BuildJob, and cleans up on completion.
+// Triggers NATS log publishing on ContainerStatus changes, and status publishing on BuildJob status updates.
 func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
 
 	// ----------------------------- 0. Retrieve the BuildJob instance -----------------------------
 	var bj buildv1.BuildJob
@@ -87,19 +95,25 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// ----------------------------- 1. Exit if already processed ----------------------------------
 	// Only process objects that are not marked as "finalized" (i.e., not deleted)
-	if bj.Status.Phase == "Succeeded" || bj.Status.Phase == "Failed" {
+	if bj.Status.Phase == string(buildstatus.StatusSucceeded) || bj.Status.Phase == string(buildstatus.StatusFailed) {
 		return ctrl.Result{}, nil
 	}
 
 	// ----------------------------- 2. Check if the Job already exists ----------------------------
-	jobName := fmt.Sprintf("buildjob-%s", bj.Name)
+	jobName := fmt.Sprintf(buildlogs.JobNamePrefix, bj.Name)
 	var existingJob batchv1.Job
 	err := r.Get(ctx, client.ObjectKey{Namespace: bj.Namespace, Name: jobName}, &existingJob)
 	if err == nil {
+		// Job already exists check the status of the containers
+		if err := r.updateContainerStatuses(ctx, &bj); err != nil {
+			slog.Error("Failed to update container statuses", "error", err)
+		}
+
 		// Job already exists, check the status of the job
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
-			if err := r.setStatusCompleted(ctx, req.NamespacedName, succeeded, msg); err != nil {
+
+			if err := r.setStatusCompleted(ctx, req.NamespacedName, bj.Name, succeeded, msg); err != nil {
 				if apierrors.IsConflict(err) {
 					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
 				}
@@ -110,7 +124,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			if !r.DeleteOnComplete {
 				// If there is available concurrency, admit one suspended job (optional)
 				if err := r.admitOneSuspendedJob(ctx, bj.Namespace); err != nil {
-					log.Error(err, "failed to admit suspended job after completion")
+					slog.Error("Failed to admit suspended job after completion", "error", err)
 				}
 				return ctrl.Result{}, nil
 			}
@@ -123,20 +137,23 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 			// Once a old job is deleted, admit one suspended job
 			if err := r.admitOneSuspendedJob(ctx, bj.Namespace); err != nil {
-				log.Error(err, "failed to admit suspended job after deletion")
+				slog.Error("Failed to admit suspended job after deletion", "error", err)
 			}
 			return ctrl.Result{}, nil
 		}
 
-		// Build is still running, set the status to be "running"
-		if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
-			if apierrors.IsConflict(err) {
-				return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+		// Build is not done, set the status to be "running"
+		if bj.Status.Phase != string(buildstatus.StatusRunning) {
+			if err := r.setStatusRunning(ctx, req.NamespacedName, jobName, bj.Name); err != nil {
+				if apierrors.IsConflict(err) {
+					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+				}
+				return ctrl.Result{}, err
 			}
-			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
 	}
+
 	if !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, err
 	}
@@ -158,15 +175,20 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// 3.3 Create Job in Kubernetes as Pod
-	log.Info("Creating Job for BuildJob", "job", k8sJob.Name, "suspend", shouldSuspend)
+	slog.Info("Creating Job for BuildJob", "job", k8sJob.Name)
 
 	if err := r.Create(ctx, k8sJob); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			slog.Debug("Job already exists, ", "job", k8sJob.Name)
 		} else {
-			log.Error(err, "cannot create Job")
+			slog.Error("cannot create Job", "error", err)
 			return ctrl.Result{}, err
 		}
+	}
+
+	// 3.3.1 Initialize container statuses
+	if err := r.initializeContainerStatuses(ctx, &bj); err != nil {
+		slog.Error("Failed to initialize container statuses", "error", err)
 	}
 
 	// 3.4 Update CR Status → Running
@@ -184,7 +206,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	//3.4.2 Otherwise, set to Running
-	if err := r.setStatusRunning(ctx, req.NamespacedName, jobName); err != nil {
+	if err := r.setStatusRunning(ctx, req.NamespacedName, jobName, bj.Name); err != nil {
 		if apierrors.IsConflict(err) {
 			return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
 		}
@@ -196,11 +218,10 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 }
 
 // setStatusRunning sets BuildJob.Status to "Running", records StartTime and PodName.
+// publishes "running" jobstatus to NATS.
 // Uses optimistic concurrency (RetryOnConflict).
-func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.NamespacedName, jobName string) error {
-	logger := log.FromContext(ctx)
-
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.NamespacedName, jobName string, jobID string) error {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		latest := &buildv1.BuildJob{}
 		if err := r.Get(ctx, nn, latest); err != nil {
 			return client.IgnoreNotFound(err)
@@ -208,28 +229,38 @@ func (r *BuildJobReconciler) setStatusRunning(ctx context.Context, nn types.Name
 		if latest.DeletionTimestamp != nil {
 			return nil
 		}
-		if latest.Status.Phase == "Running" {
+		if latest.Status.Phase == string(buildstatus.StatusRunning) {
 			return nil
 		}
 
 		base := latest.DeepCopy()
 		now := metav1.Now()
-		latest.Status.Phase = "Running"
+		latest.Status.Phase = string(buildstatus.StatusRunning)
 		latest.Status.StartTime = &now
 		latest.Status.PodName = jobName
 
 		if err := r.Status().Patch(ctx, latest, client.MergeFrom(base)); err != nil {
-			logger.Error(err, "failed to patch BuildJob status to Running")
+			slog.Error("Failed to patch BuildJob status to Running", "error", err)
 			return err
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusRunning, jobID); err != nil {
+		slog.Error("Failed to publish job running status", "job_id", jobID, "error", err)
+		return err
+	}
+	slog.Info("Published job running status", "job_id", jobID)
+	return nil
 }
 
 // setStatusCompleted marks BuildJob.Status as Succeeded/Failed and sets CompletionTime/message.
+// publishes "success" or "failed" jobstatus to NATS.
 // Uses optimistic concurrency (RetryOnConflict).
-func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.NamespacedName, succeeded bool, msg string) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.NamespacedName, jobID string, succeeded bool, msg string) error {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		latest := &buildv1.BuildJob{}
 		if err := r.Get(ctx, nn, latest); err != nil {
 			return client.IgnoreNotFound(err)
@@ -238,22 +269,40 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 			return nil
 		}
 
-		if latest.Status.Phase == "Succeeded" || latest.Status.Phase == "Failed" {
+		if latest.Status.Phase == string(buildstatus.StatusSucceeded) || latest.Status.Phase == string(buildstatus.StatusFailed) {
 			return nil
 		}
 
 		base := latest.DeepCopy()
 		now := metav1.Now()
 		if succeeded {
-			latest.Status.Phase = "Succeeded"
+			latest.Status.Phase = string(buildstatus.StatusSucceeded)
 		} else {
-			latest.Status.Phase = "Failed"
+			latest.Status.Phase = string(buildstatus.StatusFailed)
 		}
 		latest.Status.Message = msg
 		latest.Status.CompletionTime = &now
 
 		return r.Status().Patch(ctx, latest, client.MergeFrom(base))
-	})
+	}); err != nil {
+		return err
+	}
+
+	if succeeded {
+		if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusSucceeded, jobID); err != nil {
+			slog.Error("Failed to publish job succeeded status", "job_id", jobID, "error", err)
+			return err
+		}
+		slog.Info("Published job succeeded status", "job_id", jobID)
+		return nil
+	} else {
+		if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusFailed, jobID); err != nil {
+			slog.Error("Failed to publish job failed status", "job_id", jobID, "error", err)
+			return err
+		}
+		slog.Info("Published job failed status", "job_id", jobID)
+		return nil
+	}
 }
 
 // setStatusPending marks BuildJob.Status as Pending with a message.
@@ -289,7 +338,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 	var initCtrs []corev1.Container
 	for _, s := range bj.Spec.Steps {
 		c := corev1.Container{
-			Name:         fmt.Sprintf("step-%d", s.ID),
+			Name:         fmt.Sprintf(BuildStepPrefix, s.ID),
 			Image:        s.Image,
 			Env:          envFromMeta(s.Metadata), // Convert metadata to environment variables
 			VolumeMounts: []corev1.VolumeMount{sharedMount},
@@ -316,7 +365,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 
 	// Add a dummy container that runs after all init containers have finished
 	dummy := corev1.Container{
-		Name:         "buildjob-finalizer",
+		Name:         FinalizerContainerName,
 		Image:        "busybox",
 		Command:      []string{"sh", "-c", "echo build finished"},
 		VolumeMounts: []corev1.VolumeMount{sharedMount},
@@ -461,8 +510,7 @@ func (r *BuildJobReconciler) admitOneSuspendedJob(ctx context.Context, namespace
 	f := false
 	pick.Spec.Suspend = &f
 
-	log := log.FromContext(ctx)
-	log.Info("Admitting suspended Job", "job", pick.Name, "priority", bestPri)
+	slog.Info("Admitting suspended Job", "job", pick.Name, "priority", bestPri)
 
 	return r.Patch(ctx, pick, client.MergeFrom(base))
 }

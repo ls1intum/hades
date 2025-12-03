@@ -21,7 +21,9 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/utils"
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -126,17 +128,40 @@ func main() {
 	// if you are doing or is intended to do any operation such as perform cleanups
 	// after the manager stops then its usage might be unsafe.
 	// LeaderElectionReleaseOnCancel: true,
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
+	cfg := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(cfg, mgrOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+	var natsConfig utils.NatsConfig
+	utils.LoadConfig(&natsConfig)
+	nc, err := utils.SetupNatsConnection(natsConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to setup NATS Connection")
+		os.Exit(1)
+	}
+
+	publisher, err := log.NewNATSPublisher(nc)
+	if err != nil {
+		setupLog.Error(err, "unable to create NATS publisher")
+		os.Exit(1)
+	}
+
+	kcs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		setupLog.Error(err, "unable to init kubernetes clientset")
 		os.Exit(1)
 	}
 
 	if err := (&controller.BuildJobReconciler{
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
+		K8sClient:        kcs,
 		DeleteOnComplete: delOnComplete,
 		MaxParallelism:   operatorConfig.MaxParallelism,
+		Publisher:        publisher,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
 		os.Exit(1)

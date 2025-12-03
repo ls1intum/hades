@@ -14,6 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// BuildJobSpec NOTE: BuildJobSpec is intentionally defined separately from the types in shared/payload.
+// While it may duplicate some fields from the payload definitions, we cannot directly
+// use or combine them due to Kubebuilder requirements:
+//  1. CRD types must be defined within this API package (api/v1) for controller-gen.
+//  2. This struct requires Kubebuilder markers (e.g., +kubebuilder:validation:...)
+//     which would improperly pollute the generic 'shared/payload' package.
+//
+// **IMPORTANT**: If the API in 'shared/payload/payload.go' changes,
+// developers must manually review and update BuildJobSpec here to ensure consistency.
+
 package v1
 
 import (
@@ -104,6 +114,7 @@ type BuildJobStatus struct {
 	// - Running: At least one step is currently executing
 	// - Succeeded: All steps completed successfully
 	// - Failed: At least one step failed, or the job timed out
+	// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed
 	Phase   string `json:"phase,omitempty"`
 	Message string `json:"message,omitempty"`
 
@@ -125,12 +136,43 @@ type BuildJobStatus struct {
 	// Increments each time the operator restarts the job due to failure.
 	// When retryCount reaches maxRetries, no further attempts are made.
 	RetryCount int32 `json:"retryCount,omitempty"`
+
+	ContainerStatuses []ContainerStatus `json:"containerStatuses,omitempty"`
+}
+
+// ContainerState represents the runtime state of a container
+// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;Unknown
+type ContainerState string
+
+const (
+	ContainerStatePending   ContainerState = "Pending"
+	ContainerStateRunning   ContainerState = "Running"
+	ContainerStateSucceeded ContainerState = "Succeeded"
+	ContainerStateFailed    ContainerState = "Failed"
+	ContainerStateUnknown   ContainerState = "Unknown"
+)
+
+// ContainerStatus tracks the runtime state of a single container
+type ContainerStatus struct {
+	// Name of the container (e.g., "step-0", "step-1", "buildjob-finalizer")
+	Name string `json:"name"`
+
+	// StepID links back to BuildStep.ID (0 for finalizer container)
+	StepID int32 `json:"stepId"`
+
+	// State of the container
+	State ContainerState `json:"state"`
+
+	// LogsPublished indicates whether logs have been read and published to NATS
+	LogsPublished bool `json:"logsPublished,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// BuildJob is the Schema for the buildjobs API.
+// BuildJob is the Schema for the buildjobs API in Hades operator mode.
+// A BuildJob represents a multi-step CI/CD pipeline execution, where each step runs in a container.
+// Steps execute sequentially in order of their ID, with shared data passed between steps via volumes.
 type BuildJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

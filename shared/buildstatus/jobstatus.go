@@ -13,14 +13,14 @@ type StatusPublisher interface {
 }
 
 const (
-	StatusQueued  JobStatus = "queued"
-	StatusRunning JobStatus = "running"
-	StatusSuccess JobStatus = "success"
-	StatusFailed  JobStatus = "failed"
-	StatusStopped JobStatus = "stopped"
+	StatusQueued    JobStatus = "Queued"
+	StatusRunning   JobStatus = "Running"
+	StatusSucceeded JobStatus = "Succeeded"
+	StatusFailed    JobStatus = "Failed"
+	StatusStopped   JobStatus = "Stopped"
 )
 
-const StatusSubjectFormat = "hades.status.%s"
+const StatusSubjectFormat = "hades.jobstatus.%s"
 
 // Optional: Add helper methods
 func (js JobStatus) String() string {
@@ -30,7 +30,7 @@ func (js JobStatus) String() string {
 // Optional: Validation
 func (js JobStatus) IsValid() bool {
 	switch js {
-	case StatusQueued, StatusRunning, StatusSuccess, StatusFailed, StatusStopped:
+	case StatusQueued, StatusRunning, StatusSucceeded, StatusFailed, StatusStopped:
 		return true
 	default:
 		return false
