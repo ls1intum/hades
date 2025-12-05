@@ -338,9 +338,12 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 	var initCtrs []corev1.Container
 	for _, s := range bj.Spec.Steps {
 		c := corev1.Container{
-			Name:         fmt.Sprintf(BuildStepPrefix, s.ID),
-			Image:        s.Image,
-			Env:          envFromMeta(s.Metadata), // Convert metadata to environment variables
+			Name:  fmt.Sprintf(BuildStepPrefix, s.ID),
+			Image: s.Image,
+			Env: append(
+				envFromMeta(s.Metadata),
+				corev1.EnvVar{Name: "UUID", Value: bj.Name},
+			), // Convert metadata to environment variables
 			VolumeMounts: []corev1.VolumeMount{sharedMount},
 		}
 
