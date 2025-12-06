@@ -363,6 +363,25 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 			}
 		}
 
+		// Set resource requests if specified
+		if s.CPURequest != nil || s.MemoryRequest != nil {
+			c.Resources.Requests = corev1.ResourceList{}
+			if s.CPURequest != nil {
+				c.Resources.Requests[corev1.ResourceCPU] = *s.CPURequest
+			}
+			if s.MemoryRequest != nil {
+				c.Resources.Requests[corev1.ResourceMemory] = *s.MemoryRequest
+			}
+		}
+
+		// If requests are not set, but limits are, set requests = limits
+		if (c.Resources.Requests == nil || len(c.Resources.Requests) == 0) && len(c.Resources.Limits) > 0 {
+			c.Resources.Requests = corev1.ResourceList{}
+			for k, v := range c.Resources.Limits {
+				c.Resources.Requests[k] = v
+			}
+		}
+
 		initCtrs = append(initCtrs, c)
 	}
 

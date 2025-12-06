@@ -165,6 +165,16 @@ func (in *BuildStep) DeepCopyInto(out *BuildStep) {
 			(*out)[key] = val
 		}
 	}
+	if in.CPURequest != nil {
+		in, out := &in.CPURequest, &out.CPURequest
+		x := (*in).DeepCopy()
+		*out = &x
+	}
+	if in.MemoryRequest != nil {
+		in, out := &in.MemoryRequest, &out.MemoryRequest
+		x := (*in).DeepCopy()
+		*out = &x
+	}
 	if in.CPULimit != nil {
 		in, out := &in.CPULimit, &out.CPULimit
 		x := (*in).DeepCopy()
