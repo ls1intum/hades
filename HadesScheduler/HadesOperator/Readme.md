@@ -44,6 +44,16 @@ You can apply the samples (examples) from the config/sample:
   kubectl apply -k ./HadesScheduler/HadesOperator/config/samples/build_v1_buildjob.yaml
 ```
 
+### Changes in `/api/v1/buildjob_types.go`
+If any changes are made in `/api/v1/buildjob_types.go`, run the following command to regenerate the code:
+```sh
+  make generate
+```
+This command will generate the deepcopy code for the CRD as well as the CRD to be used by the helm chart. If changes are
+made but `make generate` is not executed, a specific GitHub action responding to this will fail.
+
+read more about this in the [Makefile Documentation](./makefile-explanation.md).
+
 ## License
 
 Copyright 2025.

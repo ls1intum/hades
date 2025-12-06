@@ -14,6 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// NOTE: Once this file is changed, you must run 'make manifests' to update the CRD manifests.
+// Otherwise, the action will fail.
+
+package v1
+
+import (
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 // BuildJobSpec NOTE: BuildJobSpec is intentionally defined separately from the types in shared/payload.
 // While it may duplicate some fields from the payload definitions, we cannot directly
 // use or combine them due to Kubebuilder requirements:
@@ -23,13 +33,6 @@ limitations under the License.
 //
 // **IMPORTANT**: If the API in 'shared/payload/payload.go' changes,
 // developers must manually review and update BuildJobSpec here to ensure consistency.
-
-package v1
-
-import (
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
 
 type BuildJobSpec struct {
 	// Human-readable name describing this BuildJob's purpose.
