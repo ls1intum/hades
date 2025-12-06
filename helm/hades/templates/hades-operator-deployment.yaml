@@ -34,6 +34,8 @@ spec:
               containerPort: 8081
 
           env:
+            - name: NATS_URL
+              value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
             {{- if not .Values.hadesOperator.clusterWide }}
             - name: WATCH_NAMESPACE
               value: {{ default .Release.Namespace .Values.hadesOperator.targetNamespace | quote }}
