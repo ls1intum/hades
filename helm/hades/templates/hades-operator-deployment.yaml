@@ -41,6 +41,8 @@ spec:
               value: {{ default .Release.Namespace .Values.hadesOperator.targetNamespace | quote }}
             - name: DELETE_ON_COMPLETE
               value: {{ .Values.hadesOperator.DeleteOnComplete | quote }}
+            - name: MAX_PARALLELISM
+              value: {{ .Values.hadesOperator.maxParallelism | quote }}
             {{- end }}
 
           livenessProbe:

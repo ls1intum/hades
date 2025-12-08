@@ -58,6 +58,7 @@ hadesOperator:
     enabled: true
   targetNamespace: ""
   DeleteOnComplete: true
+  maxParallelism: "100"
 
 rbac:
   hadesScheduler:

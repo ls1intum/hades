@@ -98,6 +98,18 @@ type BuildStep struct {
 	// - "WORKDIR": "/app/build" (working directory path)
 	Metadata map[string]string `json:"metadata,omitempty"`
 
+	// Minimum CPU and memory resources required for this step's container.
+	// Follows Kubernetes resource quantity format (e.g., "500m" = 0.5 CPU cores, "2" = 2 cores).
+	// Ensures the step has sufficient resources to run without being throttled.
+	// If not specified, uses the value of cpuLimit.
+	CPURequest *resource.Quantity `json:"cpuRequest,omitempty"`
+
+	// Minimum memory required for this step's container.
+	// Follows Kubernetes resource quantity format (e.g., "512Mi", "2Gi", "1G").
+	// Ensures the step has minimum memory to avoid out-of-memory errors.
+	// If not specified, uses the value of memoryLimit.
+	MemoryRequest *resource.Quantity `json:"memoryRequest,omitempty"`
+
 	// Maximum CPU resources this step's container can use.
 	// Follows Kubernetes resource quantity format (e.g., "500m" = 0.5 CPU cores, "2" = 2 cores).
 	// Prevents a single step from monopolizing cluster resources.

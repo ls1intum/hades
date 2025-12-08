@@ -81,6 +81,17 @@ spec:
                         If not specified, uses cluster defaults.
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
+                    cpuRequest:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: |-
+                        Minimum CPU and memory resources required for this step's container.
+                        Follows Kubernetes resource quantity format (e.g., "500m" = 0.5 CPU cores, "2" = 2 cores).
+                        Ensures the step has sufficient resources to run without being throttled.
+                        If not specified, uses the value of cpuLimit.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
                     id:
                       description: |-
                         Unique numeric identifier determining execution order. Must start at 1 and increment by 1.
@@ -104,6 +115,17 @@ spec:
                         Follows Kubernetes resource quantity format (e.g., "512Mi", "2Gi", "1G").
                         Prevents out-of-memory issues and resource exhaustion.
                         If not specified, uses cluster defaults.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    memoryRequest:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: |-
+                        Minimum memory required for this step's container.
+                        Follows Kubernetes resource quantity format (e.g., "512Mi", "2Gi", "1G").
+                        Ensures the step has minimum memory to avoid out-of-memory errors.
+                        If not specified, uses the value of memoryLimit.
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
                     metadata:
