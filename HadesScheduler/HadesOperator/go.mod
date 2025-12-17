@@ -10,7 +10,7 @@ replace github.com/ls1intum/hades/hadesScheduler => ../../HadesScheduler
 
 require (
 	github.com/ls1intum/hades/hadesScheduler v0.0.0-00010101000000-000000000000
-	github.com/ls1intum/hades/shared v0.0.0-20250610091423-ecd369d566e9
+	github.com/ls1intum/hades/shared v0.0.0-20251217145134-8e471923356e
 	github.com/nats-io/nats.go v1.47.0
 	k8s.io/api v0.34.2
 	k8s.io/apimachinery v0.34.2
