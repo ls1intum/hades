@@ -2,7 +2,7 @@ module github.com/ls1intum/hades/shared
 
 go 1.24.0
 
-toolchain go1.24.4
+toolchain go1.25.5
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
