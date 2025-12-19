@@ -2,7 +2,7 @@ module github.com/ls1intum/hades/hadesAPI
 
 go 1.24.0
 
-toolchain go1.24.1
+toolchain go1.25.5
 
 require (
 	github.com/gin-gonic/gin v1.11.0
