@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
 // LogAggregator defines the interface for aggregating and managing job logs
@@ -16,6 +17,8 @@ type LogAggregator interface {
 	GetJobLogs(jobID string) []buildlogs.Log
 	GetAllJobs() []string
 	MarkJobCompleted(jobID string)
+	UpdateJobStatus(jobID string, status buildstatus.JobStatus)
+	GetJobStatus(jobID string) string
 }
 
 // NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
@@ -25,6 +28,7 @@ type NATSLogAggregator struct {
 	hlc       *buildlogs.HadesLogConsumer
 	logs      sync.Map // jobID (string) -> logsVersion
 	completed sync.Map // jobID (string) -> time.Time (completion time)
+	status    sync.Map // jobID (string) -> buildstatus.JobStatus
 	config    AggregatorConfig
 }
 
@@ -233,4 +237,16 @@ func (la *NATSLogAggregator) GetAllJobs() []string {
 	})
 
 	return jobs
+}
+
+func (la *NATSLogAggregator) UpdateJobStatus(jobID string, status buildstatus.JobStatus) {
+	la.status.Store(jobID, status)
+}
+
+func (la *NATSLogAggregator) GetJobStatus(jobID string) string {
+	value, exists := la.status.Load(jobID)
+	if !exists {
+		return "Job Not Found"
+	}
+	return value.(buildstatus.JobStatus).String()
 }

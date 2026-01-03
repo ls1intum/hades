@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	logs "github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
 )
@@ -53,7 +53,7 @@ func run(cfg HadesLogManagerConfig) error {
 	defer nc.Close()
 
 	// Create log consumer
-	consumer, err := logs.NewHadesLogConsumer(nc)
+	consumer, err := buildlogs.NewHadesLogConsumer(nc)
 	if err != nil {
 		return err
 	}
@@ -189,7 +189,14 @@ func setupAPIRoute(aggregator LogAggregator) *gin.Engine {
 			c.JSON(200, gin.H{"logs": logs})
 		})
 
-		// Get all active jobs (for testing)
+		// Get job status for specific job
+		jobs.GET("/:jobId/status", func(c *gin.Context) {
+			jobID := c.Param("jobId")
+			status := aggregator.GetJobStatus(jobID)
+			c.JSON(200, gin.H{"status": status})
+		})
+
+		// Get active jobs (for testing)
 		jobs.GET("", func(c *gin.Context) {
 			jobs := aggregator.GetAllJobs()
 			c.JSON(200, gin.H{"jobs": jobs})
