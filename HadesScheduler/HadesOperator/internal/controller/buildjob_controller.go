@@ -159,7 +159,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// ----------------------------- 3. First-time creation -----------------------------
-	//3.0 check concurrency limit and current active jobs
+	// 3.0 check concurrency limit and current active jobs
 	active, err := r.countActiveJobs(ctx, bj.Namespace)
 	if err != nil {
 		return ctrl.Result{}, err
