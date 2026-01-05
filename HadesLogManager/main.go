@@ -192,7 +192,13 @@ func setupAPIRoute(aggregator LogAggregator) *gin.Engine {
 		// Get job status for specific job
 		jobs.GET("/:jobId/status", func(c *gin.Context) {
 			jobID := c.Param("jobId")
-			status := aggregator.GetJobStatus(jobID)
+			status, err := aggregator.GetJobStatus(jobID)
+
+			if err != nil {
+				c.JSON(404, gin.H{"error": err.Error()})
+				return
+			}
+
 			c.JSON(200, gin.H{"status": status})
 		})
 
