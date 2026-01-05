@@ -251,7 +251,6 @@ func (la *NATSLogAggregator) UpdateJobStatus(jobID string, status buildstatus.Jo
 func (la *NATSLogAggregator) GetJobStatus(jobID string) (string, error) {
 	value, exists := la.status.Load(jobID)
 	if !exists {
-		slog.Error("Job not found", "job_id", jobID)
 		return "", fmt.Errorf("job not found: %s", jobID)
 	}
 	return value.(buildstatus.JobStatus).String(), nil
