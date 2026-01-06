@@ -215,7 +215,6 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 //
 // func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
-
 	value, exists := la.logs.Load(jobID)
 	if !exists {
 		return []buildlogs.Log{}
@@ -226,8 +225,7 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 	return logs
 }
 
-// GetAllJobs returns a slice containing all job IDs that currently have logs
-// stored in the aggregator.
+// GetAllJobs returns a slice containing all job IDs that are running or completed
 //
 // This method is thread-safe using sync.Map.Range.
 //
@@ -236,7 +234,7 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 func (la *NATSLogAggregator) GetAllJobs() []string {
 	jobs := make([]string, 0)
 
-	la.logs.Range(func(key, value any) bool {
+	la.status.Range(func(key, value any) bool {
 		jobs = append(jobs, key.(string))
 		return true // Continue iteration
 	})
