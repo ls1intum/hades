@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	logs "github.com/ls1intum/hades/shared/buildlogs"
-	status "github.com/ls1intum/hades/shared/buildstatus"
+	"github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/nats-io/nats.go"
 )
 
@@ -23,8 +23,8 @@ type LogManager interface {
 
 // DynamicLogManager manages dynamic subscription to job logs based on job status changes.
 // It automatically starts watching logs when a job begins executing and stops when the job
-// finishes or fails. The manager maintains a map of active watchers to prevent duplicate
-// subscriptions and ensure proper cleanup.
+// completes - succeeds or fails. The manager maintains a map of active watchers to prevent
+// duplicate subscriptions and ensure proper cleanup.
 type DynamicLogManager struct {
 	nc            *nats.Conn
 	logConsumer   *logs.HadesLogConsumer
@@ -75,14 +75,14 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 	subs := make([]*nats.Subscription, 0, 3)
 
 	// Subscribe to running status - start watching logs
-	sub, err := dlm.subscribeToStatus(ctx, status.StatusRunning, dlm.handleJobRunning)
+	sub, err := dlm.subscribeToStatus(ctx, buildstatus.StatusRunning, dlm.handleJobRunning)
 	if err != nil {
 		return err
 	}
 	subs = append(subs, sub)
 
-	// Subscribe to completed status - stop watching logs
-	sub, err = dlm.subscribeToStatus(ctx, status.StatusSucceeded, dlm.handleJobCompleted)
+	// Subscribe to succeeded status - stop watching logs
+	sub, err = dlm.subscribeToStatus(ctx, buildstatus.StatusSucceeded, dlm.handleJobSucceeded)
 	if err != nil {
 		dlm.cleanupSubscriptions(subs)
 		return err
@@ -90,7 +90,7 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 	subs = append(subs, sub)
 
 	// Subscribe to failed status - stop watching logs
-	sub, err = dlm.subscribeToStatus(ctx, status.StatusFailed, dlm.handleJobCompleted)
+	sub, err = dlm.subscribeToStatus(ctx, buildstatus.StatusFailed, dlm.handleJobFailed)
 	if err != nil {
 		dlm.cleanupSubscriptions(subs)
 		return err
@@ -108,8 +108,8 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 }
 
 // subscribeToStatus creates a subscription to a job status subject
-func (dlm *DynamicLogManager) subscribeToStatus(ctx context.Context, jobStatus status.JobStatus, handler func(context.Context, string)) (*nats.Subscription, error) {
-	return dlm.nc.Subscribe(status.StatusSubject(jobStatus), func(msg *nats.Msg) {
+func (dlm *DynamicLogManager) subscribeToStatus(ctx context.Context, jobStatus buildstatus.JobStatus, handler func(context.Context, string)) (*nats.Subscription, error) {
+	return dlm.nc.Subscribe(buildstatus.StatusSubject(jobStatus), func(msg *nats.Msg) {
 		jobID, err := dlm.extractJobID(msg)
 		if err != nil {
 			slog.Warn("Invalid message received",
@@ -132,12 +132,21 @@ func (dlm *DynamicLogManager) extractJobID(msg *nats.Msg) (string, error) {
 // handleJobRunning handles the job running status event
 func (dlm *DynamicLogManager) handleJobRunning(ctx context.Context, jobID string) {
 	slog.Info("Job started running", "job_id", jobID)
+	dlm.logAggregator.UpdateJobStatus(jobID, buildstatus.StatusRunning)
 	dlm.startWatchingJobLogs(ctx, jobID)
 }
 
-// handleJobCompleted handles job completion (success or failure) events
-func (dlm *DynamicLogManager) handleJobCompleted(ctx context.Context, jobID string) {
-	slog.Info("Job completed", "job_id", jobID)
+// handleJobSucceeded handles job succeeded status event
+func (dlm *DynamicLogManager) handleJobSucceeded(ctx context.Context, jobID string) {
+	slog.Info("Job succeeded", "job_id", jobID)
+	dlm.logAggregator.UpdateJobStatus(jobID, buildstatus.StatusSucceeded)
+	dlm.stopWatchingJobLogs(jobID)
+}
+
+// handleJobFailed handles job failed status event
+func (dlm *DynamicLogManager) handleJobFailed(ctx context.Context, jobID string) {
+	slog.Info("Job failed", "job_id", jobID)
+	dlm.logAggregator.UpdateJobStatus(jobID, buildstatus.StatusFailed)
 	dlm.stopWatchingJobLogs(jobID)
 }
 

@@ -2,20 +2,24 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
 // LogAggregator defines the interface for aggregating and managing job logs
 type LogAggregator interface {
 	AddLog(log buildlogs.Log)
-	FlushJobLogs(jobID string) error
+	FlushJob(jobID string) error
 	GetJobLogs(jobID string) []buildlogs.Log
 	GetAllJobs() []string
 	MarkJobCompleted(jobID string)
+	UpdateJobStatus(jobID string, status buildstatus.JobStatus)
+	GetJobStatus(jobID string) (string, error)
 }
 
 // NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
@@ -25,6 +29,7 @@ type NATSLogAggregator struct {
 	hlc       *buildlogs.HadesLogConsumer
 	logs      sync.Map // jobID (string) -> logsVersion
 	completed sync.Map // jobID (string) -> time.Time (completion time)
+	status    sync.Map // jobID (string) -> buildstatus.JobStatus
 	config    AggregatorConfig
 }
 
@@ -131,26 +136,30 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 	}
 }
 
-// FlushJobLogs removes logs for a completed job from memory.
+// FlushJob removes logs and status for a completed job from memory.
 // This is called after the retention period expires to free up memory.
 //
 // Parameters:
-//   - jobID: The unique identifier for the job whose logs should be flushed
+//   - jobID: The unique identifier for the job whose data should be flushed
 //
 // Returns:
 //   - error: Always nil in current implementation
-func (la *NATSLogAggregator) FlushJobLogs(jobID string) error {
-	value, exists := la.logs.LoadAndDelete(jobID)
-	if !exists {
+func (la *NATSLogAggregator) FlushJob(jobID string) error {
+	value, logsExists := la.logs.LoadAndDelete(jobID)
+	if logsExists {
+		v := value.(logsVersion)
+		logs := *v.ptr
+		slog.Info("Flushed job logs",
+			"job_id", jobID,
+			"batch_count", len(logs))
+	} else {
 		slog.Debug("No logs to flush for job", "job_id", jobID)
-		return nil
 	}
 
-	v := value.(logsVersion)
-	logs := *v.ptr
-	slog.Info("Flushed job logs",
-		"job_id", jobID,
-		"batch_count", len(logs))
+	_, statusExists := la.status.LoadAndDelete(jobID)
+	if !statusExists {
+		slog.Debug("No status to flush for job", "job_id", jobID)
+	}
 
 	la.completed.Delete(jobID)
 	return nil
@@ -174,10 +183,10 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 		completedAt := value.(time.Time)
 
 		if now.Sub(completedAt) >= la.config.Retention {
-			slog.Debug("Retention expired, flushing job logs", "job_id", jobID)
+			slog.Debug("Retention expired, flushing job", "job_id", jobID)
 
-			if err := la.FlushJobLogs(jobID); err != nil {
-				slog.Error("Failed to flush logs during cleanup",
+			if err := la.FlushJob(jobID); err != nil {
+				slog.Error("Failed to flush job during cleanup",
 					"job_id", jobID,
 					"error", err)
 			} else {
@@ -206,7 +215,6 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 //
 // func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
-
 	value, exists := la.logs.Load(jobID)
 	if !exists {
 		return []buildlogs.Log{}
@@ -217,8 +225,7 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 	return logs
 }
 
-// GetAllJobs returns a slice containing all job IDs that currently have logs
-// stored in the aggregator.
+// GetAllJobs returns a slice containing all job IDs that are running or completed
 //
 // This method is thread-safe using sync.Map.Range.
 //
@@ -227,10 +234,22 @@ func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 func (la *NATSLogAggregator) GetAllJobs() []string {
 	jobs := make([]string, 0)
 
-	la.logs.Range(func(key, value any) bool {
+	la.status.Range(func(key, value any) bool {
 		jobs = append(jobs, key.(string))
 		return true // Continue iteration
 	})
 
 	return jobs
+}
+
+func (la *NATSLogAggregator) UpdateJobStatus(jobID string, status buildstatus.JobStatus) {
+	la.status.Store(jobID, status)
+}
+
+func (la *NATSLogAggregator) GetJobStatus(jobID string) (string, error) {
+	value, exists := la.status.Load(jobID)
+	if !exists {
+		return "", fmt.Errorf("job not found: %s", jobID)
+	}
+	return value.(buildstatus.JobStatus).String(), nil
 }

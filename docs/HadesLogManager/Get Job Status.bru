@@ -1,0 +1,16 @@
+meta {
+  name: Get Job Status
+  type: http
+  seq: 4
+}
+
+get {
+  url: http://localhost:8081/jobs/631f94c6-316c-44bc-a974-cbb15d682c5f/status
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
