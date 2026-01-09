@@ -94,7 +94,7 @@ For production deployments or testing with Kubernetes:
 5. Start Hades in Kubernetes mode:
 
    ```fish
-   docker compose -f docker-compose.yml -f docker-compose.k8s.yml up -d
+   docker compose -f compose.yml -f docker-compose.k8s.yml up -d
    ```
 
 ### Deploy into a VM
