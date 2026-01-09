@@ -17,14 +17,14 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.24
+          go-version: 1.25
           cache-dependency-path: "**/*.sum"
       - name: Install dependencies
         run: cd ${{ matrix.directory }} && go mod download
       - name: Test with Go
         run: go test ./${{ matrix.directory }}/... -json > TestResults-${{ matrix.directory }}.json
       - name: Upload Go test results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: Go-results-${{ matrix.directory }}
           path: TestResults-${{ matrix.directory }}.json

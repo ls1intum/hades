@@ -2,13 +2,13 @@ module github.com/ls1intum/hades/shared
 
 go 1.24.0
 
-toolchain go1.24.4
+toolchain go1.25.5
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/nats-io/nats.go v1.47.0
+	github.com/nats-io/nats.go v1.48.0
 	github.com/stretchr/testify v1.11.1
 )
 
