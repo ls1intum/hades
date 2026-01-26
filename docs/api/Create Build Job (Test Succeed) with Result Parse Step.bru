@@ -30,7 +30,10 @@ body:json {
         "name": "Clone",
         "image": "ghcr.io/ls1intum/hades/hades-clone-container:latest", // mandatory
         "volumeMounts": [
-          { "name": "shared", "mountPath": "/shared" }
+          {
+            "name": "shared",
+            "mountPath": "/shared"
+          }
         ],
         "workingDir": "/shared",
         "metadata": {
@@ -52,7 +55,10 @@ body:json {
         "name": "Execute",
         "image": "ls1tum/artemis-maven-template:java17-18", // mandatory
         "volumeMounts": [
-          { "name": "shared", "mountPath": "/shared" }
+          {
+            "name": "shared",
+            "mountPath": "/shared"
+          }
         ],
         "script": "set -e && cd /shared/example && ./gradlew --status && ./gradlew clean test"
       },
@@ -61,13 +67,16 @@ body:json {
         "name": "Parse Results",
         "image": "ghcr.io/ls1intum/hades/junit-result-parser:latest",
         "volumeMounts": [
-          { "name": "shared", "mountPath": "/shared" }
+          {
+            "name": "shared",
+            "mountPath": "/shared"
+          }
         ],
-    "metadata": {
-      "ADAPTER_ENDPOINT": "{ADAPTER_ENDPOINT}/jobs/{JOB_ID}/results",
-      "INGEST_DIR": "/shared/example/build/test-results/test",
-      "JOB_ID": "{jobId}",
-    }
+        "metadata": {
+          "API_ENDPOINT": "http://host.docker.internal:8082/adapter/test-results",
+          "INGEST_DIR": "/shared/example/build/test-results/test",
+          "JOB_NAME": "{jobId}"
+        }
       }
     ]
   }

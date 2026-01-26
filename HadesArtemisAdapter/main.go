@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -149,7 +147,7 @@ func setupAPIRoute() *gin.Engine {
 	{
 		// post logs for specific job
 		jobs.POST("/logs", func(c *gin.Context) {
-			var newLogs buildlogs.Log
+			var newLogs []buildlogs.Log
 			if err := c.BindJSON(&newLogs); err != nil {
 				return
 			}
@@ -158,16 +156,12 @@ func setupAPIRoute() *gin.Engine {
 			c.IndentedJSON(http.StatusCreated, newLogs)
 		})
 
-		// post results for specific job
-		jobs.POST("/results", func(c *gin.Context) {
+		// post test results for specific job
+		jobs.POST("/test-results", func(c *gin.Context) {
 			var newResults ResultDTO
 			if err := c.BindJSON(&newResults); err != nil {
 				return
 			}
-
-			// Pretty print the whole thing
-			jsonBytes, _ := json.MarshalIndent(newResults, "", "  ")
-			fmt.Println(string(jsonBytes))
 
 			// results = append(results, newResults)
 			c.IndentedJSON(http.StatusCreated, newResults)

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -11,15 +14,19 @@ import (
 	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
+const APIendpoint = "http://localhost:8082/adapter/logs"
+const APItoken = "<token>"
+
 // LogAggregator defines the interface for aggregating and managing job logs
 type LogAggregator interface {
 	AddLog(log buildlogs.Log)
 	FlushJob(jobID string) error
 	GetJobLogs(jobID string) []buildlogs.Log
+	GetJobStatus(jobID string) (string, error)
 	GetAllJobs() []string
+	SendJobLogs(jobID string) error
 	MarkJobCompleted(jobID string)
 	UpdateJobStatus(jobID string, status buildstatus.JobStatus)
-	GetJobStatus(jobID string) (string, error)
 }
 
 // NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
@@ -98,9 +105,7 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 		return
 	}
 
-	slog.Debug("Adding log to aggregator",
-		"job_id", log.JobID,
-		"entries", len(log.Logs))
+	slog.Debug("Adding log to aggregator", "job_id", log.JobID, "entries", len(log.Logs))
 
 	// Use LoadOrStore and CompareAndSwap for thread-safe updates
 	for {
@@ -117,9 +122,7 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 		if len(newLogs) > la.config.MaxJobLogs {
 			trimStart := len(newLogs) - la.config.MaxJobLogs
 			newLogs = newLogs[trimStart:]
-			slog.Debug("Trimmed old logs",
-				"job_id", log.JobID,
-				"trimmed_count", trimStart)
+			slog.Debug("Trimmed old logs", "job_id", log.JobID, "trimmed_count", trimStart)
 		}
 
 		newPtr := &newLogs
@@ -127,9 +130,7 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 
 		// Atomically swap if the value hasn't changed
 		if la.logs.CompareAndSwap(log.JobID, old, newVal) {
-			slog.Debug("Added log to aggregator",
-				"job_id", log.JobID,
-				"total_batches", len(newLogs))
+			slog.Debug("Added log to aggregator", "job_id", log.JobID, "total_batches", len(newLogs))
 			break
 		}
 		// If swap failed, another goroutine modified the value - retry
@@ -149,9 +150,7 @@ func (la *NATSLogAggregator) FlushJob(jobID string) error {
 	if logsExists {
 		v := value.(logsVersion)
 		logs := *v.ptr
-		slog.Info("Flushed job logs",
-			"job_id", jobID,
-			"batch_count", len(logs))
+		slog.Info("Flushed job logs", "job_id", jobID, "batch_count", len(logs))
 	} else {
 		slog.Debug("No logs to flush for job", "job_id", jobID)
 	}
@@ -168,9 +167,7 @@ func (la *NATSLogAggregator) FlushJob(jobID string) error {
 // MarkJobCompleted marks a job as completed and schedules it for cleanup after retention period.
 func (la *NATSLogAggregator) MarkJobCompleted(jobID string) {
 	la.completed.Store(jobID, time.Now())
-	slog.Info("Marked job as completed",
-		"job_id", jobID,
-		"retention", la.config.Retention)
+	slog.Info("Marked job as completed", "job_id", jobID, "retention", la.config.Retention)
 }
 
 // cleanupCompletedJobs removes logs for jobs that have exceeded the retention period.
@@ -186,9 +183,7 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 			slog.Debug("Retention expired, flushing job", "job_id", jobID)
 
 			if err := la.FlushJob(jobID); err != nil {
-				slog.Error("Failed to flush job during cleanup",
-					"job_id", jobID,
-					"error", err)
+				slog.Error("Failed to flush job during cleanup", "job_id", jobID, "error", err)
 			} else {
 				cleanedCount++
 			}
@@ -200,6 +195,43 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 		slog.Info("Completed log cleanup cycle",
 			"cleaned_jobs", cleanedCount)
 	}
+}
+
+func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
+	logs := la.GetJobLogs(jobID)
+
+	// Convert the DTO to JSON
+	jsonData, err := json.Marshal(logs)
+	if err != nil {
+		slog.Error("Error parsing logs to JSON", "error", err)
+	}
+	slog.Debug("Parsed logs to JSON", "json", string(jsonData))
+
+	slog.Info("Sending job logs to the API", "job_id", jobID, "batch_count", len(logs))
+	req, err := http.NewRequest("POST", APIendpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		slog.Error("Error creating the request", "error", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", APItoken)
+
+	// Create a Client
+	client := &http.Client{}
+
+	// Send the request via a client
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error("Error sending the request", "error", err)
+	}
+
+	slog.Info("Request sent", "status", resp.Status)
+
+	// Close response body
+	defer resp.Body.Close()
+
+	return nil
 }
 
 // GetJobLogs retrieves all log entries for a specific job ID by flattening
