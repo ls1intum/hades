@@ -12,28 +12,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joshdk/go-junit"
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/utils"
 )
 
 type HadesArtemisAdapterConfig struct {
 	APIPort string `env:"API_PORT" envDefault:"8082"`
-}
-
-// ResultMetadata populated from environment variables
-type ResultMetadata struct {
-	JobName                  string `json:"jobName" env:"JOB_NAME"`
-	UUID                     string `json:"uuid" env:"UUID"`
-	AssignmentRepoBranchName string `json:"assignmentRepoBranchName" env:"ASSIGNMENT_REPO_BRANCH_NAME" envDefault:"main"`
-	IsBuildSuccessful        bool   `json:"isBuildSuccessful" env:"IS_BUILD_SUCCESSFUL"`
-	AssignmentRepoCommitHash string `json:"assignmentRepoCommitHash" env:"ASSIGNMENT_REPO_COMMIT_HASH"`
-	TestsRepoCommitHash      string `json:"testsRepoCommitHash" env:"TESTS_REPO_COMMIT_HASH"`
-	BuildCompletionTime      string `json:"buildCompletionTime" env:"BUILD_COMPLETION_TIME"`
-}
-type ResultDTO struct {
-	ResultMetadata
-	BuildJobs []junit.Suite `json:"buildJobs"`
 }
 
 func main() {
@@ -58,21 +42,19 @@ func run(cfg HadesArtemisAdapterConfig) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	adapter := NewAdapter(ctx)
+
 	// Set up graceful shutdown
-	return runWithGracefulShutdown(ctx, cancel, cfg)
+	return runWithGracefulShutdown(ctx, cancel, cfg, adapter)
 }
 
 // runWithGracefulShutdown starts services and handles graceful shutdown
-func runWithGracefulShutdown(
-	ctx context.Context,
-	cancel context.CancelFunc,
-	cfg HadesArtemisAdapterConfig,
-) error {
+func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg HadesArtemisAdapterConfig, adapter *ArtemisAdapter) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
 
 	// Start API server
-	router := setupAPIRoute()
+	router := setupAPIRoute(adapter)
 	server := &http.Server{
 		Addr:              ":" + cfg.APIPort,
 		Handler:           router,
@@ -141,7 +123,7 @@ func waitForShutdown(
 	return shutdownErr
 }
 
-func setupAPIRoute() *gin.Engine {
+func setupAPIRoute(adapter *ArtemisAdapter) *gin.Engine {
 	r := gin.Default()
 	jobs := r.Group("/adapter")
 	{
@@ -152,7 +134,7 @@ func setupAPIRoute() *gin.Engine {
 				return
 			}
 
-			// logs = append(logs, newLogs)
+			//adapter.logs.Store(newLogs., newLogs)
 			c.IndentedJSON(http.StatusCreated, newLogs)
 		})
 
@@ -163,7 +145,8 @@ func setupAPIRoute() *gin.Engine {
 				return
 			}
 
-			// results = append(results, newResults)
+			adapter.results.Store(newResults.UUID, newResults)
+			slog.Debug("Stored new test results", "uuid", newResults.UUID)
 			c.IndentedJSON(http.StatusCreated, newResults)
 		})
 	}

@@ -28,6 +28,7 @@ func (d Job) execute(ctx context.Context) error {
 		var envs = make(map[string]string)
 		maps.Copy(envs, d.Metadata)
 		maps.Copy(envs, step.Metadata)
+		envs["UUID"] = d.ID.String()
 		step.Metadata = envs
 
 		dockerStep := Step{
