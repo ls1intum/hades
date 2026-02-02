@@ -17,7 +17,7 @@ import (
 )
 
 type HadesArtemisAdapterConfig struct {
-	APIPort string `env:"API_PORT" envDefault:"8082"`
+	APIPort string `env:"API_PORT" envDefault:"8083"`
 }
 
 func main() {
@@ -42,19 +42,19 @@ func run(cfg HadesArtemisAdapterConfig) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	adapter := NewAdapter(ctx)
+	aa := NewAdapter(ctx)
 
 	// Set up graceful shutdown
-	return runWithGracefulShutdown(ctx, cancel, cfg, adapter)
+	return runWithGracefulShutdown(ctx, cancel, cfg, aa)
 }
 
 // runWithGracefulShutdown starts services and handles graceful shutdown
-func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg HadesArtemisAdapterConfig, adapter *ArtemisAdapter) error {
+func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg HadesArtemisAdapterConfig, aa *ArtemisAdapter) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
 
 	// Start API server
-	router := setupAPIRoute(adapter)
+	router := setupAPIRoute(aa)
 	server := &http.Server{
 		Addr:              ":" + cfg.APIPort,
 		Handler:           router,
@@ -79,13 +79,7 @@ func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg
 }
 
 // waitForShutdown waits for OS signal or error and performs graceful shutdown
-func waitForShutdown(
-	ctx context.Context,
-	cancel context.CancelFunc,
-	server *http.Server,
-	wg *sync.WaitGroup,
-	errChan chan error,
-) error {
+func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *http.Server, wg *sync.WaitGroup, errChan chan error) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -123,7 +117,7 @@ func waitForShutdown(
 	return shutdownErr
 }
 
-func setupAPIRoute(adapter *ArtemisAdapter) *gin.Engine {
+func setupAPIRoute(aa *ArtemisAdapter) *gin.Engine {
 	r := gin.Default()
 	jobs := r.Group("/adapter")
 	{
@@ -134,7 +128,8 @@ func setupAPIRoute(adapter *ArtemisAdapter) *gin.Engine {
 				return
 			}
 
-			//adapter.logs.Store(newLogs., newLogs)
+			aa.StoreLogs(newLogs[0].JobID, newLogs)
+			slog.Debug("Stored new logs", "uuid", newLogs[0].JobID)
 			c.IndentedJSON(http.StatusCreated, newLogs)
 		})
 
@@ -145,7 +140,7 @@ func setupAPIRoute(adapter *ArtemisAdapter) *gin.Engine {
 				return
 			}
 
-			adapter.results.Store(newResults.UUID, newResults)
+			aa.StoreResults(newResults.UUID, newResults)
 			slog.Debug("Stored new test results", "uuid", newResults.UUID)
 			c.IndentedJSON(http.StatusCreated, newResults)
 		})

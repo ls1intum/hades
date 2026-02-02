@@ -14,7 +14,7 @@ import (
 	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
-const APIendpoint = "http://localhost:8082/adapter/logs"
+const APIendpoint = "http://localhost:8083/adapter/logs"
 const APItoken = "<token>"
 
 // LogAggregator defines the interface for aggregating and managing job logs
