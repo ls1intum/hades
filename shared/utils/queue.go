@@ -13,5 +13,8 @@ type JobPublisher interface {
 
 // JobConsumer manages job consumption.
 type JobConsumer interface {
-	DequeueJob(ctx context.Context, processing func(payload payload.QueuePayload))
+	DequeueJob(ctx context.Context, processing PayloadHandler)
 }
+
+// PayloadHandler defines a function type for processing queue payloads.
+type PayloadHandler func(payload payload.QueuePayload)
