@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	hades "github.com/ls1intum/hades/shared"
 	"github.com/ls1intum/hades/shared/payload"
-	"github.com/ls1intum/hades/shared/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/nats.go"
@@ -19,6 +19,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	hadesnats "github.com/ls1intum/hades/shared/nats"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -29,7 +30,7 @@ type APISuite struct {
 	router         *gin.Engine
 	natsC          testcontainers.Container
 	natsConnection *nats.Conn
-	hadesProducer  utils.JobPublisher
+	hadesProducer  hades.JobPublisher
 }
 
 func (suite *APISuite) SetupSuite() {
@@ -59,19 +60,19 @@ func (suite *APISuite) SetupSuite() {
 	}
 
 	// Setup NATS connection
-	natsConfig := utils.NatsConfig{
+	natsConfig := hadesnats.ConnectionConfig{
 		URL:      "nats://" + endpoint,
 		Username: "",
 		Password: "",
 	}
 
-	suite.natsConnection, err = utils.SetupNatsConnection(natsConfig)
+	suite.natsConnection, err = hadesnats.SetupNatsConnection(natsConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to NATS: %v", err)
 	}
 
 	// Create producer for tests
-	suite.hadesProducer, err = utils.NewHadesNATSPublisher(suite.natsConnection)
+	suite.hadesProducer, err = hadesnats.NewHadesPublisher(suite.natsConnection)
 	if err != nil {
 		log.Fatalf("Failed to create HadesProducer: %v", err)
 	}

@@ -1,8 +1,7 @@
-package utils
+package nats
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,137 +11,48 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	hades "github.com/ls1intum/hades/shared"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-var _ JobPublisher = (*HadesNATSPublisher)(nil)
-
-// HadesNATSPublisher manages job publishing to the NATS queue system.
-type HadesNATSPublisher struct {
-	natsConnection *nats.Conn
-	js             jetstream.JetStream
-	kv             jetstream.KeyValue
-}
-
-var _ JobConsumer = (*HadesNATSConsumer)(nil)
+var _ hades.JobConsumer = (*HadesNATSConsumer)(nil)
 
 // HadesNATSConsumer manages job consumption from the NATS queue system with priority handling.
 type HadesNATSConsumer struct {
 	natsConnection *nats.Conn
 	concurrency    uint
-	consumers      map[Priority]jetstream.Consumer
+	consumers      map[hades.Priority]jetstream.Consumer
 	kv             jetstream.KeyValue
 }
 
-const (
-	natsName          = "HadesAPI"
-	natsTimeout       = 10 * time.Second
-	natsReconnectWait = 5 * time.Second
-	natsMaxReconnects = 10
-)
-
-// SetupNatsConnection creates a connection to the NATS server with the provided configuration.
-// It configures timeouts, reconnection behavior, and optional authentication/TLS.
-func SetupNatsConnection(config NatsConfig) (*nats.Conn, error) {
-	opts := []nats.Option{
-		nats.Name(natsName),
-		nats.Timeout(natsTimeout),
-		nats.ReconnectWait(natsReconnectWait),
-		nats.MaxReconnects(natsMaxReconnects),
-	}
-
-	// Add credentials if provided
-	if config.Username != "" && config.Password != "" {
-		opts = append(opts, nats.UserInfo(config.Username, config.Password))
-	}
-
-	// Add TLS if enabled
-	if config.TLS {
-		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12, // Ensure TLS 1.2 or higher
-		}
-		opts = append(opts, nats.Secure(tlsConfig))
-	}
-
-	// Connect to NATS
-	nc, err := nats.Connect(config.URL, opts...)
-	if err != nil {
-		slog.Error("Failed to connect to NATS", "error", err)
-		return nil, err
-	}
-
-	slog.Info("Connected to NATS server", "url", config.URL)
-	return nc, nil
-}
-
-// NewHadesNATSPublisher creates a new job producer with JetStream support.
-// It initializes the job stream and key-value store for job metadata.
-func NewHadesNATSPublisher(nc *nats.Conn) (*HadesNATSPublisher, error) {
-	ctx := context.Background()
-	js, err := jetstream.New(nc)
-	if err != nil {
-		slog.Error("Failed to create JetStream context", "error", err)
-		return nil, err
-	}
-
-	s, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:       "HADES_JOBS",
-		Subjects:   []string{fmt.Sprintf("%s.*", natsSubjectBase)},
-		Storage:    jetstream.FileStorage,
-		Retention:  jetstream.WorkQueuePolicy,
-		Duplicates: 1 * time.Minute, // Disallow duplicates for 1 minute
-		MaxMsgs:    -1,
-		MaxAge:     24 * time.Hour, // Retain jobs for 24 hours by default
-	})
-	if err != nil {
-		slog.Error("Failed to create JetStream stream", "error", err)
-		return nil, err
-	}
-	slog.Info("Created JetStream stream", "stream", s)
-
-	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket: "HADES_JOBS",
-	})
-	if err != nil {
-		slog.Error("Failed to create JetStream KeyValue store", "error", err)
-		return nil, err
-	}
-
-	return &HadesNATSPublisher{
-		natsConnection: nc,
-		js:             js,
-		kv:             kv,
-	}, nil
-}
-
-// NewHadesNATSConsumer creates a new job consumer with priority queue support.
+// NewHadesConsumer creates a new job consumer with priority queue support.
 // The concurrency parameter controls the maximum number of jobs processed simultaneously.
-func NewHadesNATSConsumer(nc *nats.Conn, concurrency uint) (*HadesNATSConsumer, error) {
+func NewHadesConsumer(nc *nats.Conn, concurrency uint) (*HadesNATSConsumer, error) {
 	ctx := context.Background()
 	js, err := jetstream.New(nc)
 	if err != nil {
 		slog.Error("Failed to create JetStream context", "error", err)
 		return nil, err
 	}
-	consumers := make(map[Priority]jetstream.Consumer, len(priorities))
+	consumers := make(map[hades.Priority]jetstream.Consumer, len(hades.Priorities))
 
 	// Create a consumer for each priority (one consumer is shared across all worker nodes)
-	for _, priority := range priorities {
+	for _, priority := range hades.Priorities {
 		consumerName := fmt.Sprintf("HADES_JOBS_%s", priority)
 		cons, err := js.CreateOrUpdateConsumer(ctx, "HADES_JOBS", jetstream.ConsumerConfig{
 			Name:          consumerName,
 			Durable:       consumerName,
 			AckPolicy:     jetstream.AckExplicitPolicy,
-			FilterSubject: PrioritySubject(priority),
+			FilterSubject: prioritySubject(priority),
 		})
 		if err != nil {
 			slog.Error("Failed to create JetStream consumer", "error", err, "priority", priority)
 			return nil, err
 		}
 		consumers[priority] = cons
-		slog.Info("Created JetStream consumer", "consumer", consumerName, "priority", PrioritySubject(priority))
+		slog.Info("Created JetStream consumer", "consumer", consumerName, "priority", prioritySubject(priority))
 	}
 
 	slog.Info("Created JetStream consumer", "consumers", consumers)
@@ -162,47 +72,11 @@ func NewHadesNATSConsumer(nc *nats.Conn, concurrency uint) (*HadesNATSConsumer, 
 	}, nil
 }
 
-// EnqueueHighJob adds a job to the high-priority queue.
-func (hp *HadesNATSPublisher) EnqueueHighJob(ctx context.Context, queuePayload payload.QueuePayload) error {
-	return hp.EnqueueJobWithPriority(ctx, queuePayload, HighPriority)
-}
-
-// EnqueueMediumJob adds a job to the medium-priority queue.
-func (hp *HadesNATSPublisher) EnqueueMediumJob(ctx context.Context, queuePayload payload.QueuePayload) error {
-	return hp.EnqueueJobWithPriority(ctx, queuePayload, MediumPriority)
-}
-
-// EnqueueLowJob adds a job to the low-priority queue.
-func (hp *HadesNATSPublisher) EnqueueLowJob(ctx context.Context, queuePayload payload.QueuePayload) error {
-	return hp.EnqueueJobWithPriority(ctx, queuePayload, LowPriority)
-}
-
-// EnqueueJobWithPriority adds a job to the queue with the specified priority.
-// The job payload is stored in the key-value store and a reference is published to the stream.
-func (hp *HadesNATSPublisher) EnqueueJobWithPriority(ctx context.Context, queuePayload payload.QueuePayload, priority Priority) error {
-	bytesPayload, err := json.Marshal(queuePayload)
-	if err != nil {
-		slog.Error("Failed to marshal payload", "error", err)
-		return fmt.Errorf("failed to marshal job payload: %w", err)
-	}
-	// Store full job payload in key-value store first
-	_, err = hp.kv.Put(ctx, queuePayload.ID.String(), bytesPayload)
-	if err != nil {
-		return fmt.Errorf("failed to store job payload in KV store: %w", err)
-	}
-	// Publish job reference to the stream (use synchronous publish for guaranteed delivery)
-	_, err = hp.js.Publish(ctx, PrioritySubject(priority), queuePayload.ID[:], jetstream.WithMsgID(queuePayload.ID.String()))
-	if err != nil {
-		return fmt.Errorf("failed to publish job to stream: %w", err)
-	}
-	return nil
-}
-
 // DequeueJob continuously processes jobs from the queue in priority order.
 // It spawns worker goroutines up to the configured concurrency limit and processes
 // jobs using the provided processing function. Workers fetch jobs on-demand to ensure
 // fair distribution across multiple consumer instances.
-func (hc *HadesNATSConsumer) DequeueJob(ctx context.Context, processing PayloadHandler) {
+func (hc *HadesNATSConsumer) DequeueJob(ctx context.Context, processing hades.PayloadHandler) {
 	var wg sync.WaitGroup
 
 	// Create workers that fetch their own jobs (pull model instead of push)
@@ -227,7 +101,7 @@ func (hc *HadesNATSConsumer) DequeueJob(ctx context.Context, processing PayloadH
 }
 
 // workerLoop handles the fetch-process loop for a single worker
-func (hc *HadesNATSConsumer) workerLoop(ctx context.Context, workerID uint, processing func(payload payload.QueuePayload)) {
+func (hc *HadesNATSConsumer) workerLoop(ctx context.Context, workerID uint, processing hades.PayloadHandler) {
 	// Exponential backoff for when no messages are available
 
 	const resetBackoff = 10 * time.Millisecond
@@ -270,7 +144,7 @@ func (hc *HadesNATSConsumer) workerLoop(ctx context.Context, workerID uint, proc
 		if job.Metadata == nil {
 			job.Metadata = map[string]string{}
 		}
-		job.Metadata["hades.tum.de/priority"] = strconv.Itoa(PriorityToInt(priority))
+		job.Metadata["hades.tum.de/priority"] = strconv.Itoa(hades.PriorityToInt(priority))
 		job.Metadata["hades.tum.de/priorityName"] = string(priority)
 
 		// Process the job immediately (we have capacity)
@@ -283,8 +157,8 @@ func (hc *HadesNATSConsumer) processJob(
 	workerID uint,
 	job payload.QueuePayload,
 	msg jetstream.Msg,
-	priority Priority,
-	processing func(payload payload.QueuePayload),
+	priority hades.Priority,
+	processing hades.PayloadHandler,
 ) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -366,8 +240,8 @@ func (hc *HadesNATSConsumer) parseMessage(ctx context.Context, msg jetstream.Msg
 }
 
 // fetchNextMessage tries to fetch a message in strict priority order
-func (hc *HadesNATSConsumer) fetchNextMessage(ctx context.Context) (jetstream.Msg, Priority, bool) {
-	for _, p := range priorities {
+func (hc *HadesNATSConsumer) fetchNextMessage(ctx context.Context) (jetstream.Msg, hades.Priority, bool) {
+	for _, p := range hades.Priorities {
 		consumer := hc.consumers[p]
 
 		// Use FetchNoWait with proper cleanup

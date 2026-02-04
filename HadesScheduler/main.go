@@ -7,6 +7,8 @@ import (
 	"github.com/ls1intum/hades/hadesScheduler/docker"
 	"github.com/ls1intum/hades/hadesScheduler/k8s"
 	"github.com/ls1intum/hades/hadesScheduler/log"
+	hades "github.com/ls1intum/hades/shared"
+	hadesnats "github.com/ls1intum/hades/shared/nats"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
@@ -22,10 +24,10 @@ type JobScheduler interface {
 
 type HadesSchedulerConfig struct {
 	Concurrency uint `env:"CONCURRENCY" envDefault:"1"`
-	NatsConfig  utils.NatsConfig
+	NatsConfig  hadesnats.ConnectionConfig
 }
 
-var HadesConsumer utils.JobConsumer
+var HadesConsumer hades.JobConsumer
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
@@ -42,14 +44,14 @@ func main() {
 
 	// Set up NATS connection
 	var err error
-	NatsConnection, err = utils.SetupNatsConnection(cfg.NatsConfig)
+	NatsConnection, err = hadesnats.SetupNatsConnection(cfg.NatsConfig)
 	if err != nil {
 		slog.Error("Failed to connect to NATS", "error", err)
 		os.Exit(1)
 	}
 	defer NatsConnection.Close()
 
-	HadesConsumer, err = utils.NewHadesNATSConsumer(NatsConnection, cfg.Concurrency)
+	HadesConsumer, err = hadesnats.NewHadesConsumer(NatsConnection, cfg.Concurrency)
 	if err != nil {
 		slog.Error("Failed to create Hades consumer", "error", err)
 		os.Exit(1)

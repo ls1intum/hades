@@ -16,14 +16,6 @@ const (
 	megabyte = 1024 * 1024
 )
 
-// NatsConfig holds NATS server connection configuration.
-type NatsConfig struct {
-	URL      string `env:"NATS_URL,notEmpty" envDefault:"nats://localhost:4222"`
-	Username string `env:"NATS_USERNAME"`
-	Password string `env:"NATS_PASSWORD"`
-	TLS      bool   `env:"NATS_TLS_ENABLED" envDefault:"false"`
-}
-
 // ExecutorConfig holds job executor configuration.
 type ExecutorConfig struct {
 	// Executor is the executor to use for running the jobs (default: docker)
