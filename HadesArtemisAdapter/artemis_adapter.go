@@ -99,12 +99,12 @@ func (aa *ArtemisAdapter) sendToArtemis(dto ResultDTO) error {
 
 	jsonData, err := json.Marshal(dto)
 	if err != nil {
-		return fmt.Errorf("failed to marshal DTO: %w", err)
+		slog.Error("Error parsing logs to JSON", "error", err)
 	}
 
 	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		slog.Error("Error creating the request", "error", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -112,13 +112,11 @@ func (aa *ArtemisAdapter) sendToArtemis(dto ResultDTO) error {
 
 	resp, err := aa.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		slog.Error("Error sending the request", "error", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("Artemis returned error status: %d", resp.StatusCode)
-	}
+	slog.Info("Request sent", "status", resp.Status)
 
 	return nil
 }

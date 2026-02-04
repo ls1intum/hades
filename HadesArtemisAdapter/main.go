@@ -17,7 +17,7 @@ import (
 )
 
 type HadesArtemisAdapterConfig struct {
-	APIPort string `env:"API_PORT" envDefault:"8083"`
+	APIPort string `env:"API_PORT" envDefault:"8082"`
 }
 
 func main() {

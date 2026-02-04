@@ -14,8 +14,7 @@ import (
 	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
-const APIendpoint = "http://localhost:8083/adapter/logs"
-const APItoken = "<token>"
+const APIendpoint = "http://localhost:8082/adapter/logs"
 
 // LogAggregator defines the interface for aggregating and managing job logs
 type LogAggregator interface {
@@ -215,7 +214,6 @@ func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", APItoken)
 
 	// Create a Client
 	client := &http.Client{}
