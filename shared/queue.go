@@ -17,4 +17,4 @@ type JobConsumer interface {
 }
 
 // PayloadHandler defines a function type for processing queue payloads.
-type PayloadHandler func(payload payload.QueuePayload)
+type PayloadHandler func(payload.QueuePayload)
