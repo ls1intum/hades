@@ -202,7 +202,7 @@ func (hp *HadesNATSPublisher) EnqueueJobWithPriority(ctx context.Context, queueP
 // It spawns worker goroutines up to the configured concurrency limit and processes
 // jobs using the provided processing function. Workers fetch jobs on-demand to ensure
 // fair distribution across multiple consumer instances.
-func (hc *HadesNATSConsumer) DequeueJob(ctx context.Context, processing func(payload payload.QueuePayload)) {
+func (hc *HadesNATSConsumer) DequeueJob(ctx context.Context, processing PayloadHandler) {
 	var wg sync.WaitGroup
 
 	// Create workers that fetch their own jobs (pull model instead of push)
