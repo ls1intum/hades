@@ -44,7 +44,7 @@ func main() {
 
 	// Set up NATS connection
 	var err error
-	NatsConnection, err = hadesnats.SetupNatsConnection(cfg.NatsConfig)
+	NatsConnection, err = hadesnats.SetupDefaultNatsConnection(cfg.NatsConfig)
 	if err != nil {
 		slog.Error("Failed to connect to NATS", "error", err)
 		os.Exit(1)

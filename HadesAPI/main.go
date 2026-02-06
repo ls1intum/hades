@@ -35,7 +35,7 @@ func main() {
 	utils.LoadConfig(&cfg)
 
 	var err error
-	NatsConnection, err := hadesnats.SetupNatsConnection(cfg.NatsConfig)
+	NatsConnection, err := hadesnats.SetupDefaultNatsConnection(cfg.NatsConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to NATS: %v", err)
 		return

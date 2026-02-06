@@ -66,7 +66,7 @@ func (suite *APISuite) SetupSuite() {
 		Password: "",
 	}
 
-	suite.natsConnection, err = hadesnats.SetupNatsConnection(natsConfig)
+	suite.natsConnection, err = hadesnats.SetupDefaultNatsConnection(natsConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to NATS: %v", err)
 	}

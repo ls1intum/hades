@@ -139,7 +139,7 @@ func main() {
 
 	var natsConfig hadesnats.ConnectionConfig
 	utils.LoadConfig(&natsConfig)
-	nc, err := hadesnats.SetupNatsConnection(natsConfig)
+	nc, err := hadesnats.SetupDefaultNatsConnection(natsConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to setup NATS Connection")
 		os.Exit(1)

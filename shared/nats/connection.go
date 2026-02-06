@@ -17,20 +17,26 @@ type ConnectionConfig struct {
 }
 
 const (
-	natsName          = "HadesAPI"
+	natsName          = "Hades"
 	natsTimeout       = 10 * time.Second
 	natsReconnectWait = 5 * time.Second
 	natsMaxReconnects = 10
 )
 
-// SetupNatsConnection creates a connection to the NATS server with the provided configuration.
+// SetupDefaultNatsConnection creates a connection to the NATS server with the provided configuration.
 // It configures timeouts, reconnection behavior, and optional authentication/TLS.
-func SetupNatsConnection(config ConnectionConfig) (*nats.Conn, error) {
+func SetupDefaultNatsConnection(config ConnectionConfig) (*nats.Conn, error) {
+	return SetupNatsConnection(natsName, natsTimeout, natsReconnectWait, natsMaxReconnects, config)
+}
+
+// SetupNatsConnection creates a connection to the NATS server with the provided configuration.
+// It allows customization of the connection name, timeouts, and reconnection behavior, as well as optional authentication and TLS settings.
+func SetupNatsConnection(name string, timeout, reconnectWait time.Duration, maxReconnects int, config ConnectionConfig) (*nats.Conn, error) {
 	opts := []nats.Option{
-		nats.Name(natsName),
-		nats.Timeout(natsTimeout),
-		nats.ReconnectWait(natsReconnectWait),
-		nats.MaxReconnects(natsMaxReconnects),
+		nats.Name(name),
+		nats.Timeout(timeout),
+		nats.ReconnectWait(reconnectWait),
+		nats.MaxReconnects(maxReconnects),
 	}
 
 	// Add credentials if provided
