@@ -1,6 +1,4 @@
-package utils
-
-import "fmt"
+package hades
 
 // Priority represents job priority levels for queue management.
 type Priority string
@@ -12,20 +10,12 @@ const (
 	MediumPriority Priority = "medium"
 	// LowPriority represents low-priority jobs (priority <= 1)
 	LowPriority Priority = "low"
-
-	// natsSubjectBase is the base NATS subject for all job messages
-	natsSubjectBase = "hades.jobs"
 )
 
 var (
-	// priorities defines the order in which job queues are checked (high to low)
-	priorities = []Priority{HighPriority, MediumPriority, LowPriority}
+	// Priorities defines the order in which job queues are checked (high to low)
+	Priorities = []Priority{HighPriority, MediumPriority, LowPriority}
 )
-
-// PrioritySubject returns the NATS subject for a given priority level.
-func PrioritySubject(p Priority) string {
-	return fmt.Sprintf("%s.%s", natsSubjectBase, p)
-}
 
 // PriorityFromInt converts an integer priority value to a Priority type.
 // Values >= 3 are high priority, <= 1 are low priority, and 2 is medium priority.

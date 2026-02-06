@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/ls1intum/hades/shared/buildlogs"
+	hadesnats "github.com/ls1intum/hades/shared/nats"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
 )
@@ -24,7 +25,7 @@ const (
 
 // HadesLogManagerConfig holds the configuration for the log manager
 type HadesLogManagerConfig struct {
-	NatsConfig utils.NatsConfig
+	NatsConfig hadesnats.ConnectionConfig
 	APIPort    string `env:"API_PORT" envDefault:"8081"`
 }
 
@@ -75,7 +76,7 @@ func run(cfg HadesLogManagerConfig) error {
 }
 
 // connectNATS establishes connection to NATS server with timeout
-func connectNATS(config utils.NatsConfig) (*nats.Conn, error) {
+func connectNATS(config hadesnats.ConnectionConfig) (*nats.Conn, error) {
 	nc, err := nats.Connect(config.URL, nats.Timeout(natsConnectTimeout))
 	if err != nil {
 		return nil, err

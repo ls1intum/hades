@@ -26,6 +26,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	hadesnats "github.com/ls1intum/hades/shared/nats"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -135,9 +137,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	var natsConfig utils.NatsConfig
+	var natsConfig hadesnats.ConnectionConfig
 	utils.LoadConfig(&natsConfig)
-	nc, err := utils.SetupNatsConnection(natsConfig)
+	nc, err := hadesnats.SetupDefaultNatsConnection(natsConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to setup NATS Connection")
 		os.Exit(1)
