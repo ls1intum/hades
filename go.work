@@ -1,7 +1,8 @@
-go 1.25.0
+go 1.25.3
 
 use (
 	./HadesAPI
+	./HadesArtemisAdapter
 	./HadesLogManager
 	./HadesScheduler
 	./HadesScheduler/HadesOperator
