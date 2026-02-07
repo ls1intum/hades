@@ -1,4 +1,4 @@
-# hadesoperator
+# Hades Operator
 The **Hades Operator** brings Kubernetes-native automation to the [HadesCI](https://github.com/ls1intum/hades) system — a scalable job execution tool built for programming exercises and CI pipelines.
 
 This Operator helps run, schedule, and manage Hades build jobs inside a Kubernetes cluster, using native APIs and cloud-native patterns. It improves scalability, reliability, and simplifies deployment.
