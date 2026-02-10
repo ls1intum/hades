@@ -95,7 +95,7 @@ func (aa *ArtemisAdapter) checkAndSendIfReady(jobID string) error {
 
 // sendToArtemis sends the combined result DTO to the Artemis endpoint
 func (aa *ArtemisAdapter) sendToArtemis(dto ResultDTO) error {
-	endpoint := fmt.Sprintf("%s/%s", artemisBaseURL, newResultEndpoint)
+	endpoint := fmt.Sprintf("%s/%s/%s", artemisBaseURL, newResultEndpoint, dto.JobName)
 
 	jsonData, err := json.Marshal(dto)
 	if err != nil {
