@@ -2,7 +2,7 @@ module github.com/ls1intum/hades/HadesScheduler/HadesOperator
 
 go 1.25.0
 
-toolchain go1.25.5
+toolchain go1.26.0
 
 replace github.com/ls1intum/hades/shared => ../../shared
 
