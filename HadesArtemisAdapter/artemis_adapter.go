@@ -15,7 +15,7 @@ import (
 )
 
 type ArtemisAdapter struct {
-	logs       sync.Map // jobID (string) -> []buildlogs.Log
+	logs       sync.Map // jobID (string) -> []buildlogs.LogEntry (only Step 2:execution logs)
 	results    sync.Map // jobID (string) -> results
 	httpClient *http.Client
 }
@@ -32,8 +32,8 @@ type ResultMetadata struct {
 }
 type ResultDTO struct {
 	ResultMetadata
-	BuildJobs []junit.Suite   `json:"buildJobs"`
-	BuildLogs []buildlogs.Log `json:"buildLogs"`
+	BuildJobs []junit.Suite        `json:"results"`
+	BuildLogs []buildlogs.LogEntry `json:"logs"`
 }
 
 const artemisBaseURL = "http://localhost:8080" // Replace with actual Artemis URL
@@ -49,9 +49,11 @@ func NewAdapter(ctx context.Context) *ArtemisAdapter {
 	return &aa
 }
 
-// StoreLogs stores logs for a job ID and checks if results are ready
+// StoreLogs only stores Step 2 (execution) logs for a job ID and checks if results are ready
 func (aa *ArtemisAdapter) StoreLogs(jobID string, logs []buildlogs.Log) error {
-	aa.logs.Store(jobID, logs)
+	execution_logs := logs[1].Logs
+	aa.logs.Store(jobID, execution_logs)
+
 	return aa.checkAndSendIfReady(jobID)
 }
 
@@ -69,7 +71,7 @@ func (aa *ArtemisAdapter) checkAndSendIfReady(jobID string) error {
 
 	// If both logs and results exist, combine and send
 	if logsExist && resultsExist {
-		logs := logs.([]buildlogs.Log)
+		logs := logs.([]buildlogs.LogEntry)
 		results := results.(ResultDTO)
 
 		results.BuildLogs = logs
@@ -80,12 +82,11 @@ func (aa *ArtemisAdapter) checkAndSendIfReady(jobID string) error {
 			slog.Error("Failed to send results with logs to Artemis", "jobID", jobID, "error", err)
 			return err
 		}
+		slog.Info("Successfully sent results with logs to Artemis", "jobID", jobID)
 
 		// Clean up after successful send
 		aa.logs.Delete(jobID)
 		aa.results.Delete(jobID)
-
-		slog.Info("Successfully sent results with logs to Artemis", "jobID", jobID)
 	} else {
 		slog.Debug("Waiting for complete data", "jobID", jobID, "hasLogs", logsExist, "hasResults", resultsExist)
 	}
