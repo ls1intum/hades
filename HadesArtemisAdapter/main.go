@@ -125,6 +125,7 @@ func setupAPIRoute(aa *ArtemisAdapter) *gin.Engine {
 		jobs.POST("/logs", func(c *gin.Context) {
 			var newLogs []buildlogs.Log
 			if err := c.BindJSON(&newLogs); err != nil {
+				slog.Error("Failed to bind test results JSON", "error", err)
 				return
 			}
 
@@ -137,6 +138,7 @@ func setupAPIRoute(aa *ArtemisAdapter) *gin.Engine {
 		jobs.POST("/test-results", func(c *gin.Context) {
 			var newResults ResultDTO
 			if err := c.BindJSON(&newResults); err != nil {
+				slog.Error("Failed to bind test results JSON", "error", err)
 				return
 			}
 

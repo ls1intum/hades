@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joshdk/go-junit"
 	"github.com/ls1intum/hades/shared/buildlogs"
 )
 
@@ -29,10 +28,37 @@ type ResultMetadata struct {
 	AssignmentRepoCommitHash string `json:"assignmentRepoCommitHash" env:"ASSIGNMENT_REPO_COMMIT_HASH"`
 	TestsRepoCommitHash      string `json:"testsRepoCommitHash" env:"TESTS_REPO_COMMIT_HASH"`
 	BuildCompletionTime      string `json:"buildCompletionTime" env:"BUILD_COMPLETION_TIME"`
+	Passed                   int    `json:"passed" env:"PASSED"`
 }
+
+type TestSuiteDTO struct {
+	Name      string        `json:"name"`
+	Time      float64       `json:"time"`
+	Errors    int           `json:"errors"`
+	Skipped   int           `json:"skipped"`
+	Failures  int           `json:"failures"`
+	Tests     int           `json:"tests"`
+	TestCases []TestCaseDTO `json:"testCases"`
+}
+
+type TestCaseDTO struct {
+	Name      string                     `json:"name"`
+	Classname string                     `json:"classname"`
+	Time      float64                    `json:"time"`
+	Failures  []TestCaseDetailMessageDTO `json:"failures"`     // empty for passing tests
+	Errors    []TestCaseDetailMessageDTO `json:"errors"`       // empty for passing tests
+	Successes []TestCaseDetailMessageDTO `json:"successInfos"` // empty for failing tests
+}
+
+type TestCaseDetailMessageDTO struct {
+	Message               string `json:"message"`
+	Type                  string `json:"type"`
+	MessageWithStackTrace string `json:"messageWithStackTrace"`
+}
+
 type ResultDTO struct {
 	ResultMetadata
-	BuildJobs []junit.Suite        `json:"results"`
+	Results   []TestSuiteDTO       `json:"results"`
 	BuildLogs []buildlogs.LogEntry `json:"logs"`
 }
 
@@ -60,6 +86,7 @@ func (aa *ArtemisAdapter) StoreLogs(jobID string, logs []buildlogs.Log) error {
 // StoreResults stores results for a job ID and checks if logs are ready
 func (aa *ArtemisAdapter) StoreResults(jobID string, results ResultDTO) error {
 	aa.results.Store(jobID, results)
+	slog.Debug("Stored results", "jobID", jobID, "results", results.Results)
 	return aa.checkAndSendIfReady(jobID)
 }
 
