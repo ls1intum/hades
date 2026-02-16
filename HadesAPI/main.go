@@ -5,13 +5,15 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	hades "github.com/ls1intum/hades/shared"
+	hadesnats "github.com/ls1intum/hades/shared/nats"
 	"github.com/ls1intum/hades/shared/utils"
 	log "github.com/sirupsen/logrus"
 )
 
 type HadesAPIConfig struct {
 	APIPort           uint `env:"HADESAPI_API_PORT,notEmpty" envDefault:"8080"`
-	NatsConfig        utils.NatsConfig
+	NatsConfig        hadesnats.ConnectionConfig
 	AuthKey           string `env:"AUTH_KEY"`
 	PrometheusAddress string `env:"PROMETHEUS_ADDRESS" envDefault:""`
 	// How long the task should be kept for monitoring
@@ -22,7 +24,7 @@ type HadesAPIConfig struct {
 
 var cfg HadesAPIConfig
 
-var HadesProducer utils.JobPublisher
+var HadesProducer hades.JobPublisher
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
@@ -33,14 +35,14 @@ func main() {
 	utils.LoadConfig(&cfg)
 
 	var err error
-	NatsConnection, err := utils.SetupNatsConnection(cfg.NatsConfig)
+	NatsConnection, err := hadesnats.SetupDefaultNatsConnection(cfg.NatsConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to NATS: %v", err)
 		return
 	}
 	defer NatsConnection.Close()
 
-	HadesProducer, err = utils.NewHadesNATSPublisher(NatsConnection)
+	HadesProducer, err = hadesnats.NewHadesPublisher(NatsConnection)
 	if err != nil {
 		log.Fatalf("Failed to create HadesProducer: %v", err)
 		return

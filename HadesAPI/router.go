@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	hades "github.com/ls1intum/hades/shared"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	log "github.com/sirupsen/logrus"
@@ -57,7 +58,7 @@ func AddBuildToQueue(c *gin.Context) {
 	payload.QueuePayload.ID = uuid.New()
 	log.Debug("Received build request ", payload)
 
-	queuePrio := utils.PriorityFromInt(payload.Priority)
+	queuePrio := hades.PriorityFromInt(payload.Priority)
 
 	err := HadesProducer.EnqueueJobWithPriority(c.Request.Context(), payload.QueuePayload, queuePrio)
 	if err != nil {

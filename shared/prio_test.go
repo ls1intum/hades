@@ -1,4 +1,4 @@
-package utils
+package hades
 
 import (
 	"testing"
@@ -25,25 +25,6 @@ func TestPriorityFromInt(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := PriorityFromInt(tt.priority)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
-func TestPrioritySubject(t *testing.T) {
-	tests := []struct {
-		name     string
-		priority Priority
-		expected string
-	}{
-		{"high priority subject", HighPriority, "hades.jobs.high"},
-		{"medium priority subject", MediumPriority, "hades.jobs.medium"},
-		{"low priority subject", LowPriority, "hades.jobs.low"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := PrioritySubject(tt.priority)
 			assert.Equal(t, tt.expected, got)
 		})
 	}
