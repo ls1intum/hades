@@ -179,7 +179,7 @@ For more complex workflows, you can define multi-step jobs where each step runs 
 
 ## Configuration Options
 
-Hades can be configured through environment variables or a `.env` file:
+Hades can be configured through environment variables or through a `.env` file:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
