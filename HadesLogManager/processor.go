@@ -79,7 +79,7 @@ func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, conf
 
 // cleanupLoop runs periodic cleanup of completed jobs
 func (la *NATSLogAggregator) cleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 
 	for {
