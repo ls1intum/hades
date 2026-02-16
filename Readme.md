@@ -185,7 +185,7 @@ Hades can be configured through environment variables or a `.env` file:
 |----------|-------------|---------|
 | `HADES_EXECUTOR` | Execution platform: `docker` or `kubernetes` | `docker` |
 | `CONCURRENCY` | Number of jobs to process concurrently | `1` |
-| `API_PORT` | Port for the Hades API | `8080` |
+| `HADESAPI_API_PORT` | Port for the Hades API | `8080` |
 
 ## Deployment
 

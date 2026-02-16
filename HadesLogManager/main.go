@@ -25,7 +25,7 @@ const (
 // HadesLogManagerConfig holds the configuration for the log manager
 type HadesLogManagerConfig struct {
 	NatsConfig utils.NatsConfig
-	APIPort    string `env:"API_PORT" envDefault:"8081"`
+	APIPort    string `env:"HADESLOGMANAGER_API_PORT" envDefault:"8081"`
 }
 
 func main() {

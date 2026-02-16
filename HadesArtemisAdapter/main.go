@@ -21,7 +21,7 @@ const (
 )
 
 type AdapterConfig struct {
-	APIPort           string `env:"API_PORT" envDefault:"8082"`
+	APIPort           string `env:"HADESADAPTER_API_PORT" envDefault:"8082"`
 	ArtemisBaseURL    string `env:"ARTEMIS_BASE_URL"`
 	NewResultEndpoint string `env:"ARTEMIS_NEW_RESULT_ENDPOINT"`
 	ArtemisAuthToken  string `env:"ARTEMIS_AUTH_TOKEN"`
