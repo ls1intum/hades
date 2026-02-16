@@ -31,7 +31,7 @@ jobs:
           - dockerfile: ./HadesScheduler/HadesOperator/Dockerfile
             image: ls1intum/hades/hades-operator
             context: ./HadesScheduler/HadesOperator
-          - dockerfile: ./HadesScheduler/HadesLogManager/Dockerfile
+          - dockerfile: ./HadesLogManager/Dockerfile
             image: ls1intum/hades/hades-log-manager
           - dockerfile: ./HadesArtemisAdapter/Dockerfile
             image: ls1intum/hades/hades-artemis-adapter
