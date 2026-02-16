@@ -79,7 +79,7 @@ func NewAdapter(ctx context.Context, cfg AdapterConfig) *ArtemisAdapter {
 func (aa *ArtemisAdapter) StoreLogs(jobID string, logs []buildlogs.Log) error {
 	executionLogs := []buildlogs.LogEntry{}
 	if len(logs) < 2 {
-		slog.Error("Execution logs missing", "jobID", jobID)
+		slog.Warn("Execution logs missing", "jobID", jobID)
 		executionLogs = []buildlogs.LogEntry{}
 	} else {
 		executionLogs = logs[1].Logs
@@ -157,6 +157,10 @@ func (aa *ArtemisAdapter) sendToArtemis(dto ResultDTO) error {
 		return fmt.Errorf("sending request to Artemis: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("adapter returned HTTP %d for job %s", resp.StatusCode, dto.UUID)
+	}
 
 	slog.Info("Request sent", "status", resp.Status)
 

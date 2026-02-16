@@ -206,7 +206,7 @@ func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
 	if err != nil {
 		return fmt.Errorf("marshaling logs to JSON: %w", err)
 	}
-	slog.Debug("Parsed logs to JSON", "json", string(jsonData))
+	slog.Debug("Marshaled logs to JSON", "job_id", jobID)
 
 	req, err := http.NewRequest("POST", la.cfg.APIendpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
