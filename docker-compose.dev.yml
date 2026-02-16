@@ -32,3 +32,5 @@ services:
       - HADESADAPTER_API_PORT=8082
       # Override these in your .env file for local dev
       - ARTEMIS_BASE_URL=${ARTEMIS_BASE_URL}
+      - ARTEMIS_NEW_RESULT_ENDPOINT=${ARTEMIS_NEW_RESULT_ENDPOINT}
+      - ARTEMIS_AUTH_TOKEN=${ARTEMIS_AUTH_TOKEN}
