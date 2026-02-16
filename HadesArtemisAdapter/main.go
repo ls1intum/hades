@@ -16,16 +16,22 @@ import (
 	"github.com/ls1intum/hades/shared/utils"
 )
 
-type HadesArtemisAdapterConfig struct {
-	APIPort string `env:"API_PORT" envDefault:"8082"`
+const (
+	shutdownTimeout = 30 * time.Second
+)
+
+type AdapterConfig struct {
+	APIPort           string `env:"API_PORT" envDefault:"8082"`
+	ArtemisBaseURL    string `env:"ARTEMIS_BASE_URL"`
+	NewResultEndpoint string `env:"ARTEMIS_NEW_RESULT_ENDPOINT"`
+	ArtemisAuthToken  string `env:"ARTEMIS_AUTH_TOKEN"`
 }
 
 func main() {
 	// Setup logging
 	utils.SetupLogging()
 
-	// Load configuration
-	var cfg HadesArtemisAdapterConfig
+	var cfg AdapterConfig
 	utils.LoadConfig(&cfg)
 
 	// Run main application
@@ -36,20 +42,20 @@ func main() {
 }
 
 // run contains the main application logic with proper error handling
-func run(cfg HadesArtemisAdapterConfig) error {
+func run(cfg AdapterConfig) error {
 
 	// Create context for application lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	aa := NewAdapter(ctx)
+	aa := NewAdapter(ctx, cfg)
 
 	// Set up graceful shutdown
 	return runWithGracefulShutdown(ctx, cancel, cfg, aa)
 }
 
 // runWithGracefulShutdown starts services and handles graceful shutdown
-func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg HadesArtemisAdapterConfig, aa *ArtemisAdapter) error {
+func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg AdapterConfig, aa *ArtemisAdapter) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
 
@@ -98,7 +104,7 @@ func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *htt
 	cancel()
 
 	// Shutdown API server with timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
@@ -129,9 +135,18 @@ func setupAPIRoute(aa *ArtemisAdapter) *gin.Engine {
 				return
 			}
 
-			aa.StoreLogs(newLogs[0].JobID, newLogs)
-			slog.Debug("Stored new logs", "uuid", newLogs[0].JobID)
-			c.IndentedJSON(http.StatusCreated, newLogs)
+			if len(newLogs) == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "empty logs array"})
+				return
+			}
+
+			jobID := newLogs[0].JobID
+			if err := aa.StoreLogs(jobID, newLogs); err != nil {
+				slog.Error("Failed to store logs", "job_id", jobID, "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store logs"})
+				return
+			}
+			c.JSON(http.StatusCreated, gin.H{"status": "stored", "job_id": jobID})
 		})
 
 		// post test results for specific job
@@ -142,7 +157,12 @@ func setupAPIRoute(aa *ArtemisAdapter) *gin.Engine {
 				return
 			}
 
-			aa.StoreResults(newResults.UUID, newResults)
+			if err := aa.StoreResults(newResults.UUID, newResults); err != nil {
+				slog.Error("Failed to store/send results", "uuid", newResults.UUID, "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process results"})
+				return
+			}
+
 			slog.Debug("Stored new test results", "uuid", newResults.UUID)
 			c.IndentedJSON(http.StatusCreated, newResults)
 		})

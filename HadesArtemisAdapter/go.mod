@@ -1,4 +1,4 @@
-module Hades-ArtemisAdapter
+module HadesArtemisAdapter
 
 go 1.25.3
 

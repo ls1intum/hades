@@ -14,7 +14,9 @@ import (
 	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
-const APIendpoint = "http://localhost:8082/adapter/logs"
+const (
+	httpClientTimeout = 10 * time.Second
+)
 
 // LogAggregator defines the interface for aggregating and managing job logs
 type LogAggregator interface {
@@ -36,7 +38,7 @@ type NATSLogAggregator struct {
 	logs      sync.Map // jobID (string) -> logsVersion
 	completed sync.Map // jobID (string) -> time.Time (completion time)
 	status    sync.Map // jobID (string) -> buildstatus.JobStatus
-	config    AggregatorConfig
+	cfg       AggregatorConfig
 }
 
 // wrapper stored in sync.Map: comparable (uint64 + pointer)
@@ -47,9 +49,10 @@ type logsVersion struct {
 
 // AggregatorConfig defines the configuration parameters for log aggregation behavior.
 type AggregatorConfig struct {
-	BatchSize  int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
-	Retention  time.Duration `env:"LOG_RETENTION" envDefault:"1h"`
-	MaxJobLogs int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
+	BatchSize   int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
+	Retention   time.Duration `env:"LOG_RETENTION" envDefault:"1h"`
+	MaxJobLogs  int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
+	APIendpoint string        `env:"API_ENDPOINT"`
 }
 
 // NewLogAggregator creates a new NATS-based LogAggregator instance with the specified configuration.
@@ -64,8 +67,8 @@ type AggregatorConfig struct {
 //   - LogAggregator: A new instance ready to aggregate logs
 func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
 	la := &NATSLogAggregator{
-		hlc:    hlc,
-		config: config,
+		hlc: hlc,
+		cfg: config,
 	}
 
 	// Start background cleanup goroutine
@@ -118,8 +121,8 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 		newLogs = append(newLogs, log)
 
 		// Trim if needed
-		if len(newLogs) > la.config.MaxJobLogs {
-			trimStart := len(newLogs) - la.config.MaxJobLogs
+		if len(newLogs) > la.cfg.MaxJobLogs {
+			trimStart := len(newLogs) - la.cfg.MaxJobLogs
 			newLogs = newLogs[trimStart:]
 			slog.Debug("Trimmed old logs", "job_id", log.JobID, "trimmed_count", trimStart)
 		}
@@ -166,7 +169,7 @@ func (la *NATSLogAggregator) FlushJob(jobID string) error {
 // MarkJobCompleted marks a job as completed and schedules it for cleanup after retention period.
 func (la *NATSLogAggregator) MarkJobCompleted(jobID string) {
 	la.completed.Store(jobID, time.Now())
-	slog.Info("Marked job as completed", "job_id", jobID, "retention", la.config.Retention)
+	slog.Info("Marked job as completed", "job_id", jobID, "retention", la.cfg.Retention)
 }
 
 // cleanupCompletedJobs removes logs for jobs that have exceeded the retention period.
@@ -178,7 +181,7 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 		jobID := key.(string)
 		completedAt := value.(time.Time)
 
-		if now.Sub(completedAt) >= la.config.Retention {
+		if now.Sub(completedAt) >= la.cfg.Retention {
 			slog.Debug("Retention expired, flushing job", "job_id", jobID)
 
 			if err := la.FlushJob(jobID); err != nil {
@@ -199,36 +202,27 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
 	logs := la.GetJobLogs(jobID)
 
-	// Convert the DTO to JSON
 	jsonData, err := json.Marshal(logs)
 	if err != nil {
-		slog.Error("Error parsing logs to JSON", "error", err)
+		return fmt.Errorf("marshaling logs to JSON: %w", err)
 	}
 	slog.Debug("Parsed logs to JSON", "json", string(jsonData))
 
-	slog.Info("Sending job logs to the API", "job_id", jobID, "batch_count", len(logs))
-	req, err := http.NewRequest("POST", APIendpoint, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", la.cfg.APIendpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
-		slog.Error("Error creating the request", "error", err)
+		return fmt.Errorf("creating HTTP request: %w", err)
 	}
 
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-
-	// Create a Client
-	client := &http.Client{}
-
-	// Send the request via a client
+	client := &http.Client{Timeout: httpClientTimeout}
 	resp, err := client.Do(req)
+
 	if err != nil {
-		slog.Error("Error sending the request", "error", err)
+		return fmt.Errorf("sending HTTP request: %w", err)
 	}
 
-	slog.Info("Request sent", "status", resp.Status)
-
-	// Close response body
 	defer resp.Body.Close()
-
+	slog.Info("Sent job logs to adapter", "job_id", jobID, "status", resp.Status)
 	return nil
 }
 

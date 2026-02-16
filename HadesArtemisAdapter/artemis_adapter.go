@@ -16,19 +16,21 @@ import (
 type ArtemisAdapter struct {
 	logs       sync.Map // jobID (string) -> []buildlogs.LogEntry (only Step 2:execution logs)
 	results    sync.Map // jobID (string) -> results
+	jobLocks   sync.Map // jobID (string) -> *sync.Mutex
 	httpClient *http.Client
+	cfg        AdapterConfig
 }
 
-// ResultMetadata populated from environment variables
+// Result DTOs used by Artemis
 type ResultMetadata struct {
-	JobName                  string `json:"jobName" env:"JOB_NAME"`
-	UUID                     string `json:"uuid" env:"UUID"`
-	AssignmentRepoBranchName string `json:"assignmentRepoBranchName" env:"ASSIGNMENT_REPO_BRANCH_NAME" envDefault:"main"`
-	IsBuildSuccessful        bool   `json:"isBuildSuccessful" env:"IS_BUILD_SUCCESSFUL"`
-	AssignmentRepoCommitHash string `json:"assignmentRepoCommitHash" env:"ASSIGNMENT_REPO_COMMIT_HASH"`
-	TestsRepoCommitHash      string `json:"testsRepoCommitHash" env:"TESTS_REPO_COMMIT_HASH"`
-	BuildCompletionTime      string `json:"buildCompletionTime" env:"BUILD_COMPLETION_TIME"`
-	Passed                   int    `json:"passed" env:"PASSED"`
+	JobName                  string `json:"jobName"`
+	UUID                     string `json:"uuid"`
+	AssignmentRepoBranchName string `json:"assignmentRepoBranchName"`
+	IsBuildSuccessful        bool   `json:"isBuildSuccessful"`
+	AssignmentRepoCommitHash string `json:"assignmentRepoCommitHash"`
+	TestsRepoCommitHash      string `json:"testsRepoCommitHash"`
+	BuildCompletionTime      string `json:"buildCompletionTime"`
+	Passed                   int    `json:"passed"`
 }
 
 type TestSuiteDTO struct {
@@ -62,14 +64,12 @@ type ResultDTO struct {
 	BuildLogs []buildlogs.LogEntry `json:"logs"`
 }
 
-const artemisBaseURL = "http://localhost:8080" // Replace with actual Artemis URL
-const newResultEndpoint = "api/programming/public/programming-exercises/new-result"
 const requestTimeout = 10 * time.Second
-const artemisAuthToken = "superduperlongtestingsecrettoken"
 
-func NewAdapter(ctx context.Context) *ArtemisAdapter {
+func NewAdapter(ctx context.Context, cfg AdapterConfig) *ArtemisAdapter {
 	aa := ArtemisAdapter{
 		httpClient: &http.Client{Timeout: requestTimeout},
+		cfg:        cfg,
 	}
 
 	return &aa
@@ -77,9 +77,15 @@ func NewAdapter(ctx context.Context) *ArtemisAdapter {
 
 // StoreLogs only stores Step 2 (execution) logs for a job ID and checks if results are ready
 func (aa *ArtemisAdapter) StoreLogs(jobID string, logs []buildlogs.Log) error {
-	execution_logs := logs[1].Logs
-	aa.logs.Store(jobID, execution_logs)
+	executionLogs := []buildlogs.LogEntry{}
+	if len(logs) < 2 {
+		slog.Error("Execution logs missing", "jobID", jobID)
+		executionLogs = []buildlogs.LogEntry{}
+	} else {
+		executionLogs = logs[1].Logs
+	}
 
+	aa.logs.Store(jobID, executionLogs)
 	return aa.checkAndSendIfReady(jobID)
 }
 
@@ -93,6 +99,13 @@ func (aa *ArtemisAdapter) StoreResults(jobID string, results ResultDTO) error {
 // checkAndSendIfReady checks if both logs and results exist for a jobID
 // If both are present, combines them and sends to Artemis
 func (aa *ArtemisAdapter) checkAndSendIfReady(jobID string) error {
+	// Get or create mutex for this specific job
+	lockVal, _ := aa.jobLocks.LoadOrStore(jobID, &sync.Mutex{})
+	lock := lockVal.(*sync.Mutex)
+
+	lock.Lock()
+	defer lock.Unlock()
+
 	logs, logsExist := aa.logs.Load(jobID)
 	results, resultsExist := aa.results.Load(jobID)
 
@@ -114,6 +127,7 @@ func (aa *ArtemisAdapter) checkAndSendIfReady(jobID string) error {
 		// Clean up after successful send
 		aa.logs.Delete(jobID)
 		aa.results.Delete(jobID)
+		aa.jobLocks.Delete(jobID)
 	} else {
 		slog.Debug("Waiting for complete data", "jobID", jobID, "hasLogs", logsExist, "hasResults", resultsExist)
 	}
@@ -123,24 +137,24 @@ func (aa *ArtemisAdapter) checkAndSendIfReady(jobID string) error {
 
 // sendToArtemis sends the combined result DTO to the Artemis endpoint
 func (aa *ArtemisAdapter) sendToArtemis(dto ResultDTO) error {
-	endpoint := fmt.Sprintf("%s/%s/%s", artemisBaseURL, newResultEndpoint, dto.JobName)
+	endpoint := fmt.Sprintf("%s/%s/%s", aa.cfg.ArtemisBaseURL, aa.cfg.NewResultEndpoint, dto.JobName)
 
 	jsonData, err := json.Marshal(dto)
 	if err != nil {
-		slog.Error("Error parsing logs to JSON", "error", err)
+		return fmt.Errorf("marshaling DTO to JSON: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
-		slog.Error("Error creating the request", "error", err)
+		return fmt.Errorf("creating request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", artemisAuthToken)
+	req.Header.Set("Authorization", aa.cfg.ArtemisAuthToken)
 
 	resp, err := aa.httpClient.Do(req)
 	if err != nil {
-		slog.Error("Error sending the request", "error", err)
+		return fmt.Errorf("sending request to Artemis: %w", err)
 	}
 	defer resp.Body.Close()
 
