@@ -35,8 +35,8 @@ type ResultDTO struct {
 
 // ResultMetadata contains the metadata about a build job's execution and outcome.
 type ResultMetadata struct {
-	JobName                  string `json:"jobName"`
-	UUID                     string `json:"uuid"`
+	JobName                  string `json:"jobName"` // contains participationId
+	UUID                     string `json:"uuid"`    // JobId
 	AssignmentRepoBranchName string `json:"assignmentRepoBranchName"`
 	IsBuildSuccessful        bool   `json:"isBuildSuccessful"`
 	AssignmentRepoCommitHash string `json:"assignmentRepoCommitHash"`

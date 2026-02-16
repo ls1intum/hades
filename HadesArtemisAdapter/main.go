@@ -80,7 +80,6 @@ func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg
 		}
 	}()
 
-	// Wait for shutdown signal or error
 	return waitForShutdown(ctx, cancel, server, &wg, errChan)
 }
 
