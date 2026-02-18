@@ -105,7 +105,7 @@ func (suite *APISuite) TestPingRoute() {
 
 func (suite *APISuite) TestAddBuildToQueueRoute() {
 	w := httptest.NewRecorder()
-	payload := payload.RESTPayload{
+	restPayload := payload.RESTPayload{
 		Priority: 1,
 		QueuePayload: payload.QueuePayload{
 			Name:      "example",
@@ -136,7 +136,7 @@ func (suite *APISuite) TestAddBuildToQueueRoute() {
 			},
 		},
 	}
-	jsonValue, _ := json.Marshal(payload)
+	jsonValue, _ := json.Marshal(restPayload)
 	req, _ := http.NewRequest("POST", "/build", bytes.NewBuffer(jsonValue))
 	req.Header.Set("Content-Type", "application/json")
 	suite.router.ServeHTTP(w, req)
