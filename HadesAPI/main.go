@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 
+	"log/slog"
+
 	"github.com/gin-gonic/gin"
 	hades "github.com/ls1intum/hades/shared"
 	hadesnats "github.com/ls1intum/hades/shared/nats"
 	"github.com/ls1intum/hades/shared/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 type HadesAPIConfig struct {
@@ -28,8 +29,8 @@ var HadesProducer hades.JobPublisher
 
 func main() {
 	if is_debug := os.Getenv("DEBUG"); is_debug == "true" {
-		log.SetLevel(log.DebugLevel)
-		log.Warn("DEBUG MODE ENABLED")
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+		slog.Warn("DEBUG MODE ENABLED")
 	}
 
 	utils.LoadConfig(&cfg)
@@ -37,21 +38,21 @@ func main() {
 	var err error
 	NatsConnection, err := hadesnats.SetupDefaultNatsConnection(cfg.NatsConfig)
 	if err != nil {
-		log.Fatalf("Failed to connect to NATS: %v", err)
+		slog.Error("Failed to connect to NATS", "error", err)
 		return
 	}
 	defer NatsConnection.Close()
 
 	HadesProducer, err = hadesnats.NewHadesPublisher(NatsConnection)
 	if err != nil {
-		log.Fatalf("Failed to create HadesProducer: %v", err)
+		slog.Error("Failed to create HadesProducer", "error", err)
 		return
 	}
 
-	log.Infof("Starting HadesAPI on port %d", cfg.APIPort)
+	slog.Info("Starting HadesAPI on port", "port", cfg.APIPort)
 	gin.SetMode(gin.ReleaseMode)
 
 	r := setupRouter(cfg.AuthKey)
 
-	log.Panic(r.Run(fmt.Sprintf(":%d", cfg.APIPort)))
+	slog.Error("Failed to start HadesAPI", "error", r.Run(fmt.Sprintf(":%d", cfg.APIPort)))
 }

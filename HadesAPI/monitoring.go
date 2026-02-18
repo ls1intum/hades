@@ -3,15 +3,16 @@ package main
 import (
 	"encoding/json"
 
+	"log/slog"
+
 	"github.com/ls1intum/hades/shared/payload"
-	log "github.com/sirupsen/logrus"
 )
 
 // SafePayloadFormatter formats a job payload for display, removing sensitive metadata
 func SafePayloadFormatter(bytes []byte) string {
 	var job payload.QueuePayload
 	if err := json.Unmarshal(bytes, &job); err != nil {
-		log.WithError(err).Error("Failed to unmarshal task payload")
+		slog.Error("Failed to unmarshal task payload", "error", err)
 		return ""
 	}
 
@@ -23,7 +24,7 @@ func SafePayloadFormatter(bytes []byte) string {
 
 	jsonTmp, err := json.Marshal(job)
 	if err != nil {
-		log.WithError(err).Error("Failed to marshal sanitized payload")
+		slog.Error("Failed to marshal sanitized payload", "error", err)
 		return ""
 	}
 	return string(jsonTmp)

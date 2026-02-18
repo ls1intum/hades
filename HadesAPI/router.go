@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -8,7 +9,6 @@ import (
 	hades "github.com/ls1intum/hades/shared"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 func setupRouter(auth_key string) *gin.Engine {
@@ -16,9 +16,9 @@ func setupRouter(auth_key string) *gin.Engine {
 	r.Use(gin.ErrorLogger())
 	r.Use(gin.Recovery())
 	if auth_key == "" {
-		log.Warn("No auth key set")
+		slog.Warn("No auth key set")
 	} else {
-		log.Info("Auth key set")
+		slog.Info("Auth key set")
 		r.Use(gin.BasicAuth(gin.Accounts{
 			"hades": auth_key,
 		}))
@@ -39,7 +39,7 @@ func AddBuildToQueue(c *gin.Context) {
 	var payload payload.RESTPayload
 	payload.Priority = 3 // Default priority
 	if err := c.ShouldBind(&payload); err != nil {
-		log.WithError(err).Error("Failed to bind JSON")
+		slog.Error("Failed to bind JSON", "error", err)
 		c.String(http.StatusBadRequest, "Failed to bind JSON")
 		return
 	}
@@ -48,7 +48,7 @@ func AddBuildToQueue(c *gin.Context) {
 	for _, step := range payload.QueuePayload.Steps {
 		if step.MemoryLimit != "" {
 			if _, err := utils.ParseMemoryLimit(step.MemoryLimit); err != nil {
-				log.WithError(err).Error("Failed to parse RAM limit")
+				slog.Error("Failed to parse RAM limit", "error", err)
 				c.String(http.StatusBadRequest, "Failed to parse RAM limit")
 				return
 			}
@@ -56,13 +56,13 @@ func AddBuildToQueue(c *gin.Context) {
 	}
 
 	payload.QueuePayload.ID = uuid.New()
-	log.Debug("Received build request ", payload)
+	slog.Debug("Received build request ", "payload", payload)
 
 	queuePrio := hades.PriorityFromInt(payload.Priority)
 
 	err := HadesProducer.EnqueueJobWithPriority(c.Request.Context(), payload.QueuePayload, queuePrio)
 	if err != nil {
-		log.WithError(err).Error("Failed to enqueue job")
+		slog.Error("Failed to enqueue job", "error", err)
 		c.String(http.StatusInternalServerError, "Failed to enqueue job")
 		return
 	}
@@ -70,7 +70,7 @@ func AddBuildToQueue(c *gin.Context) {
 	// Get the priority level for subject routing
 	// queuePriority := utils.PrioFromInt(payload.Priority)
 
-	log.Printf("Successfully enqueued job: %s", payload.QueuePayload.ID.String())
+	slog.Info("Successfully enqueued job", "job_id", payload.QueuePayload.ID.String())
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Successfully enqueued job",
 		"job_id":  payload.QueuePayload.ID.String(),
