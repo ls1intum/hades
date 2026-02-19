@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,7 +21,6 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	hadesnats "github.com/ls1intum/hades/shared/nats"
-	log "github.com/sirupsen/logrus"
 )
 
 const NATS_IMAGE = "nats:2.11.4"
@@ -50,13 +50,13 @@ func (suite *APISuite) SetupSuite() {
 		Started:          true,
 	})
 	if err != nil {
-		log.Fatalf("Could not start NATS: %s", err)
+		slog.Error("Could not start NATS", "error", err)
 	}
 
 	endpoint, err := suite.natsC.Endpoint(ctx, "")
-	log.Infof("NATS endpoint: %s", endpoint)
+	slog.Info("NATS endpoint", "endpoint", endpoint)
 	if err != nil {
-		log.Fatalf("Could not get NATS endpoint: %s", err)
+		slog.Error("Could not get NATS endpoint", "error", err)
 	}
 
 	// Setup NATS connection
@@ -68,13 +68,13 @@ func (suite *APISuite) SetupSuite() {
 
 	suite.natsConnection, err = hadesnats.SetupDefaultNatsConnection(natsConfig)
 	if err != nil {
-		log.Fatalf("Failed to connect to NATS: %v", err)
+		slog.Error("Failed to connect to NATS", "error", err)
 	}
 
 	// Create producer for tests
 	suite.hadesProducer, err = hadesnats.NewHadesPublisher(suite.natsConnection)
 	if err != nil {
-		log.Fatalf("Failed to create HadesProducer: %v", err)
+		slog.Error("Failed to create HadesProducer", "error", err)
 	}
 
 	// Set the global HadesProducer for tests
@@ -90,7 +90,7 @@ func (suite *APISuite) TearDownSuite() {
 	// Stop NATS container
 	ctx := context.Background()
 	if err := suite.natsC.Terminate(ctx); err != nil {
-		log.Fatalf("Could not stop NATS: %s", err)
+		slog.Error("Could not stop NATS", "error", err)
 	}
 }
 
@@ -192,6 +192,6 @@ func (suite *APISuite) TestInvalidJSON() {
 }
 
 func TestAPISuite(t *testing.T) {
-	log.SetLevel(log.DebugLevel)
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 	suite.Run(t, new(APISuite))
 }
