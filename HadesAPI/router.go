@@ -56,7 +56,7 @@ func AddBuildToQueue(c *gin.Context) {
 	}
 
 	payload.QueuePayload.ID = uuid.New()
-	slog.Debug("Received build request ", "payload", payload)
+	slog.Debug("Received build request ", "payload", SafePayloadFormat(payload.QueuePayload))
 
 	queuePrio := hades.PriorityFromInt(payload.Priority)
 

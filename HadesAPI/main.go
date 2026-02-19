@@ -54,5 +54,7 @@ func main() {
 
 	r := setupRouter(cfg.AuthKey)
 
-	slog.Error("Failed to start HadesAPI", "error", r.Run(fmt.Sprintf(":%d", cfg.APIPort)))
+	if err := r.Run(fmt.Sprintf(":%d", cfg.APIPort)); err != nil {
+		slog.Error("Failed to start HadesAPI", "error", err)
+	}
 }
