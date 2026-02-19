@@ -30,7 +30,9 @@ Hades is built upon the following key components:
 
   - **Docker Executor**: Designed for local development, the Docker executor is responsible for running jobs within Docker containers on a single host.
 
-  - **Kubernetes Executor**: Intended for production use, the Kubernetes executor executes jobs within a Kubernetes cluster, providing improved scalability, reliability, and resource utilization.
+  - **Hades Operator (Recommended)**: The modern, production-ready standard for Kubernetes. It implements a Kubernetes-native controller pattern using Custom Resource Definitions (CRDs). This mode offers superior scalability, automatic retries, and fine-grained RBAC integration.
+
+  - **Kubernetes Executor (Deprecated)**: The legacy Kubernetes execution mode.
 
 ## How It Works
 
@@ -77,47 +79,23 @@ To run Hades in Docker mode for local development:
 
 ### Running in Kubernetes Mode
 
-For production deployments or testing with Kubernetes:
+For production deployments, Hades is designed to run natively within a Kubernetes cluster using **Helm**. This is the recommended way to achieve full scalability and reliability.
 
-1. Ensure you have a running Kubernetes cluster and a valid kubeconfig file.
+1. **Prerequisites**:
+   - A Kubernetes cluster (v1.25+)
+   - [Helm](https://helm.sh/docs/intro/install/) (v3.12+) installed locally.
 
-2. Copy the `.env.example` file to `.env` and update the configuration:
-
+2. **Deployment**: We provide a comprehensive Helm Chart that packages the API, Scheduler, and NATS broker. The scheduler uses a `ServiceAccount` to manage job lifecycles within the cluster.
+   
    ```fish
-   cp .env.example .env
+   # Quick install
+   helm repo add nats https://nats-io.github.io/k8s/helm/charts
+   helm dependency build ./helm/hades/
+   helm upgrade --install hades ./helm/hades -n hades --create-namespace
    ```
 
-3. Change the `HADES_EXECUTOR` variable to `kubernetes` in your `.env` file.
+3. **Detailed Documentation**: For advanced configuration (Ingress, TLS, resource limits) and step-by-step setup, please refer to the: [Hades Helm Chart Guide](./helm/hades/Readme.md)
 
-4. Adjust the Kubeconfig volume mount in `docker-compose.k8s.yml` to point to your kubeconfig file.
-
-5. Start Hades in Kubernetes mode:
-
-   ```fish
-   docker compose -f compose.yml -f docker-compose.k8s.yml up -d
-   ```
-
-### Deploy into a VM
-
-For production deployments in a VM:
-1. Ensure you have Docker installed in the VM 
-2. Copy the `.env.example` file to `.env` and update the configuration:
-
-   ```fish
-   cp .env.example .env
-   ```
-3. Change the `LETSENCRYPT_EMAIL` variable to your email address in your `.env` file. 
-4. Change the `HADES_API_HOST` variable to domain name or your IP address in your `.env` file.
-5. Create Traefik configuration files
-
-    ```fish
-    touch traefik/acme.json
-    chmod 600 traefik/acme.json
-    ```
-6. Deploy Hades:  
-   ```fish
-   docker compose -f compose.yml -f docker-compose.deploy.yml up -d
-   ```
 ## Usage Examples
 
 ### Creating a Simple Job
@@ -188,6 +166,28 @@ Hades can be configured through environment variables or a `.env` file:
 | `API_PORT` | Port for the Hades API | `8080` |
 
 ## Deployment
+
+### Deploy into a VM
+
+For production deployments in a VM:
+1. Ensure you have Docker installed in the VM
+2. Copy the `.env.example` file to `.env` and update the configuration:
+
+   ```fish
+   cp .env.example .env
+   ```
+3. Change the `LETSENCRYPT_EMAIL` variable to your email address in your `.env` file.
+4. Change the `HADES_API_HOST` variable to domain name or your IP address in your `.env` file.
+5. Create Traefik configuration files
+
+    ```fish
+    touch traefik/acme.json
+    chmod 600 traefik/acme.json
+    ```
+6. Deploy Hades:
+   ```fish
+   docker compose -f compose.yml -f docker-compose.deploy.yml up -d
+   ```
 
 ### Ansible Deployment
 
