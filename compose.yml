@@ -37,6 +37,39 @@ services:
     environment:
       - NATS_URL=nats://nats:4222
       - HADES_EXECUTOR=docker
+    
+  hadesLogManager:
+    image: ghcr.io/ls1intum/hades/hades-log-manager
+    build:
+      context: .
+      dockerfile: ./HadesLogManager/Dockerfile
+    ports:
+      - "8083:8081"  # Map to 8083 to avoid conflicts
+    networks:
+      - hades
+    depends_on:
+      nats:
+        condition: service_healthy
+      hadesAPI:
+        condition: service_started
+    environment:
+      - HADESLOGMANAGER_API_PORT=8081
+      - API_ENDPOINT=${API_ENDPOINT}
+
+  hadesArtemisAdapter:
+    image: ghcr.io/ls1intum/hades/hades-artemis-adapter
+    build:
+      context: .
+      dockerfile: ./HadesArtemisAdapter/Dockerfile
+    ports:
+      - "8082:8082"
+    networks:
+      - hades
+    environment:
+      - HADESADAPTER_API_PORT=8082
+      - ARTEMIS_BASE_URL=${ARTEMIS_BASE_URL}
+      - ARTEMIS_NEW_RESULT_ENDPOINT=${ARTEMIS_NEW_RESULT_ENDPOINT}
+      - ARTEMIS_AUTH_TOKEN=${ARTEMIS_AUTH_TOKEN}
 
   nats:
     image: nats:2.11.4

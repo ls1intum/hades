@@ -231,5 +231,6 @@ func (dlm *DynamicLogManager) stopWatchingJobLogs(jobID string) {
 		watcher.cancel()
 
 		dlm.logAggregator.MarkJobCompleted(jobID)
+		dlm.logAggregator.SendJobLogs(jobID)
 	}
 }

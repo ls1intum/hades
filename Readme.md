@@ -179,13 +179,13 @@ For more complex workflows, you can define multi-step jobs where each step runs 
 
 ## Configuration Options
 
-Hades can be configured through environment variables or a `.env` file:
+Hades can be configured through environment variables or through a `.env` file:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `HADES_EXECUTOR` | Execution platform: `docker` or `kubernetes` | `docker` |
 | `CONCURRENCY` | Number of jobs to process concurrently | `1` |
-| `API_PORT` | Port for the Hades API | `8080` |
+| `HADESAPI_API_PORT` | Port for the Hades API | `8080` |
 
 ## Deployment
 

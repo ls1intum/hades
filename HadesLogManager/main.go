@@ -26,7 +26,7 @@ const (
 // HadesLogManagerConfig holds the configuration for the log manager
 type HadesLogManagerConfig struct {
 	NatsConfig hadesnats.ConnectionConfig
-	APIPort    string `env:"API_PORT" envDefault:"8081"`
+	APIPort    string `env:"HADESLOGMANAGER_API_PORT" envDefault:"8081"`
 }
 
 func main() {
@@ -87,12 +87,7 @@ func connectNATS(config hadesnats.ConnectionConfig) (*nats.Conn, error) {
 }
 
 // runWithGracefulShutdown starts services and handles graceful shutdown
-func runWithGracefulShutdown(
-	ctx context.Context,
-	cancel context.CancelFunc,
-	cfg HadesLogManagerConfig,
-	dynamicManager LogManager,
-	logAggregator LogAggregator,
+func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg HadesLogManagerConfig, dynamicManager LogManager, logAggregator LogAggregator,
 ) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
@@ -135,12 +130,7 @@ func runWithGracefulShutdown(
 }
 
 // waitForShutdown waits for OS signal or error and performs graceful shutdown
-func waitForShutdown(
-	ctx context.Context,
-	cancel context.CancelFunc,
-	server *http.Server,
-	wg *sync.WaitGroup,
-	errChan chan error,
+func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *http.Server, wg *sync.WaitGroup, errChan chan error,
 ) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

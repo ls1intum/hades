@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -11,15 +14,20 @@ import (
 	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
+const (
+	httpClientTimeout = 10 * time.Second
+)
+
 // LogAggregator defines the interface for aggregating and managing job logs
 type LogAggregator interface {
 	AddLog(log buildlogs.Log)
 	FlushJob(jobID string) error
 	GetJobLogs(jobID string) []buildlogs.Log
+	GetJobStatus(jobID string) (string, error)
 	GetAllJobs() []string
+	SendJobLogs(jobID string) error
 	MarkJobCompleted(jobID string)
 	UpdateJobStatus(jobID string, status buildstatus.JobStatus)
-	GetJobStatus(jobID string) (string, error)
 }
 
 // NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
@@ -30,7 +38,7 @@ type NATSLogAggregator struct {
 	logs      sync.Map // jobID (string) -> logsVersion
 	completed sync.Map // jobID (string) -> time.Time (completion time)
 	status    sync.Map // jobID (string) -> buildstatus.JobStatus
-	config    AggregatorConfig
+	cfg       AggregatorConfig
 }
 
 // wrapper stored in sync.Map: comparable (uint64 + pointer)
@@ -41,9 +49,10 @@ type logsVersion struct {
 
 // AggregatorConfig defines the configuration parameters for log aggregation behavior.
 type AggregatorConfig struct {
-	BatchSize  int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
-	Retention  time.Duration `env:"LOG_RETENTION" envDefault:"1h"`
-	MaxJobLogs int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
+	BatchSize   int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
+	Retention   time.Duration `env:"LOG_RETENTION" envDefault:"1h"`
+	MaxJobLogs  int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
+	APIendpoint string        `env:"API_ENDPOINT"`
 }
 
 // NewLogAggregator creates a new NATS-based LogAggregator instance with the specified configuration.
@@ -58,8 +67,8 @@ type AggregatorConfig struct {
 //   - LogAggregator: A new instance ready to aggregate logs
 func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
 	la := &NATSLogAggregator{
-		hlc:    hlc,
-		config: config,
+		hlc: hlc,
+		cfg: config,
 	}
 
 	// Start background cleanup goroutine
@@ -70,7 +79,7 @@ func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, conf
 
 // cleanupLoop runs periodic cleanup of completed jobs
 func (la *NATSLogAggregator) cleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 
 	for {
@@ -98,9 +107,7 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 		return
 	}
 
-	slog.Debug("Adding log to aggregator",
-		"job_id", log.JobID,
-		"entries", len(log.Logs))
+	slog.Debug("Adding log to aggregator", "job_id", log.JobID, "entries", len(log.Logs))
 
 	// Use LoadOrStore and CompareAndSwap for thread-safe updates
 	for {
@@ -114,12 +121,10 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 		newLogs = append(newLogs, log)
 
 		// Trim if needed
-		if len(newLogs) > la.config.MaxJobLogs {
-			trimStart := len(newLogs) - la.config.MaxJobLogs
+		if len(newLogs) > la.cfg.MaxJobLogs {
+			trimStart := len(newLogs) - la.cfg.MaxJobLogs
 			newLogs = newLogs[trimStart:]
-			slog.Debug("Trimmed old logs",
-				"job_id", log.JobID,
-				"trimmed_count", trimStart)
+			slog.Debug("Trimmed old logs", "job_id", log.JobID, "trimmed_count", trimStart)
 		}
 
 		newPtr := &newLogs
@@ -127,9 +132,7 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 
 		// Atomically swap if the value hasn't changed
 		if la.logs.CompareAndSwap(log.JobID, old, newVal) {
-			slog.Debug("Added log to aggregator",
-				"job_id", log.JobID,
-				"total_batches", len(newLogs))
+			slog.Debug("Added log to aggregator", "job_id", log.JobID, "total_batches", len(newLogs))
 			break
 		}
 		// If swap failed, another goroutine modified the value - retry
@@ -149,9 +152,7 @@ func (la *NATSLogAggregator) FlushJob(jobID string) error {
 	if logsExists {
 		v := value.(logsVersion)
 		logs := *v.ptr
-		slog.Info("Flushed job logs",
-			"job_id", jobID,
-			"batch_count", len(logs))
+		slog.Info("Flushed job logs", "job_id", jobID, "batch_count", len(logs))
 	} else {
 		slog.Debug("No logs to flush for job", "job_id", jobID)
 	}
@@ -168,9 +169,7 @@ func (la *NATSLogAggregator) FlushJob(jobID string) error {
 // MarkJobCompleted marks a job as completed and schedules it for cleanup after retention period.
 func (la *NATSLogAggregator) MarkJobCompleted(jobID string) {
 	la.completed.Store(jobID, time.Now())
-	slog.Info("Marked job as completed",
-		"job_id", jobID,
-		"retention", la.config.Retention)
+	slog.Info("Marked job as completed", "job_id", jobID, "retention", la.cfg.Retention)
 }
 
 // cleanupCompletedJobs removes logs for jobs that have exceeded the retention period.
@@ -182,13 +181,11 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 		jobID := key.(string)
 		completedAt := value.(time.Time)
 
-		if now.Sub(completedAt) >= la.config.Retention {
+		if now.Sub(completedAt) >= la.cfg.Retention {
 			slog.Debug("Retention expired, flushing job", "job_id", jobID)
 
 			if err := la.FlushJob(jobID); err != nil {
-				slog.Error("Failed to flush job during cleanup",
-					"job_id", jobID,
-					"error", err)
+				slog.Error("Failed to flush job during cleanup", "job_id", jobID, "error", err)
 			} else {
 				cleanedCount++
 			}
@@ -200,6 +197,33 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 		slog.Info("Completed log cleanup cycle",
 			"cleaned_jobs", cleanedCount)
 	}
+}
+
+func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
+	logs := la.GetJobLogs(jobID)
+
+	jsonData, err := json.Marshal(logs)
+	if err != nil {
+		return fmt.Errorf("marshaling logs to JSON: %w", err)
+	}
+	slog.Debug("Marshaled logs to JSON", "job_id", jobID)
+
+	req, err := http.NewRequest("POST", la.cfg.APIendpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("creating HTTP request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: httpClientTimeout}
+	resp, err := client.Do(req)
+
+	if err != nil {
+		return fmt.Errorf("sending HTTP request: %w", err)
+	}
+
+	defer resp.Body.Close()
+	slog.Info("Sent job logs to adapter", "job_id", jobID, "status", resp.Status)
+	return nil
 }
 
 // GetJobLogs retrieves all log entries for a specific job ID by flattening

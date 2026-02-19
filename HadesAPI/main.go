@@ -13,7 +13,7 @@ import (
 )
 
 type HadesAPIConfig struct {
-	APIPort           uint `env:"API_PORT,notEmpty" envDefault:"8080"`
+	APIPort           uint `env:"HADESAPI_API_PORT,notEmpty" envDefault:"8080"`
 	NatsConfig        hadesnats.ConnectionConfig
 	AuthKey           string `env:"AUTH_KEY"`
 	PrometheusAddress string `env:"PROMETHEUS_ADDRESS" envDefault:""`
