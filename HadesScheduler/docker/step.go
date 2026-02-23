@@ -87,6 +87,12 @@ func (s Step) execute(ctx context.Context) error {
 		return err
 	}
 
+	defer func() {
+		if err := removeContainer(ctx, s.cli, resp.ID); err != nil {
+			s.logger.Error("Failed to cleanup container", slog.Any("error", err), slog.Any("container_id", resp.ID))
+		}
+	}()
+
 	// Start the container
 	err = s.cli.ContainerStart(ctx, resp.ID, container.StartOptions{})
 	if err != nil {
@@ -95,7 +101,7 @@ func (s Step) execute(ctx context.Context) error {
 	}
 
 	// Wait for the container to finish
-	statusCh, errCh := s.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	statusCh, errCh := s.cli.ContainerWait(ctx, resp.ID, container.WaitCondition(container.WaitConditionNotRunning))
 	select {
 	case err := <-errCh:
 		if err != nil {
@@ -103,6 +109,15 @@ func (s Step) execute(ctx context.Context) error {
 			return err
 		}
 	case status := <-statusCh:
+		// Write the container logs to NATS before checking status
+		// Logs should be written even if the container fails to start or crashes during execution
+		if err := processContainerLogs(ctx, s.cli, s.publisher, resp.ID, jobId); err != nil {
+			s.logger.Error("Failed to write container logs to NATS", slog.Any("error", err), slog.Any("container_id", resp.ID))
+			return err
+		} else {
+			s.logger.Debug("Container logs written to NATS", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
+		}
+
 		if status.StatusCode != 0 {
 			s.logger.Error("Container exited with status", slog.Any("status", status.StatusCode), slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
 			return fmt.Errorf("container exited with status %d", status.StatusCode)
@@ -110,20 +125,5 @@ func (s Step) execute(ctx context.Context) error {
 	}
 
 	s.logger.Debug("Container completed", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
-
-	// Write the container logs to NATS
-	err = processContainerLogs(ctx, s.cli, s.publisher, resp.ID, jobId)
-
-	if err != nil {
-		s.logger.Error("Failed to write container logs to NATS", slog.Any("error", err), slog.Any("container_id", resp.ID))
-		return err
-	} else {
-		s.logger.Debug("Container logs written to NATS", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
-	}
-
-	if err := removeContainer(ctx, s.cli, resp.ID); err != nil {
-		s.logger.Error("Failed to cleanup container", slog.Any("error", err), slog.Any("container_id", resp.ID))
-	}
-
 	return nil
 }

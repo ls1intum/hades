@@ -187,7 +187,7 @@ func (aa *ArtemisAdapter) sendToArtemis(dto ResultDTO) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("adapter returned HTTP %d for job %s", resp.StatusCode, dto.UUID)
+		return fmt.Errorf("Artemis returned HTTP %d for job %s", resp.StatusCode, dto.UUID)
 	}
 
 	slog.Info("Request sent", "status", resp.Status)
