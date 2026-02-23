@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -50,7 +51,7 @@ func (d Job) execute(ctx context.Context) error {
 			d.logger.Error("Failed to execute step", slog.Any("error", err))
 			if step.Metadata[ContinueOnError] == "true" {
 				d.logger.Info("Next step should be executed despite error due to ContinueOnError setting", slog.Any("step", step))
-				stepErr = fmt.Errorf("Step %v failed with error but ContinueOnError is set: %w", step.ID, err)
+				stepErr = errors.Join(stepErr, fmt.Errorf("step %v failed with ContinueOnError set: %w", step.ID, err))
 				continue
 			}
 			return err

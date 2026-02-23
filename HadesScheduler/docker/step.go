@@ -88,6 +88,9 @@ func (s Step) execute(ctx context.Context) error {
 	}
 
 	defer func() {
+		if s.Options.containerAutoremove {
+			return
+		}
 		if err := removeContainer(ctx, s.cli, resp.ID); err != nil {
 			s.logger.Error("Failed to cleanup container", slog.Any("error", err), slog.Any("container_id", resp.ID))
 		}

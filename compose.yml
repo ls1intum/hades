@@ -55,6 +55,7 @@ services:
     environment:
       - HADESLOGMANAGER_API_PORT=8081
       - API_ENDPOINT=${API_ENDPOINT}
+      - NATS_URL=nats://nats:4222
 
   hadesArtemisAdapter:
     image: ghcr.io/ls1intum/hades/hades-artemis-adapter

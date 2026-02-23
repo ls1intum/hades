@@ -241,6 +241,8 @@ func (dlm *DynamicLogManager) stopWatchingJobLogs(jobID string) {
 		watcher.wg.Wait() // Wait outside the lock
 
 		dlm.logAggregator.MarkJobCompleted(jobID)
-		dlm.logAggregator.SendJobLogs(jobID)
+		if err := dlm.logAggregator.SendJobLogs(jobID); err != nil {
+			slog.Error("Failed to send job logs", "job_id", jobID, "error", err)
+		}
 	}
 }
