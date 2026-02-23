@@ -2,46 +2,91 @@
 sidebar_position: 1
 ---
 
-# Tutorial Intro
+# What is Hades?
 
-Let's discover **Docusaurus in less than 5 minutes**.
+**Hades** is a scalable, container-native job scheduler built for executing containerized workloads reliably and at scale. It was designed with simplicity and extensibility in mind — from local development all the way to production Kubernetes clusters.
 
-## Getting Started
+## Core Design Goals
 
-Get started by **creating a new site**.
+| Goal | Description |
+|---|---|
+| **Simplicity** | Focuses on delivering the essentials needed to execute containerized jobs without unnecessary complexity. |
+| **Scalability** | Capable of queuing and executing a large number of jobs in parallel, making it ideal for high-traffic scenarios such as student exam submissions. |
+| **Container-Based Isolation** | Every job step runs inside its own container, ensuring consistent execution environments and strong security boundaries between workloads. |
+| **Kubernetes Native** | First-class support for Kubernetes via the Hades Operator, leveraging CRDs and cloud-native patterns for production deployments. |
+| **Extensibility** | Designed to plug into different execution backends (Docker, Kubernetes, Kubernetes Operator) with minimal configuration changes. |
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
+## Architecture
 
-### What you'll need
+Hades is composed of three core services that work together:
 
-- [Node.js](https://nodejs.org/en/download/) version 20.0 or above:
-  - When installing Node.js, you are recommended to check all checkboxes related to dependencies.
-
-## Generate a new site
-
-Generate a new Docusaurus site using the **classic template**.
-
-The classic template will automatically be added to your project after you run the command:
-
-```bash
-npm init docusaurus@latest my-website classic
+```
+┌─────────┐         ┌─────────┐          ┌───────────────┐
+│         │         │         │          │               │
+│  API    │────────▶│  NATS   │─────────▶│  Scheduler    │
+│         │         │ Queue   │          │               │
+└─────────┘         └─────────┘          └───────┬───────┘
+                                                 │
+                                                 ▼
+                        ┌────────────────────────┴───────────────────────┐
+                        │                                                │
+                        ▼                                                ▼
+                 ┌─────────────┐                               ┌─────────────────┐
+                 │             │                               │                 │
+                 │   Docker    │                               │   Kubernetes    │
+                 │  Executor   │                               │    Executor     │
+                 │             │                               │                 │
+                 └─────────────┘                               └─────────────────┘
 ```
 
-You can type this command into Command Prompt, Powershell, Terminal, or any other integrated terminal of your code editor.
+### Components
 
-The command also installs all necessary dependencies you need to run Docusaurus.
+- **API** — The main entry point. Accepts job submissions, validates payloads, and publishes build events to the NATS queue.
+- **NATS (JetStream)** — The message broker that decouples job submission from execution, enabling reliable async processing and back-pressure.
+- **Scheduler** — Consumes events from NATS and dispatches jobs to the configured executor backend.
 
-## Start your site
+### Executor Backends
 
-Run the development server:
+Hades supports three execution modes:
 
-```bash
-cd my-website
-npm run start
+| Mode | Use Case |
+|---|---|
+| **Docker** | Local development and single-host deployments |
+| **Kubernetes Executor** *(deprecated)* | Legacy Kubernetes integration |
+| **Hades Operator** *(recommended)* | Production Kubernetes — uses CRDs and a native controller pattern |
+
+## How a Job Works
+
+1. **Submit** — A job (with one or more steps) is `POST`ed to the API.
+2. **Queue** — The API publishes the job to NATS JetStream.
+3. **Schedule** — The Scheduler picks up the event and dispatches it to the active executor.
+4. **Execute** — Each step runs in its own container. Steps share data via a common volume.
+5. **Complete** — Results and logs are stored and accessible via the API.
+
+## Job Format
+
+A job is a JSON document that defines a name and a list of ordered steps:
+
+```json
+{
+  "name": "Example Job",
+  "steps": [
+    {
+      "id": 1,
+      "name": "Hello World",
+      "image": "alpine:latest",
+      "script": "echo 'Hello, Hades!'"
+    }
+  ]
+}
 ```
 
-The `cd` command changes the directory you're working with. In order to work with your newly created Docusaurus site, you'll need to navigate the terminal there.
+Each step specifies the container image to use and the script to run inside it.
 
-The `npm run start` command builds your website locally and serves it through a development server, ready for you to view at http://localhost:3000/.
+## What's Next?
 
-Open `docs/intro.md` (this page) and edit some lines: the site **reloads automatically** and displays your changes.
+- **[Installation](./installation/docker-mode)** — Get Hades running in Docker or Kubernetes.
+- **[Usage Guide](./usage/submitting-jobs)** — Learn how to submit and monitor jobs.
+- **[Operation Modes](./operation-modes/docker)** — Understand the different executor backends in depth.
+- **[Helm Chart](./deployment/helm)** — Deploy Hades to Kubernetes with Helm.
+- **[Traefik Deployment](./deployment/traefik)** — Expose Hades securely with automatic TLS via Traefik.
