@@ -20,6 +20,7 @@ const (
 	shutdownTimeout = 30 * time.Second
 )
 
+// AdapterConfig holds the configuration for the Artemis adapter service.
 type AdapterConfig struct {
 	APIPort           string `env:"HADESADAPTER_API_PORT" envDefault:"8082"`
 	ArtemisBaseURL    string `env:"ARTEMIS_BASE_URL"`
@@ -27,6 +28,8 @@ type AdapterConfig struct {
 	ArtemisAuthToken  string `env:"ARTEMIS_AUTH_TOKEN"`
 }
 
+// main is the application entry point. It initialises logging, loads configuration from environment variables,
+// and delegates to run for the core application logic.
 func main() {
 	// Setup logging
 	utils.SetupLogging()
@@ -41,7 +44,8 @@ func main() {
 	}
 }
 
-// run contains the main application logic with proper error handling
+// run initialises the application context, creates the ArtemisAdapter, and starts the server with graceful shutdown support.
+// It returns any fatal error encountered during the lifetime of the application.
 func run(cfg AdapterConfig) error {
 
 	// Create context for application lifecycle
@@ -54,7 +58,8 @@ func run(cfg AdapterConfig) error {
 	return runWithGracefulShutdown(ctx, cancel, cfg, aa)
 }
 
-// runWithGracefulShutdown starts services and handles graceful shutdown
+// runWithGracefulShutdown configures and starts the HTTP API server in a background goroutine,
+// then delegates to waitForShutdown to block until either an OS signal or a fatal server error triggers a graceful teardown.
 func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg AdapterConfig, aa *ArtemisAdapter) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
@@ -83,7 +88,9 @@ func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg
 	return waitForShutdown(ctx, cancel, server, &wg, errChan)
 }
 
-// waitForShutdown waits for OS signal or error and performs graceful shutdown
+// waitForShutdown blocks until it receives either an OS signal (SIGINT/SIGTERM) or an error from errChan.
+// Once triggered, it cancels the application context, attempts a graceful HTTP server shutdown within shutdownTimeout,
+// and waits for all goroutines tracked by wg to complete before returning.
 func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *http.Server, wg *sync.WaitGroup, errChan chan error) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -122,11 +129,17 @@ func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *htt
 	return shutdownErr
 }
 
+// setupAPIRoute creates and configures the Gin router with all adapter endpoints.
+// It registers the following routes:
+//
+//   - POST /adapter/logs         — accepts a JSON array of buildlogs.Log, stores it, key: jobID of the first log entry.
+//   - POST /adapter/test-results — accepts a JSON ResultDTO, stores it, and forwards it to Artemis using the configured result endpoint.
+//   - GET  /health               — returns a simple liveness check response.
 func setupAPIRoute(aa *ArtemisAdapter) *gin.Engine {
 	r := gin.Default()
 	jobs := r.Group("/adapter")
 	{
-		// post logs for specific job
+		// Post logs for specific job
 		jobs.POST("/logs", func(c *gin.Context) {
 			var newLogs []buildlogs.Log
 			if err := c.BindJSON(&newLogs); err != nil {
@@ -148,7 +161,7 @@ func setupAPIRoute(aa *ArtemisAdapter) *gin.Engine {
 			c.JSON(http.StatusCreated, gin.H{"status": "stored", "job_id": jobID})
 		})
 
-		// post test results for specific job
+		// Post test results for specific job
 		jobs.POST("/test-results", func(c *gin.Context) {
 			var newResults ResultDTO
 			if err := c.BindJSON(&newResults); err != nil {

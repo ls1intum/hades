@@ -169,6 +169,13 @@ func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *htt
 	return shutdownErr
 }
 
+// setupAPIRoute creates and configures the Gin router with all log manager endpoints.
+// It registers the following routes:
+//
+//   - GET /jobs/:jobId/logs   — returns all aggregated log entries for the given job ID. (Used for testing purposes)
+//   - GET /jobs/:jobId/status — returns the current build status for the given job ID, or 404 if the job is not found.
+//   - GET /jobs               — returns a list of all known job IDs (active and completed).
+//   - GET /health             — liveness probe returning a static OK response.
 func setupAPIRoute(aggregator LogAggregator) *gin.Engine {
 	r := gin.Default()
 	jobs := r.Group("/jobs")

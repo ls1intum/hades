@@ -199,6 +199,9 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 	}
 }
 
+// SendJobLogs retrieves all stored logs for jobID, marshals them to JSON, and
+// sends them via an HTTP POST to the configured APIendpoint. It returns an error
+// if marshalling, request creation, or the HTTP call itself fails.
 func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
 	logs := la.GetJobLogs(jobID)
 
@@ -266,10 +269,14 @@ func (la *NATSLogAggregator) GetAllJobs() []string {
 	return jobs
 }
 
+// UpdateJobStatus stores or overwrites the build status for jobID.
+// This method is thread-safe via sync.Map.Store.
 func (la *NATSLogAggregator) UpdateJobStatus(jobID string, status buildstatus.JobStatus) {
 	la.status.Store(jobID, status)
 }
 
+// GetJobStatus returns the string representation of the current build status for jobID.
+// It returns an error if no status has been recorded for the given job.
 func (la *NATSLogAggregator) GetJobStatus(jobID string) (string, error) {
 	value, exists := la.status.Load(jobID)
 	if !exists {
