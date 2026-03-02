@@ -46,6 +46,10 @@ jobs:
     if: github.event_name != 'pull_request'
     # ls1intum/.github main branch @ 396e574
     uses: ls1intum/.github/.github/workflows/build-docusaurus-gh-pages.yml@396e5741a162951516ce357f9b9b77119fb28985
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     with:
       docs-path: website
       node-version: "22"
