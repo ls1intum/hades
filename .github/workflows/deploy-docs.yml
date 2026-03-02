@@ -44,7 +44,8 @@ jobs:
   deploy:
     needs: build
     if: github.event_name != 'pull_request'
-    uses: ls1intum/.github/.github/workflows/build-docs.yml@feat/docusaurus-gh-pages
+    # ls1intum/.github main branch @ 396e574
+    uses: ls1intum/.github/.github/workflows/build-docusaurus-gh-pages.yml@396e5741a162951516ce357f9b9b77119fb28985
     with:
       docs-path: website
       node-version: "22"
