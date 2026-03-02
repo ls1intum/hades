@@ -1,0 +1,17 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "website/**"
+  workflow_dispatch:
+
+jobs:
+  deploy-docs:
+    uses: ls1intum/.github/.github/workflows/build-docs.yml@feat/docusaurus-gh-pages
+    with:
+      docs-path: website
+      node-version: "22"
+      environment: github-pages
