@@ -7,7 +7,12 @@ meta {
 post {
   url: http://{{hostname}}/build
   body: json
-  auth: none
+  auth: basic
+}
+
+auth:basic {
+  username: hades
+  password: {{auth_key}}
 }
 
 body:json {

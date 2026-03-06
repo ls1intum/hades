@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+  release:
+    types: [released, prereleased]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  actions: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: [shared, HadesAPI]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25
+          cache-dependency-path: "**/*.sum"
+      - name: Install dependencies
+        run: cd ${{ matrix.directory }} && go mod download
+      - name: Test
+        run: go test ./${{ matrix.directory }}/... -json > TestResults-${{ matrix.directory }}.json
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: Go-results-${{ matrix.directory }}
+          path: TestResults-${{ matrix.directory }}.json
+
+  build-api:
+    needs: test
+    if: github.actor != 'dependabot[bot]'
+    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
+    with:
+      image-name: ls1intum/hades/hades-api
+      docker-file: ./HadesAPI/Dockerfile
+    secrets: inherit
+
+  build-scheduler:
+    needs: test
+    if: github.actor != 'dependabot[bot]'
+    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
+    with:
+      image-name: ls1intum/hades/hades-scheduler
+      docker-file: ./HadesScheduler/Dockerfile
+    secrets: inherit
+
+  build-operator:
+    needs: test
+    if: github.actor != 'dependabot[bot]'
+    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
+    with:
+      image-name: ls1intum/hades/hades-operator
+      docker-file: ./HadesScheduler/HadesOperator/Dockerfile
+    secrets: inherit
+
+  deploy:
+    needs: [build-api, build-scheduler]
+    runs-on: ubuntu-latest
+    environment: hades-test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create deployment directory on VM
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          proxy_host: ${{ vars.DEPLOYMENT_GATEWAY_HOST }}
+          proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
+          proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
+          proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
+          script: mkdir -p /opt/hades/traefik
+
+      - name: Copy deployment files to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          proxy_host: ${{ vars.DEPLOYMENT_GATEWAY_HOST }}
+          proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
+          proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
+          proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
+          source: "docker-compose.test.yml,traefik/traefik.yml"
+          target: /opt/hades
+          strip_components: 0
+
+      - name: Create .env file on VM
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          proxy_host: ${{ vars.DEPLOYMENT_GATEWAY_HOST }}
+          proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
+          proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
+          proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
+          script: |
+            touch /opt/hades/traefik/acme.json
+            chmod 600 /opt/hades/traefik/acme.json
+            install -m 600 /dev/null /opt/hades/.env
+            cat > /opt/hades/.env <<'EOF'
+            IMAGE_TAG=${{ needs.build-api.outputs.image_tag }}
+            HADES_API_HOST=${{ vars.HADES_API_HOST }}
+            LETSENCRYPT_EMAIL=${{ vars.LETSENCRYPT_EMAIL }}
+            AUTH_KEY=${{ secrets.AUTH_KEY }}
+            EOF
+
+      - name: Deploy with docker compose
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          proxy_host: ${{ vars.DEPLOYMENT_GATEWAY_HOST }}
+          proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
+          proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
+          proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
+          script: |
+            cd /opt/hades
+            docker compose -f docker-compose.test.yml up --pull=always -d --remove-orphans
+            docker image prune -af --filter "until=24h"
