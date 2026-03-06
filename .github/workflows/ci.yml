@@ -73,7 +73,6 @@ jobs:
     with:
       image-name: ls1intum/hades/hades-operator
       docker-file: ./HadesScheduler/HadesOperator/Dockerfile
-      docker-context: ./HadesScheduler/HadesOperator
     secrets: inherit
 
   deploy:
