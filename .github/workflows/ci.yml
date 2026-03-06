@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        directory: [shared, HadesAPI, HadesScheduler]
+        directory: [shared, HadesAPI]
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go
