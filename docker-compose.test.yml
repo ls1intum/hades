@@ -1,0 +1,79 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+      - --certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/acme.json:/etc/traefik/acme.json
+    restart: unless-stopped
+    networks:
+      - hades
+
+  hadesAPI:
+    image: ghcr.io/ls1intum/hades/hades-api:${IMAGE_TAG:-latest}
+    expose:
+      - "8080"
+    networks:
+      - hades
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      - NATS_URL=nats://nats:4222
+      - AUTH_KEY=${AUTH_KEY:-}
+      - RETENTION_IN_MIN=${RETENTION_IN_MIN:-30}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+      - TIMEOUT_IN_MIN=${TIMEOUT_IN_MIN:-0}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hadesapi.rule=Host(`${HADES_API_HOST}`)"
+      - "traefik.http.routers.hadesapi.entrypoints=web,websecure"
+      - "traefik.http.routers.hadesapi.tls.certresolver=letsencrypt"
+      - "traefik.http.services.hadesapi.loadbalancer.server.port=8080"
+    restart: unless-stopped
+
+  hadesScheduler:
+    image: ghcr.io/ls1intum/hades/hades-scheduler:${IMAGE_TAG:-latest}
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+    networks:
+      - hades
+    depends_on:
+      nats:
+        condition: service_healthy
+      hadesAPI:
+        condition: service_started
+    environment:
+      - NATS_URL=nats://nats:4222
+      - HADES_EXECUTOR=${HADES_EXECUTOR:-docker}
+      - CONCURRENCY=${CONCURRENCY:-1}
+      - DOCKER_HOST=${DOCKER_HOST:-unix:///var/run/docker.sock}
+      - DOCKER_CPU_LIMIT=${DOCKER_CPU_LIMIT:-2}
+      - DOCKER_MEMORY_LIMIT=${DOCKER_MEMORY_LIMIT:-2g}
+    restart: unless-stopped
+
+  nats:
+    image: nats:2.11.4
+    command: ["-js", "-m", "8222"]
+    networks:
+      - hades
+    healthcheck:
+      test: ["CMD", "nats-server", "--health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  hades:
+    external: false
