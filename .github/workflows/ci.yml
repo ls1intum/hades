@@ -94,7 +94,6 @@ jobs:
           proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
           proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
           source: "docker-compose.test.yml,traefik/traefik.yml"
-          target: /opt/hades
           strip_components: 0
 
       - name: Create .env file on VM
@@ -130,6 +129,5 @@ jobs:
           proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
           proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
           script: |
-            cd /opt/hades
             docker compose -f docker-compose.test.yml up --pull=always -d --remove-orphans
             docker image prune -af --filter "until=24h"
