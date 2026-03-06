@@ -32,9 +32,9 @@ jobs:
       matrix:
         directory: [shared, HadesAPI]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: 1.25
           cache-dependency-path: "**/*.sum"
@@ -43,7 +43,7 @@ jobs:
       - name: Test
         run: go test ./${{ matrix.directory }}/... -json > TestResults-${{ matrix.directory }}.json
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Go-results-${{ matrix.directory }}
           path: TestResults-${{ matrix.directory }}.json
@@ -81,7 +81,7 @@ jobs:
     environment: hades-test
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Create deployment directory on VM
         uses: appleboy/ssh-action@v1.2.5
@@ -96,7 +96,7 @@ jobs:
           script: mkdir -p /opt/hades/traefik
 
       - name: Copy deployment files to VM
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ vars.VM_HOST }}
           username: ${{ vars.VM_USERNAME }}
