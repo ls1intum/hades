@@ -2,6 +2,8 @@ package docker
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 
@@ -9,6 +11,8 @@ import (
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/payload"
 )
+
+const ContinueOnError = "CONTINUE_ON_ERROR"
 
 type Job struct {
 	cli    *client.Client
@@ -21,6 +25,8 @@ type Job struct {
 type jobIDContextKey string
 
 func (d Job) execute(ctx context.Context) error {
+	stepErr := error(nil)
+
 	for _, step := range d.Steps {
 		d.logger.Info("Executing step", slog.Any("step", step))
 
@@ -28,6 +34,7 @@ func (d Job) execute(ctx context.Context) error {
 		var envs = make(map[string]string)
 		maps.Copy(envs, d.Metadata)
 		maps.Copy(envs, step.Metadata)
+		envs["UUID"] = d.ID.String()
 		step.Metadata = envs
 
 		dockerStep := Step{
@@ -42,8 +49,13 @@ func (d Job) execute(ctx context.Context) error {
 		err := dockerStep.execute(stepCtx)
 		if err != nil {
 			d.logger.Error("Failed to execute step", slog.Any("error", err))
+			if step.Metadata[ContinueOnError] == "true" {
+				d.logger.Info("Next step should be executed despite error due to ContinueOnError setting", slog.Any("step", step))
+				stepErr = errors.Join(stepErr, fmt.Errorf("step %v failed with ContinueOnError set: %w", step.ID, err))
+				continue
+			}
 			return err
 		}
 	}
-	return nil
+	return stepErr
 }

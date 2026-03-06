@@ -16,3 +16,21 @@ services:
       - DEBUG=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+  hadesLogManager:
+    ports:
+      - "8083:8081"  # Expose for local access
+    environment:
+      - DEBUG=true
+      - HADESLOGMANAGER_API_PORT=8081
+      - API_ENDPOINT=http://hadesArtemisAdapter:8082/adapter/logs
+  
+  hadesArtemisAdapter:
+    ports:
+      - "8082:8082"  # Expose for local access
+    environment:
+      - DEBUG=true
+      - HADESADAPTER_API_PORT=8082
+      # Override these in your .env file for local dev
+      - ARTEMIS_BASE_URL=${ARTEMIS_BASE_URL}
+      - ARTEMIS_NEW_RESULT_ENDPOINT=${ARTEMIS_NEW_RESULT_ENDPOINT}
+      - ARTEMIS_AUTH_TOKEN=${ARTEMIS_AUTH_TOKEN}
