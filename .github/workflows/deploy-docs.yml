@@ -1,0 +1,56 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "website/**"
+  pull_request:
+    paths:
+      - "website/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: yarn
+          cache-dependency-path: website/yarn.lock
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: |
+          cd website
+          yarn install --immutable
+
+      - name: Build website
+        run: |
+          cd website
+          yarn build
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request'
+    # ls1intum/.github main branch @ 396e574
+    uses: ls1intum/.github/.github/workflows/build-docusaurus-gh-pages.yml@396e5741a162951516ce357f9b9b77119fb28985
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    with:
+      docs-path: website
+      node-version: "22"
+      environment: github-pages
