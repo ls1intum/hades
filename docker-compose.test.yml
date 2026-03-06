@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   traefik:
-    image: traefik:v3.0
+    image: traefik:v3.6
     container_name: traefik
     command:
       - --configFile=/etc/traefik/traefik.yml
@@ -36,7 +36,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hadesapi.rule=Host(`${HADES_API_HOST}`)"
-      - "traefik.http.routers.hadesapi.entrypoints=web,websecure"
+      - "traefik.http.routers.hadesapi.entrypoints=websecure"
       - "traefik.http.routers.hadesapi.tls.certresolver=letsencrypt"
       - "traefik.http.services.hadesapi.loadbalancer.server.port=8080"
     restart: unless-stopped
