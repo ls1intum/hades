@@ -65,9 +65,9 @@ func ParseMemoryLimit(limit string) (int64, error) {
 	}
 
 	switch strings.ToUpper(unit) {
-	case "g", "G":
+	case "G":
 		return value * gigabyte, nil
-	case "m", "M":
+	case "M":
 		return value * megabyte, nil
 	default:
 		return 0, fmt.Errorf("unsupported memory unit %q: must be G (gigabytes) or M (megabytes)", unit)

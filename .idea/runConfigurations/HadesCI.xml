@@ -1,6 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="HadesCI" type="CompoundRunConfigurationType">
     <toRun name="HadesAPI" type="GoApplicationRunConfiguration" />
+    <toRun name="HadesOperaor" type="GoApplicationRunConfiguration" />
     <toRun name="HadesScheduler" type="GoApplicationRunConfiguration" />
     <method v="2" />
   </configuration>
