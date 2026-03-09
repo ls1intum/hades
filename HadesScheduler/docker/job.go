@@ -12,8 +12,6 @@ import (
 	"github.com/ls1intum/hades/shared/payload"
 )
 
-const ContinueOnError = "CONTINUE_ON_ERROR"
-
 type Job struct {
 	cli    *client.Client
 	logger *slog.Logger
@@ -49,7 +47,7 @@ func (d Job) execute(ctx context.Context) error {
 		err := dockerStep.execute(stepCtx)
 		if err != nil {
 			d.logger.Error("Failed to execute step", slog.Any("error", err))
-			if step.Metadata[ContinueOnError] == "true" {
+			if step.ContinueOnError == true {
 				d.logger.Info("Next step should be executed despite error due to ContinueOnError setting", slog.Any("step", step))
 				stepErr = errors.Join(stepErr, fmt.Errorf("step %v failed with ContinueOnError set: %w", step.ID, err))
 				continue
