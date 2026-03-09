@@ -89,17 +89,17 @@ jobs:
     if: github.actor != 'dependabot[bot]'
     uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
     with:
-      image-name: ls1intum/hades/hades-operator
-      docker-file: ./HadesScheduler/HadesOperator/Dockerfile
+      image-name: ls1intum/hades/hades-log-manager
+      docker-file: ./HadesLogManager/Dockerfile
     secrets: inherit
 
   build-artemis-adapter:
-  needs: test
+    needs: test
     if: github.actor != 'dependabot[bot]'
     uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
     with:
-      image-name: ls1intum/hades/hades-operator
-      docker-file: ./HadesScheduler/HadesOperator/Dockerfile
+      image-name: ls1intum/hades/hades-artemis-adapter
+      docker-file: ./HadesArtemisAdapter/Dockerfile
     secrets: inherit
 
   deploy:
