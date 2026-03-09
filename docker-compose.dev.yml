@@ -22,5 +22,5 @@ services:
     environment:
       - DEBUG=true
       - HADESLOGMANAGER_API_PORT=8081
-      - API_ENDPOINT=http://hadesArtemisAdapter:8082/adapter/logs
+      - API_ENDPOINT=${ARTEMIS_ADAPTER_URL}
       
