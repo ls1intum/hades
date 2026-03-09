@@ -1,16 +1,16 @@
-module HadesAdapter
+module github.com/ls1intum/hades/hadesLogManager
 
 go 1.24.4
 
 require (
 	github.com/gin-gonic/gin v1.11.0
-	github.com/nats-io/nats.go v1.48.0
+	github.com/nats-io/nats.go v1.49.0
 )
 
 require (
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
-	github.com/caarlos0/env/v11 v11.3.1 // indirect
+	github.com/caarlos0/env/v11 v11.4.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.9 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
@@ -34,15 +34,15 @@ require (
 	github.com/ugorji/go/codec v1.3.0 // indirect
 	golang.org/x/arch v0.20.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/text v0.32.0 // indirect
 	google.golang.org/protobuf v1.36.9 // indirect
 )
 
 require (
-	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/ls1intum/hades/shared v0.0.0-20260211120818-0675529ef398
-	github.com/nats-io/nkeys v0.4.11 // indirect
+	github.com/nats-io/nkeys v0.4.12 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
 )
