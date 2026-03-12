@@ -74,17 +74,20 @@ jobs:
       image-name: ls1intum/hades/hades-operator
       docker-file: ./HadesScheduler/HadesOperator/Dockerfile
     secrets: inherit
+  
+  deploy-traefik:
+    needs: [build-api, build-scheduler]
+    uses: ls1intum/.github/.github/workflows/deploy-docker-traefik.yml@feat/traefik-deployment
+    with:
+      environment: hades-test
+      image-tag: v3.6
+    secrets: inherit
 
   deploy:
     needs: [build-api, build-scheduler]
     runs-on: ubuntu-latest
     environment: hades-test
     steps:
-      - name: Setup Traefik
-        uses: ls1intum/.github/.github/workflows/deploy-docker-traefik.yml@feat/traefik-deployment
-        with:
-          environment: hades-test
-          image-tag: v3.6
 
       - name: Checkout repository
         uses: actions/checkout@v6
