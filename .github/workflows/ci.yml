@@ -77,7 +77,7 @@ jobs:
   
   deploy-traefik:
     needs: [build-api, build-scheduler]
-    uses: ls1intum/.github/.github/workflows/deploy-docker-traefik.yml@feat/traefik-deployment
+    uses: ls1intum/.github/.github/workflows/deploy-docker-traefik.yml@main
     with:
       environment: hades-test
       image-tag: v3.6
@@ -91,18 +91,6 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Create deployment directory on VM
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ vars.VM_HOST }}
-          username: ${{ vars.VM_USERNAME }}
-          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          proxy_host: ${{ vars.DEPLOYMENT_GATEWAY_HOST }}
-          proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
-          proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
-          proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
-          script: mkdir -p /opt/hades/traefik
 
       - name: Copy deployment files to VM
         uses: appleboy/scp-action@v1.0.0
@@ -129,8 +117,6 @@ jobs:
           proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
           proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
           script: |
-            touch /opt/hades/traefik/acme.json
-            chmod 600 /opt/hades/traefik/acme.json
             install -m 600 /dev/null /opt/hades/.env
             cat > /opt/hades/.env <<'EOF'
             IMAGE_TAG=${{ needs.build-api.outputs.image_tag }}
