@@ -16,3 +16,11 @@ services:
       - DEBUG=true
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+  hadesLogManager:
+    ports:
+      - "8083:8081"  # Expose for local access
+    environment:
+      - DEBUG=true
+      - HADESLOGMANAGER_API_PORT=8081
+      - API_ENDPOINT=${ARTEMIS_ADAPTER_URL}
+      

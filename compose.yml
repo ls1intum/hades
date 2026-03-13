@@ -37,6 +37,25 @@ services:
     environment:
       - NATS_URL=nats://nats:4222
       - HADES_EXECUTOR=docker
+    
+  hadesLogManager:
+    image: ghcr.io/ls1intum/hades/hades-log-manager
+    build:
+      context: .
+      dockerfile: ./HadesLogManager/Dockerfile
+    ports:
+      - "8083:8081"  # Map to 8083 to avoid conflicts
+    networks:
+      - hades
+    depends_on:
+      nats:
+        condition: service_healthy
+      hadesAPI:
+        condition: service_started
+    environment:
+      - HADESLOGMANAGER_API_PORT=8081
+      - API_ENDPOINT=${API_ENDPOINT}
+      - NATS_URL=nats://nats:4222
 
   nats:
     image: nats:2.11.4

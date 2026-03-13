@@ -1,7 +1,6 @@
 
 version: '3.7'
 services:
-
   hadesScheduler:
     environment:
       - NATS_URL=nats://nats:4222

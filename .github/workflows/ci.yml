@@ -83,6 +83,23 @@ jobs:
       image-tag: v3.6
     secrets: inherit
 
+  build-log-manager:
+    needs: test
+    if: github.actor != 'dependabot[bot]'
+    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
+    with:
+      image-name: ls1intum/hades/hades-log-manager
+      docker-file: ./HadesLogManager/Dockerfile
+    secrets: inherit
+
+  deploy-traefik:
+    needs: [build-api, build-scheduler]
+    uses: ls1intum/.github/.github/workflows/deploy-docker-traefik.yml@main
+    with:
+      environment: hades-test
+      image-tag: v3.6
+    secrets: inherit
+
   deploy:
     needs: [build-api, build-scheduler]
     runs-on: ubuntu-latest
