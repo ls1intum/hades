@@ -84,11 +84,20 @@ jobs:
       docker-file: ./HadesLogManager/Dockerfile
     secrets: inherit
 
+  deploy-traefik:
+    needs: [build-api, build-scheduler]
+    uses: ls1intum/.github/.github/workflows/deploy-docker-traefik.yml@main
+    with:
+      environment: hades-test
+      image-tag: v3.6
+    secrets: inherit
+
   deploy:
     needs: [build-api, build-scheduler]
     runs-on: ubuntu-latest
     environment: hades-test
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v6
 
@@ -114,7 +123,7 @@ jobs:
           proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
           proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
           proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
-          source: "docker-compose.test.yml,traefik/traefik.yml"
+          source: "docker-compose.test.yml"
           target: /opt/hades
           strip_components: 0
 
@@ -129,8 +138,6 @@ jobs:
           proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
           proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
           script: |
-            touch /opt/hades/traefik/acme.json
-            chmod 600 /opt/hades/traefik/acme.json
             install -m 600 /dev/null /opt/hades/.env
             cat > /opt/hades/.env <<'EOF'
             IMAGE_TAG=${{ needs.build-api.outputs.image_tag }}
