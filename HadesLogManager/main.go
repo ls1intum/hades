@@ -153,7 +153,7 @@ func waitForShutdown(
 	cancel()
 
 	// Shutdown API server with timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, shutdownTimeout)
 	defer shutdownCancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
