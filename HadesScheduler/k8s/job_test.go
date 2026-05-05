@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,11 +75,14 @@ func (suite *JobUnitTestSuite) TestVolumeSpec() {
 	// Assert that each per-step volume has the correct name and ConfigMap reference
 	for i, step := range job.Steps {
 		assert.Equal(suite.T(), fmt.Sprintf("%s-build-script", step.IDString()), volumeSpec[i].Name)
+		require.NotNil(suite.T(), volumeSpec[i].VolumeSource.ConfigMap, "per-step volume must reference a ConfigMap")
 		assert.Equal(suite.T(), configMap.Name, volumeSpec[i].VolumeSource.ConfigMap.LocalObjectReference.Name)
 	}
 
 	// Assert that each per-step volume has the correct ConfigMap key
 	for i, step := range job.Steps {
+		require.NotNil(suite.T(), volumeSpec[i].VolumeSource.ConfigMap, "per-step volume must reference a ConfigMap")
+		require.NotEmpty(suite.T(), volumeSpec[i].VolumeSource.ConfigMap.Items, "ConfigMap items must include step key mapping")
 		assert.Equal(suite.T(), step.IDString(), volumeSpec[i].VolumeSource.ConfigMap.Items[0].Key)
 	}
 

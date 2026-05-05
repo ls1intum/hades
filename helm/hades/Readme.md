@@ -56,7 +56,7 @@ The Scheduler operates in **`operator` mode** by default (`hadesScheduler.config
       cat ./helm/hades/values.yaml
       ```
 
-3. Install the chart using serviceaccount mode (default)
+3. Install the chart (default: operator mode)
     ```bash
     helm upgrade --install hades ./helm/hades -n hades --create-namespace
     ```

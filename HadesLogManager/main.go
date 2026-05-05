@@ -193,7 +193,7 @@ func setupAPIRoute(aggregator buildlogs.LogAggregator) *gin.Engine {
 				return
 			}
 
-			c.JSON(200, gin.H{"status": status})
+			c.JSON(200, gin.H{"status": status.String()})
 		})
 
 		// Get active jobs (for testing)

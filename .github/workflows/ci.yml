@@ -87,7 +87,7 @@ jobs:
       - name: Install dependencies
         run: cd ${{ matrix.path }} && go mod download
       - name: Test
-        run: cd ${{ matrix.path }} && go test ./... -json > ../TestResults-${{ matrix.name }}.json
+        run: cd ${{ matrix.path }} && go test ./... -json > "${{ github.workspace }}/TestResults-${{ matrix.name }}.json"
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7

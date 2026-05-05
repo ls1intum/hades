@@ -14,7 +14,7 @@ type LogAggregator interface {
 	GetAllJobs() []string
 	MarkJobCompleted(jobID string)
 	UpdateJobStatus(jobID string, status buildstatus.JobStatus)
-	GetJobStatus(jobID string) (string, error)
+	GetJobStatus(jobID string) (buildstatus.JobStatus, error)
 }
 
 // LogManager defines the interface for managing job log subscriptions

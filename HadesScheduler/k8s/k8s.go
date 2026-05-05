@@ -69,7 +69,7 @@ func NewK8sScheduler(nc *nats.Conn) (*Scheduler, error) {
 		slog.Info("Creating namespace in Kubernetes")
 		_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
 		if err != nil {
-			slog.Info("Failed to create namespace in Kubernetes", "error", err)
+			slog.Error("Failed to create namespace in Kubernetes", "error", err)
 			return nil, err
 		}
 	}

@@ -34,7 +34,7 @@ Hades is built upon the following key components:
 
   - **Kubernetes Executor (Deprecated)**: The legacy Kubernetes execution mode.
 
-- **Log Manager**: Subscribes to job status and log events on NATS, aggregates per-job logs in memory, and exposes them through an HTTP API (`GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status`, default port `8081`).
+- **Log Manager** *(local development only)*: Subscribes to job status and log events on NATS, aggregates per-job logs in memory, and exposes them through an HTTP API (`GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status`, default port `8081`). Run via `make run` for local workflows; not currently part of the Docker compose stack or the production Helm deployment.
 
 ## How It Works
 
@@ -256,7 +256,7 @@ Major-version upgrades (for example `sigs.k8s.io/controller-runtime` v0.22 -> v0
 
 Docker base images in the per-component `Dockerfile`s are tracked by Renovate; for a manual bump, look up the latest tag on the relevant registry and edit the `FROM` line.
 
-## High Level Architecture Diagram
+## High-Level Architecture Diagram
 
 ```
 ┌─────────┐         ┌─────────┐          ┌───────────────┐
