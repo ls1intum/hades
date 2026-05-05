@@ -11,17 +11,6 @@ import (
 	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
-// LogAggregator defines the interface for aggregating and managing job logs
-type LogAggregator interface {
-	AddLog(log buildlogs.Log)
-	FlushJob(jobID string) error
-	GetJobLogs(jobID string) []buildlogs.Log
-	GetAllJobs() []string
-	MarkJobCompleted(jobID string)
-	UpdateJobStatus(jobID string, status buildstatus.JobStatus)
-	GetJobStatus(jobID string) (string, error)
-}
-
 // NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
 // It provides thread-safe log aggregation with configurable batching, automatic log rotation,
 // and memory management. Thread-safety is provided by sync.Map for all operations.
@@ -56,7 +45,7 @@ type AggregatorConfig struct {
 //
 // Returns:
 //   - LogAggregator: A new instance ready to aggregate logs
-func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
+func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) buildlogs.LogAggregator {
 	la := &NATSLogAggregator{
 		hlc:    hlc,
 		config: config,
