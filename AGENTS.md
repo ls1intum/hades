@@ -44,9 +44,6 @@ helm dependency build ./helm/hades
 helm lint ./helm/hades
 helm template hades ./helm/hades -n hades
 ```
-
-CI (`.github/workflows/ci.yml`) only runs `go test` for `shared` and `HadesAPI`. `HadesScheduler`/operator/log-manager tests are not gated. The CI builds and pushes Docker images for `hades-api`, `hades-scheduler`, `hades-operator` to `ghcr.io/ls1intum/hades/`. `HadesLogManager` runs locally via `make run` but currently has no Dockerfile, no helm template, no compose service, and no CI build - it is not yet part of the deployed system.
-
 ## Running locally
 
 The top-level `Makefile` wraps the common workflows (`make help` lists every target):
