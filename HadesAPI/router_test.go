@@ -35,7 +35,6 @@ type APISuite struct {
 
 func (suite *APISuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
-	suite.router = setupRouter("")
 
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
@@ -77,8 +76,7 @@ func (suite *APISuite) SetupSuite() {
 		slog.Error("Failed to create HadesProducer", "error", err)
 	}
 
-	// Set the global HadesProducer for tests
-	HadesProducer = suite.hadesProducer
+	suite.router = setupRouter("", suite.hadesProducer)
 }
 
 func (suite *APISuite) TearDownSuite() {
