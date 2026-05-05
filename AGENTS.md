@@ -67,3 +67,8 @@ The top-level `Makefile` wraps the common workflows (`make help` lists every tar
 - Don't add fields to `BuildJobSpec` without regenerating the CRD (CI will block the PR).
 - Don't introduce package-level mutable globals for dependencies - the codebase has been moving away from them (see `setupRouter` taking `JobPublisher` as a parameter).
 - Don't assume `HadesLogManager` is part of the deployed system when reasoning about production end-to-end flows; it is currently CLI-only (no Dockerfile / helm template).
+
+
+## Pull Requests
+
+- When opening a PR make sure to use the pull_request_template.md in the .github folder. 
