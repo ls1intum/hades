@@ -76,3 +76,5 @@ Temporary Items
 # Ignore all local history of files
 .history
 .ionide
+.claude/settings.local.json
+CODE_REVIEW.md
