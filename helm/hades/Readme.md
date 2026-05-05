@@ -1,6 +1,6 @@
 # Hades Helm Chart
 
-Deploy the **Hades** build system (API, Scheduler, and NATS broker) into any Kubernetes cluster using Helm.
+Deploy the **Hades** build system (API, Scheduler, Operator, and NATS broker) into any Kubernetes cluster using Helm.
 
 ---
 
@@ -22,15 +22,16 @@ Deploy the **Hades** build system (API, Scheduler, and NATS broker) into any Kub
 
 This chart bundles the core services of Hades:
 
-| Component           | Description                                                                      |
-|---------------------|----------------------------------------------------------------------------------|
-| **hades-api**       | Processes and validates the request and produce the build request as NATS events |
-| **hades-scheduler** | Consumes NATS events and spawns per-exercise runner Pods                         |
-| **hades-nats**      | Embedded [NATS JetStream](https://nats.io) message broker (sub-chart)            |
+| Component            | Description                                                                                              |
+|----------------------|----------------------------------------------------------------------------------------------------------|
+| **hades-api**        | Processes and validates the request and produces the build request as NATS events                        |
+| **hades-scheduler**  | Consumes NATS events and translates each into a `BuildJob` custom resource                               |
+| **hades-operator**   | Watches `BuildJob` CRs and reconciles them into Kubernetes `batchv1.Job`s with one container per step    |
+| **hades-nats**       | Embedded [NATS JetStream](https://nats.io) message broker (sub-chart)                                    |
 
-The Scheduler operates in **`serviceaccount` mode** by default, using Kubernetes-native in-cluster credentials to authenticate and create jobs.
+The Scheduler operates in **`operator` mode** by default (`hadesScheduler.configMode: operator` in `values.yaml`). In this mode the scheduler does not create Pods directly; instead it creates `BuildJob` CRs, which the operator reconciles into Kubernetes Jobs.
 
-> ⚠️ The previously supported `kubeconfig` mode is not implemented in this version.
+> The chart also still supports `serviceaccount` mode (legacy direct scheduling) by setting `hadesScheduler.configMode: serviceaccount`. The `kubeconfig` mode is not intended for in-cluster deployment.
 
 ---
 
@@ -81,17 +82,17 @@ The Scheduler operates in **`serviceaccount` mode** by default, using Kubernetes
 
 Expected healthy log lines:
 
-```
+```text
 INFO Connected to NATS server url=nats://hades-nats.hades.svc:4222
 INFO Started HadesScheduler in Kubernetes mode
-INFO Using service account for Kubernetes access
+INFO Using operator mode (dynamic client)
 ```
 
 ---
 
 ## Configuration
 
-All user-configurable options live in **`values.yaml`**. The default mode is `serviceaccount`.
+All user-configurable options live in **`values.yaml`**. The default mode is `operator`.
 
 ### Values Reference
 
@@ -114,7 +115,14 @@ hadesScheduler:
       memory: 256Mi
   service:
     targetPort: 8080
-  configMode: serviceaccount  # ← required value, "serviceaccount" is the only supported mode currently
+  configMode: operator  # one of: operator (default), serviceaccount
+
+# Operator (only deployed when scheduler runs in `operator` mode)
+hadesOperator:
+  replicaCount: 1
+  clusterWide: false        # set true to grant cluster-wide RBAC instead of namespace-scoped
+  DeleteOnComplete: true    # delete BuildJob CRs once their batchv1.Job finishes
+  maxParallelism: "100"
 ```
 
 ---
