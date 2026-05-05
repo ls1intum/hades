@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	shutdownTimeout    = 30 * time.Second
-	natsConnectTimeout = 10 * time.Second
+	shutdownTimeout = 30 * time.Second
 )
 
 // HadesLogManagerConfig holds the configuration for the log manager
@@ -75,15 +74,9 @@ func run(cfg HadesLogManagerConfig) error {
 	return runWithGracefulShutdown(ctx, cancel, cfg, dynamicManager, logAggregator)
 }
 
-// connectNATS establishes connection to NATS server with timeout
+// connectNATS establishes connection to NATS server
 func connectNATS(config hadesnats.ConnectionConfig) (*nats.Conn, error) {
-	nc, err := nats.Connect(config.URL, nats.Timeout(natsConnectTimeout))
-	if err != nil {
-		return nil, err
-	}
-
-	slog.Info("Connected to NATS server", "url", config.URL)
-	return nc, nil
+	return hadesnats.SetupDefaultNatsConnection(config)
 }
 
 // runWithGracefulShutdown starts services and handles graceful shutdown
@@ -150,7 +143,7 @@ func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *htt
 	cancel()
 
 	// Shutdown API server with timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, shutdownTimeout)
 	defer shutdownCancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
@@ -197,7 +190,7 @@ func setupAPIRoute(aggregator LogAggregator) *gin.Engine {
 				return
 			}
 
-			c.JSON(200, gin.H{"status": status})
+			c.JSON(200, gin.H{"status": status.String()})
 		})
 
 		// Get active jobs (for testing)

@@ -16,11 +16,6 @@ var (
 	ErrEmptyJobID = errors.New("empty job ID")
 )
 
-// LogManager defines the interface for managing job log subscriptions
-type LogManager interface {
-	StartListening(ctx context.Context) error
-}
-
 // DynamicLogManager manages dynamic subscription to job logs based on job status changes.
 // It automatically starts watching logs when a job begins executing and stops when the job
 // completes - succeeds or fails. The manager maintains a map of active watchers to prevent
@@ -28,7 +23,7 @@ type LogManager interface {
 type DynamicLogManager struct {
 	nc            *nats.Conn
 	logConsumer   *logs.HadesLogConsumer
-	logAggregator LogAggregator
+	logAggregator logs.LogAggregator
 	mu            sync.RWMutex
 	watchers      map[string]watcherState // jobID -> watcher state
 }
@@ -51,7 +46,7 @@ type watcherState struct {
 //
 // Returns:
 //   - LogManager: A new instance ready to start listening for job status changes
-func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, aggregator LogAggregator) LogManager {
+func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, aggregator logs.LogAggregator) logs.LogManager {
 	return &DynamicLogManager{
 		nc:            nc,
 		logConsumer:   logConsumer,

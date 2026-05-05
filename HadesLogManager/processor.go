@@ -65,7 +65,7 @@ type AggregatorConfig struct {
 //
 // Returns:
 //   - LogAggregator: A new instance ready to aggregate logs
-func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) LogAggregator {
+func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) buildlogs.LogAggregator {
 	la := &NATSLogAggregator{
 		hlc: hlc,
 		cfg: config,
@@ -282,5 +282,5 @@ func (la *NATSLogAggregator) GetJobStatus(jobID string) (string, error) {
 	if !exists {
 		return "", fmt.Errorf("job not found: %s", jobID)
 	}
-	return value.(buildstatus.JobStatus).String(), nil
+	return value.(buildstatus.JobStatus), nil
 }

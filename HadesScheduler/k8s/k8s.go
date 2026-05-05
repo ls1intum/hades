@@ -29,17 +29,16 @@ type Scheduler struct {
 
 type K8sConfig struct {
 	// K8sNamespace is the namespace in which the jobs should be scheduled (default: hades-executor)
-	// This may change in the future to allow for multiple namespaces
 	K8sNamespace string `env:"K8S_NAMESPACE,notEmpty" envDefault:"hades-executor"`
 
-	// K8sConfigMode is used to determine how the Kubernetes client should be configured ("kubeconfig", "serviceaccount" or "operator")
+	// ConfigMode is used to determine how the Kubernetes client should be configured ("kubeconfig", "serviceaccount" or "operator")
 	ConfigMode string `env:"K8S_CONFIG_MODE,notEmpty" envDefault:"kubeconfig"`
 }
 
 // K8sConfigKubeconfig is used as configuration if used with a kubeconfig file
 type K8sConfigKubeconfig struct {
 	K8sConfig
-	kubeconfig string `env:"KUBECONFIG"`
+	Kubeconfig string `env:"KUBECONFIG"`
 }
 
 // K8sConfigServiceaccount is used as configuration if used with a service account
@@ -53,49 +52,42 @@ type BuildJobGVRConfig struct {
 	Resource string `env:"BUILDJOB_RESOURCE,notEmpty" envDefault:"buildjobs"`
 }
 
-func NewK8sScheduler() (*Scheduler, error) {
+func NewK8sScheduler(nc *nats.Conn) (*Scheduler, error) {
 	slog.Debug("Initializing Kubernetes scheduler")
 
-	// Load the user provided Kubernetes configuration
 	var k8sCfg K8sConfig
 	utils.LoadConfig(&k8sCfg)
 	slog.Debug("Kubernetes config", "config", k8sCfg)
 
-	// Initialize the Kubernetes scheduler
 	slog.Info("Initializing Kubernetes client")
-	scheduler := initializeClusterAccess(k8sCfg)
+	scheduler, err := initializeClusterAccess(k8sCfg)
+	if err != nil {
+		return nil, err
+	}
 
-	// TODO: Check cluster connection and print cluster nodes to log
-
-	// Add the namespace to the scheduler, ignore if we are using the operator mode
 	if k8sCfg.ConfigMode != "operator" && scheduler.k8sClient != nil {
 		slog.Info("Creating namespace in Kubernetes")
 		_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
 		if err != nil {
-			// TODO: This may fail if the namespace already exists - we need to handle that case with a check
-			slog.With("error", err).Info("Failed to create namespace in Kubernetes")
+			slog.Error("Failed to create namespace in Kubernetes", "error", err)
 			return nil, err
 		}
+	}
+
+	if nc != nil {
+		publisher, err := log.NewNATSPublisher(nc)
+		if err != nil {
+			return nil, fmt.Errorf("creating NATS publisher: %w", err)
+		}
+		scheduler.publisher = *publisher
+	} else {
+		slog.Warn("NATS connection is nil, publisher not created, logs will not be published")
 	}
 
 	return &scheduler, nil
 }
 
-func (k *Scheduler) SetPublisher(nc *nats.Conn) *Scheduler {
-	if nc != nil {
-		publisher, err := log.NewNATSPublisher(nc)
-		if err != nil {
-			slog.Error("Failed to create NATS publisher", "error", err)
-		}
-		k.publisher = *publisher
-	} else {
-		slog.Warn("NATS connection is nil, publisher not created, logs will not be published")
-	}
-	return k
-}
-
-// Create a Kubernetes clientset based on the provided configuration
-func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
+func initializeClusterAccess(k8sCfg K8sConfig) (Scheduler, error) {
 	switch k8sCfg.ConfigMode {
 	case "kubeconfig":
 		return initializeKubeconfigAccess(k8sCfg)
@@ -105,37 +97,47 @@ func initializeClusterAccess(k8sCfg K8sConfig) Scheduler {
 		return initializeOperatorAccess(k8sCfg)
 	default:
 		slog.Error("Invalid Kubernetes config mode specified", "config_mode", k8sCfg.ConfigMode)
-		return Scheduler{}
+		return Scheduler{}, fmt.Errorf("invalid Kubernetes config mode: %s", k8sCfg.ConfigMode)
 	}
 }
 
-func initializeKubeconfigAccess(k8sCfg K8sConfig) Scheduler {
+func initializeKubeconfigAccess(k8sCfg K8sConfig) (Scheduler, error) {
 	slog.Info("Using kubeconfig for Kubernetes access")
 
-	var K8sConfigKub K8sConfigKubeconfig
-	utils.LoadConfig(&K8sConfigKub)
+	var k8sConfigKub K8sConfigKubeconfig
+	utils.LoadConfig(&k8sConfigKub)
+
+	clientset, err := initializeKubeconfig(k8sConfigKub)
+	if err != nil {
+		return Scheduler{}, err
+	}
 
 	return Scheduler{
-		k8sClient: initializeKubeconfig(K8sConfigKub),
+		k8sClient: clientset,
 		namespace: k8sCfg.K8sNamespace,
 		config:    k8sCfg,
-	}
+	}, nil
 }
 
-func initializeServiceAccountAccess(k8sCfg K8sConfig) Scheduler {
+func initializeServiceAccountAccess(k8sCfg K8sConfig) (Scheduler, error) {
 	slog.Info("Using service account for Kubernetes access")
 
-	var K8sConfigSvc K8sConfigServiceaccount
-	utils.LoadConfig(&K8sConfigSvc)
+	var k8sConfigSvc K8sConfigServiceaccount
+	utils.LoadConfig(&k8sConfigSvc)
+
+	clientset := initializeInCluster()
+	if clientset == nil {
+		return Scheduler{}, fmt.Errorf("failed to initialize in-cluster Kubernetes client")
+	}
 
 	return Scheduler{
-		k8sClient: initializeInCluster(),
+		k8sClient: clientset,
 		namespace: k8sCfg.K8sNamespace,
 		config:    k8sCfg,
-	}
+	}, nil
 }
 
-func initializeOperatorAccess(k8sCfg K8sConfig) Scheduler {
+func initializeOperatorAccess(k8sCfg K8sConfig) (Scheduler, error) {
 	slog.Info("Using operator mode (dynamic client)")
 	rc, err := rest.InClusterConfig()
 	if err != nil {
@@ -146,22 +148,20 @@ func initializeOperatorAccess(k8sCfg K8sConfig) Scheduler {
 		)
 		rc, err = kubeconfig.ClientConfig()
 		if err != nil {
-			slog.Error("Failed to build rest.Config for operator mode", "error", err)
-			return Scheduler{}
+			return Scheduler{}, fmt.Errorf("building rest.Config for operator mode: %w", err)
 		}
 	}
 
 	dyn, err := dynamic.NewForConfig(rc)
 	if err != nil {
-		slog.Error("Failed to create dynamic client", "error", err)
-		return Scheduler{}
+		return Scheduler{}, fmt.Errorf("creating dynamic client: %w", err)
 	}
 
 	return Scheduler{
 		dynClient: dyn,
 		namespace: k8sCfg.K8sNamespace,
 		config:    k8sCfg,
-	}
+	}, nil
 }
 
 func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
@@ -209,7 +209,6 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 		}
 	}
 
-	// assemble steps
 	steps := make([]map[string]interface{}, 0, len(job.Steps))
 	for _, s := range job.Steps {
 		sm := map[string]interface{}{
@@ -232,7 +231,6 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 		steps = append(steps, sm)
 	}
 
-	// assemble the BuildJob CR object
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "build.hades.tum.de/v1",

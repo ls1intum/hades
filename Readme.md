@@ -34,6 +34,8 @@ Hades is built upon the following key components:
 
   - **Kubernetes Executor (Deprecated)**: The legacy Kubernetes execution mode.
 
+- **Log Manager** *(local development only)*: Subscribes to job status and log events on NATS, aggregates per-job logs in memory, and exposes them through an HTTP API (`GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status`, default port `8081`). Run via `make run` for local workflows; not currently part of the Docker compose stack or the production Helm deployment.
+
 ## How It Works
 
 Hades processes jobs through a sequence of well-defined steps:
@@ -63,19 +65,29 @@ To run Hades in Docker mode for local development:
    cd Hades
    ```
 
-2. Copy the `.env.example` file to `.env`:
+2. Copy the `.env.example` file to `.env` (the default configuration uses Docker as the executor, so no changes are necessary for local testing):
 
    ```fish
    cp .env.example .env
    ```
 
-   The default configuration uses Docker as the executor, so no changes are necessary for local testing.
-
 3. Start the Hades services:
 
-   ```fish
-   docker compose up -d
-   ```
+   - **All components in the CLI** (NATS still runs in Docker):
+
+     ```fish
+     make run
+     ```
+
+     This launches `HadesAPI`, `HadesScheduler`, and `HadesLogManager` via `go run` and streams their logs to the terminal. Press `Ctrl-C` to stop them; run `make docker-stop` to also shut NATS down.
+
+   - **Full stack in Docker**:
+
+     ```fish
+     make docker-run
+     ```
+
+     Use `make docker-logs` to follow the output and `make docker-stop` to tear the stack down.
 
 ### Running in Kubernetes Mode
 
@@ -161,9 +173,34 @@ Hades can be configured through environment variables or a `.env` file:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `HADES_EXECUTOR` | Execution platform: `docker` or `kubernetes` | `docker` |
+| `HADES_EXECUTOR` | Execution platform: `docker` or `k8s` | `docker` |
 | `CONCURRENCY` | Number of jobs to process concurrently | `1` |
 | `API_PORT` | Port for the Hades API | `8080` |
+
+## Development Workflow
+
+A top-level [`Makefile`](./Makefile) wraps the most common development tasks. Run `make help` to see every target.
+
+| Target | Purpose |
+| ------ | ------- |
+| `make run` | Run `HadesAPI`, `HadesScheduler`, and `HadesLogManager` locally via `go run` (NATS auto-starts in Docker). |
+| `make run-api` / `make run-scheduler` / `make run-logmanager` / `make run-operator` | Run a single component locally via `go run`. |
+| `make docker-run` / `make docker-stop` / `make docker-logs` | Start, stop, or tail the full docker compose stack. |
+| `make docker-run-api` / `make docker-run-scheduler` / `make docker-run-nats` | Start an individual service via docker compose. |
+| `make build` | Compile every Go module in the workspace. |
+| `make docker-build` | Build all Hades container images. |
+| `make test` | Run unit tests across every Go module. |
+| `make test-race` | Same as `make test` with the race detector. |
+| `make cover` | Generate and open the HadesAPI coverage report. |
+| `make test-operator` / `make test-operator-e2e` | Run HadesOperator envtest unit tests, or Kind-based e2e tests. |
+| `make fmt` / `make lint` | Format code with `gofmt` or run `go vet`. |
+| `make vuln` | Run `govulncheck` (auto-installs it on first use). |
+| `make deps-check` / `make deps-update` / `make deps-tidy` | List outdated direct dependencies, bump them, or run `go mod tidy` across all modules. |
+| `make helm-deps` | Refresh the Helm chart subchart lock file. |
+| `make ci` | Mirror the CI run locally (`lint` + `test`). |
+
+Tests live alongside the code in each module, and CI (`.github/workflows/ci.yml`) currently runs the `shared` and `HadesAPI` suites on every push and pull request.
+The HadesOperator e2e target requires [Kind](https://kind.sigs.k8s.io/) to be installed locally.
 
 ## Deployment
 
@@ -194,25 +231,49 @@ For production deployments in a VM:
 Hades includes Ansible playbooks for automated deployment.
 See the `ansible/hades/README.md` file for more details.
 
-## High Level Architecture Diagram
+## Dependency Management
+
+Hades uses [Renovate](https://docs.renovatebot.com/) (configured in `renovate.json`) to open automated PRs for dependency updates across Go modules, Helm charts, Docker base images, and GitHub Actions.
+Prefer merging Renovate PRs whenever possible so lock files and changelog links stay consistent.
+
+For manual checks (for example before cutting a release), the workspace is wired up through the top-level Makefile:
+
+```fish
+make deps-check     # list outdated direct dependencies in every Go module
+make deps-update    # bump direct deps in every module and run go mod tidy
+make helm-deps      # refresh helm/hades/Chart.lock
+make vuln           # run govulncheck across every module
+```
+
+After running `make deps-update`, verify the workspace still builds and tests pass:
+
+```fish
+make build
+make test
+```
+
+Major-version upgrades (for example `sigs.k8s.io/controller-runtime` v0.22 -> v0.24, or any `/v2`, `/v3` import path bump) often contain breaking API changes and should be reviewed one module at a time rather than via a blanket `make deps-update`.
+
+Docker base images in the per-component `Dockerfile`s are tracked by Renovate; for a manual bump, look up the latest tag on the relevant registry and edit the `FROM` line.
+
+## High-Level Architecture Diagram
 
 ```
 ┌─────────┐         ┌─────────┐          ┌───────────────┐
-│         │         │         │          │               │
+│         │ jobs    │         │  jobs    │               │
 │  API    │────────▶│  NATS   │─────────▶│  Scheduler    │
 │         │         │ Queue   │          │               │
-└─────────┘         └─────────┘          └───────┬───────┘
-                                                 │
-                                                 ▼
-                        ┌────────────────────────┴───────────────────────┐
-                        │                                                │
-                        ▼                                                ▼
-                 ┌─────────────┐                               ┌─────────────────┐
-                 │             │                               │                 │
-                 │   Docker    │                               │   Kubernetes    │
-                 │  Executor   │                               │    Executor     │
-                 │             │                               │                 │
-                 └─────────────┘                               └─────────────────┘
+└─────────┘         └────┬────┘          └───────┬───────┘
+                         ▲                       │
+                  status │ logs                  ▼
+                         │            ┌──────────┴──────────┐
+                  ┌──────┴──────┐     │                     │
+                  │             │     ▼                     ▼
+                  │    Log      │  ┌─────────────┐    ┌─────────────────┐
+                  │   Manager   │  │   Docker    │    │   Kubernetes    │
+                  │  (HTTP API) │  │  Executor   │    │  / Operator     │
+                  │             │  └─────────────┘    └─────────────────┘
+                  └─────────────┘
 ```
 
 

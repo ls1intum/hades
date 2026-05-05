@@ -24,32 +24,79 @@ permissions:
   packages: write
   actions: write
 
+env:
+  GO_VERSION: "1.25"
+
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        directory: [shared, HadesAPI]
     steps:
       - uses: actions/checkout@v6
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.25
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "**/*.sum"
+      - name: go vet (all modules)
+        run: make lint
+      - name: gofmt check
+        run: |
+          set -e
+          changed=$(gofmt -l HadesAPI HadesScheduler HadesLogManager shared)
+          if [ -n "$changed" ]; then
+            echo "::error title=gofmt::Run 'make fmt' locally; the following files need formatting:"
+            echo "$changed"
+            exit 1
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "**/*.sum"
+      - name: go build (all modules)
+        run: make build
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: shared
+            path: shared
+          - name: HadesAPI
+            path: HadesAPI
+          - name: HadesScheduler
+            path: HadesScheduler
+          - name: HadesLogManager
+            path: HadesLogManager
+          - name: HadesOperator
+            path: HadesScheduler/HadesOperator
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: "**/*.sum"
       - name: Install dependencies
-        run: cd ${{ matrix.directory }} && go mod download
+        run: cd ${{ matrix.path }} && go mod download
       - name: Test
-        run: go test ./${{ matrix.directory }}/... -json > TestResults-${{ matrix.directory }}.json
+        run: cd ${{ matrix.path }} && go test ./... -json > "${{ github.workspace }}/TestResults-${{ matrix.name }}.json"
       - name: Upload test results
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: Go-results-${{ matrix.directory }}
-          path: TestResults-${{ matrix.directory }}.json
+          name: Go-results-${{ matrix.name }}
+          path: TestResults-${{ matrix.name }}.json
 
   build-api:
-    needs: test
+    needs: [lint, build, test]
     if: github.actor != 'dependabot[bot]'
     uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
     with:
@@ -58,7 +105,7 @@ jobs:
     secrets: inherit
 
   build-scheduler:
-    needs: test
+    needs: [lint, build, test]
     if: github.actor != 'dependabot[bot]'
     uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
     with:
@@ -67,14 +114,14 @@ jobs:
     secrets: inherit
 
   build-operator:
-    needs: test
+    needs: [lint, build, test]
     if: github.actor != 'dependabot[bot]'
     uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
     with:
       image-name: ls1intum/hades/hades-operator
       docker-file: ./HadesScheduler/HadesOperator/Dockerfile
     secrets: inherit
-  
+
   deploy-traefik:
     needs: [build-api, build-scheduler]
     uses: ls1intum/.github/.github/workflows/deploy-docker-traefik.yml@main

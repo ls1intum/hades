@@ -18,3 +18,8 @@ type JobConsumer interface {
 
 // PayloadHandler defines a function type for processing queue payloads.
 type PayloadHandler func(payload.QueuePayload)
+
+// JobScheduler manages job scheduling.
+type JobScheduler interface {
+	ScheduleJob(ctx context.Context, job payload.QueuePayload) error
+}
