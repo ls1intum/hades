@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -67,19 +68,23 @@ func (suite *JobUnitTestSuite) TestVolumeSpec() {
 	// Call volumeSpec on the K8sJob
 	volumeSpec := job.volumeSpec(configMap)
 
-	// Assert that the number of volumes matches the number of steps in the QueuePayload
-	assert.Len(suite.T(), volumeSpec, len(job.Steps))
+	// volumeSpec returns one volume per step plus one shared EmptyDir volume.
+	assert.Len(suite.T(), volumeSpec, len(job.Steps)+1)
 
-	// Assert that each volume has the correct name and ConfigMap reference
+	// Assert that each per-step volume has the correct name and ConfigMap reference
 	for i, step := range job.Steps {
-		assert.Equal(suite.T(), step.IDString(), volumeSpec[i].Name)
+		assert.Equal(suite.T(), fmt.Sprintf("%s-build-script", step.IDString()), volumeSpec[i].Name)
 		assert.Equal(suite.T(), configMap.Name, volumeSpec[i].VolumeSource.ConfigMap.LocalObjectReference.Name)
 	}
 
-	// Assert that each volume has the correct key and path
+	// Assert that each per-step volume has the correct ConfigMap key
 	for i, step := range job.Steps {
 		assert.Equal(suite.T(), step.IDString(), volumeSpec[i].VolumeSource.ConfigMap.Items[0].Key)
 	}
+
+	// The trailing volume is the shared EmptyDir mount.
+	shared := volumeSpec[len(job.Steps)]
+	assert.NotNil(suite.T(), shared.VolumeSource.EmptyDir)
 }
 
 func TestJob(t *testing.T) {
