@@ -106,6 +106,48 @@ func (suite *APISuite) TestPingRoute() {
 	assert.NoError(suite.T(), err)
 }
 
+func (suite *APISuite) TestAuthBoundary() {
+	router := setupRouter("secret", suite.hadesProducer)
+
+	// /ping is outside the auth group and must stay open
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/ping", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(suite.T(), 200, w.Code)
+	var body map[string]string
+	assert.NoError(suite.T(), json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(suite.T(), "ok", body["status"])
+	_, err := time.Parse(time.RFC3339, body["timestamp"])
+	assert.NoError(suite.T(), err)
+
+	// POST /build without credentials must be rejected
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/build", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(suite.T(), 401, w.Code)
+}
+
+func (suite *APISuite) TestNoAuthBoundary() {
+	router := setupRouter("", suite.hadesProducer)
+
+	// /ping must still return 200
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/ping", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(suite.T(), 200, w.Code)
+	var body map[string]string
+	assert.NoError(suite.T(), json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(suite.T(), "ok", body["status"])
+	_, err := time.Parse(time.RFC3339, body["timestamp"])
+	assert.NoError(suite.T(), err)
+
+	// POST /build without credentials must not be rejected by auth (no 401)
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/build", nil)
+	router.ServeHTTP(w, req)
+	assert.NotEqual(suite.T(), 401, w.Code)
+}
+
 func (suite *APISuite) TestAddBuildToQueueRoute() {
 	w := httptest.NewRecorder()
 	restPayload := payload.RESTPayload{
