@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,17 +16,18 @@ func setupRouter(authKey string, producer hades.JobPublisher) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.ErrorLogger())
 	r.Use(gin.Recovery())
+
+	r.GET("/ping", ping)
+
+	api := r.Group("/")
 	if authKey == "" {
 		slog.Warn("No auth key set")
 	} else {
 		slog.Info("Auth key set")
-		r.Use(gin.BasicAuth(gin.Accounts{
-			"hades": authKey,
-		}))
+		api.Use(gin.BasicAuth(gin.Accounts{"hades": authKey}))
 	}
 
-	r.GET("/ping", ping)
-	r.POST("/build", func(c *gin.Context) {
+	api.POST("/build", func(c *gin.Context) {
 		addBuildToQueue(c, producer)
 	})
 	return r
@@ -33,7 +35,8 @@ func setupRouter(authKey string, producer hades.JobPublisher) *gin.Engine {
 
 func ping(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"message": "pong",
+		"status":    "ok",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	})
 }
 

@@ -25,6 +25,22 @@ spec:
               memory: {{ .Values.hadesApi.resources.requests.memory | quote }}
           ports:
             - containerPort: {{ .Values.hadesApi.service.targetPort }}
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: {{ .Values.hadesApi.service.targetPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: {{ .Values.hadesApi.service.targetPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           env:
             - name: NATS_URL
               value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"

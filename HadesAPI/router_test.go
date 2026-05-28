@@ -98,7 +98,12 @@ func (suite *APISuite) TestPingRoute() {
 	suite.router.ServeHTTP(w, req)
 
 	assert.Equal(suite.T(), 200, w.Code)
-	assert.Equal(suite.T(), "{\"message\":\"pong\"}", w.Body.String())
+
+	var body map[string]string
+	assert.NoError(suite.T(), json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(suite.T(), "ok", body["status"])
+	_, err := time.Parse(time.RFC3339, body["timestamp"])
+	assert.NoError(suite.T(), err)
 }
 
 func (suite *APISuite) TestAddBuildToQueueRoute() {
