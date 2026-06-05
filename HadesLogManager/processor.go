@@ -40,7 +40,7 @@ type AggregatorConfig struct {
 	BatchSize   int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
 	Retention   time.Duration `env:"LOG_RETENTION" envDefault:"1h"`
 	MaxJobLogs  int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
-	APIendpoint string        `env:"API_ENDPOINT"`
+	APIendpoint string        `env:"ARTEMIS_ADAPTER_URL"`
 }
 
 // NewLogAggregator creates a new NATS-based LogAggregator instance with the specified configuration.
