@@ -80,7 +80,7 @@ func connectNATS(config hadesnats.ConnectionConfig) (*nats.Conn, error) {
 }
 
 // runWithGracefulShutdown starts services and handles graceful shutdown
-func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg HadesLogManagerConfig, dynamicManager LogManager, logAggregator LogAggregator,
+func runWithGracefulShutdown(ctx context.Context, cancel context.CancelFunc, cfg HadesLogManagerConfig, dynamicManager buildlogs.LogManager, logAggregator buildlogs.LogAggregator,
 ) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
@@ -169,7 +169,7 @@ func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *htt
 //   - GET /jobs/:jobId/status — returns the current build status for the given job ID, or 404 if the job is not found.
 //   - GET /jobs               — returns a list of all known job IDs (active and completed).
 //   - GET /health             — liveness probe returning a static OK response.
-func setupAPIRoute(aggregator LogAggregator) *gin.Engine {
+func setupAPIRoute(aggregator buildlogs.LogAggregator) *gin.Engine {
 	r := gin.Default()
 	jobs := r.Group("/jobs")
 	{

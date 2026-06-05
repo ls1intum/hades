@@ -18,18 +18,6 @@ const (
 	httpClientTimeout = 10 * time.Second
 )
 
-// LogAggregator defines the interface for aggregating and managing job logs
-type LogAggregator interface {
-	AddLog(log buildlogs.Log)
-	FlushJob(jobID string) error
-	GetJobLogs(jobID string) []buildlogs.Log
-	GetJobStatus(jobID string) (string, error)
-	GetAllJobs() []string
-	SendJobLogs(jobID string) error
-	MarkJobCompleted(jobID string)
-	UpdateJobStatus(jobID string, status buildstatus.JobStatus)
-}
-
 // NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
 // It provides thread-safe log aggregation with configurable batching, automatic log rotation,
 // and memory management. Thread-safety is provided by sync.Map for all operations.
@@ -277,10 +265,10 @@ func (la *NATSLogAggregator) UpdateJobStatus(jobID string, status buildstatus.Jo
 
 // GetJobStatus returns the string representation of the current build status for jobID.
 // It returns an error if no status has been recorded for the given job.
-func (la *NATSLogAggregator) GetJobStatus(jobID string) (string, error) {
+func (la *NATSLogAggregator) GetJobStatus(jobID string) (buildstatus.JobStatus, error) {
 	value, exists := la.status.Load(jobID)
 	if !exists {
-		return "", fmt.Errorf("job not found: %s", jobID)
+		return buildstatus.JobStatus(""), fmt.Errorf("job not found: %s", jobID)
 	}
 	return value.(buildstatus.JobStatus), nil
 }
