@@ -1,4 +1,5 @@
 module github.com/ls1intum/hades/hadesLogManager
+replace github.com/ls1intum/hades/shared => ../shared
 
 go 1.25.0
 
