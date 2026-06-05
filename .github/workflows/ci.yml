@@ -145,7 +145,7 @@ jobs:
     secrets: inherit
 
   deploy:
-    needs: [build-api, build-scheduler]
+    needs: [build-api, build-scheduler, build-log-manager]
     runs-on: ubuntu-latest
     environment: hades-test
     steps:
