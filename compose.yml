@@ -38,6 +38,40 @@ services:
       - NATS_URL=nats://nats:4222
       - HADES_EXECUTOR=docker
 
+  hadesLogManager:
+    image: ghcr.io/ls1intum/hades/hades-logmanager
+    build:
+      context: .
+      dockerfile: ./HadesLogManager/Dockerfile
+    ports:
+      # Exposed on 8082 to avoid conflict with hadesAPI on 8081
+      - "8082:8081"
+    networks:
+      - hades
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      - NATS_URL=nats://nats:4222
+
+  hadesWebhook:
+    build:
+      context: .
+      dockerfile: ./HadesWebhook/Dockerfile
+    ports:
+      - "8083:8083"
+    networks:
+      - hades
+    depends_on:
+      hadesAPI:
+        condition: service_started
+    environment:
+      - HADES_API_URL=http://hadesAPI:8080
+      # HADES_AUTH_KEY=          # set if HadesAPI AUTH_KEY is configured
+      # GITHUB_WEBHOOK_SECRET=   # required for production; leave empty to skip validation
+      # JOB_TEMPLATE_PATH=       # path to a .json.tmpl file mounted into the container
+      # ALLOWED_EVENTS=push,pull_request
+
   nats:
     image: nats:2.11.4
     command: ["-js", "-m", "8222"]

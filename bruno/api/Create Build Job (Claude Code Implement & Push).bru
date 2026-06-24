@@ -1,0 +1,67 @@
+meta {
+  name: Create Build Job (Claude Code Implement & Push)
+  type: http
+  seq: 6
+}
+
+post {
+  url: http://{{hostname}}/build
+  body: json
+  auth: basic
+}
+
+auth:basic {
+  username: hades
+  password: {{auth_key}}
+}
+
+body:json {
+  {
+    "name": "Claude Code Implement Feature",
+    "priority": 3,
+    "steps": [
+      {
+        "id": 1,
+        "name": "Clone",
+        "image": "ghcr.io/ls1intum/hades/hades-clone-container:latest",
+        // Clones the repo into /shared/repo. All steps share /shared.
+        "metadata": {
+          "REPOSITORY_DIR": "/shared",
+          "HADES_REPO_URL": "{{repo_url}}",
+          "HADES_REPO_USERNAME": "x-access-token",
+          "HADES_REPO_PASSWORD": "{{git_token}}",
+          "HADES_REPO_PATH": "./repo",
+          "HADES_REPO_ORDER": "1"
+        }
+      },
+      {
+        "id": 2,
+        "name": "Implement",
+        "image": "{{claude_code_image}}", // e.g. ghcr.io/your-org/claude-code:latest
+        "metadata": {
+          "ANTHROPIC_API_KEY": "{{anthropic_api_key}}",
+          "CLAUDE_PROMPT": "{{claude_prompt}}",
+          "GIT_TOKEN": "{{git_token}}",
+          "REPO_URL": "{{repo_url}}"
+        },
+        // Configures git, creates a branch, runs Claude Code (with file-edit and
+        // bash permissions so it can write and commit), then pushes. The push URL
+        // embeds the PAT; replace <host>/<owner>/<repo>.git with your actual path.
+        // --output-format json writes the final answer as one JSON line, and the
+        // result sentinels make it easy to extract from GET /jobs/:id/logs.
+        "script": "set -e; cd /shared/repo; git config user.email hades@local; git config user.name Hades; git checkout -b hades/feature; echo '===HADES_RESULT_START==='; claude -p \"$CLAUDE_PROMPT\" --allowedTools 'Edit,Write,Read,Bash' --output-format json; echo '===HADES_RESULT_END==='; git add -A; git diff --cached --quiet || git commit -m 'feat: implement via Claude Code'; git push \"https://x-access-token:${GIT_TOKEN}@${REPO_URL#https://}\" hades/feature"
+      }
+    ]
+  }
+}
+
+vars:pre-request {
+  claude_code_image: ghcr.io/anthropics/claude-code:latest
+  repo_url: https://github.com/your-org/your-repo.git
+  claude_prompt: Add a /healthz endpoint to the Gin router that returns HTTP 200 and the JSON body {"status":"ok"}.
+}
+
+vars:secret [
+  anthropic_api_key,
+  git_token
+]

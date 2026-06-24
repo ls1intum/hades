@@ -1,0 +1,47 @@
+meta {
+  name: Create Build Job (Claude Code Oneshot)
+  type: http
+  seq: 5
+}
+
+post {
+  url: http://{{hostname}}/build
+  body: json
+  auth: basic
+}
+
+auth:basic {
+  username: hades
+  password: {{auth_key}}
+}
+
+body:json {
+  {
+    "name": "Claude Code Oneshot",
+    "priority": 3,
+    "steps": [
+      {
+        "id": 1,
+        "name": "claude",
+        "image": "{{claude_code_image}}", // e.g. ghcr.io/your-org/claude-code:latest
+        "metadata": {
+          "ANTHROPIC_API_KEY": "{{anthropic_api_key}}",
+          "CLAUDE_PROMPT": "{{claude_prompt}}"
+        },
+        // The script wraps the answer in sentinels so it can be extracted from
+        // GET /jobs/:id/logs later. --output-format json writes one JSON line,
+        // which survives the log parser's per-line timestamp-stripping cleanly.
+        "script": "echo '===HADES_RESULT_START==='; claude -p \"$CLAUDE_PROMPT\" --output-format json --dangerously-skip-permissions; echo '===HADES_RESULT_END==='"
+      }
+    ]
+  }
+}
+
+vars:pre-request {
+  claude_code_image: ghcr.io/anthropics/claude-code:latest
+  claude_prompt: Write a haiku about distributed systems
+}
+
+vars:secret [
+  anthropic_api_key
+]

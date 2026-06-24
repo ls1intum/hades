@@ -2,7 +2,7 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-GO_MODULES := HadesAPI HadesScheduler HadesScheduler/HadesOperator HadesLogManager shared
+GO_MODULES := HadesAPI HadesScheduler HadesScheduler/HadesOperator HadesLogManager HadesWebhook shared
 GO_PATHS   := $(addsuffix /...,$(addprefix ./,$(GO_MODULES)))
 
 COMPOSE      ?= docker compose
@@ -18,9 +18,10 @@ help: ## Show this help.
 run: docker-run-nats ## Run api, scheduler, and logmanager locally via go run (Ctrl-C stops all).
 	@echo "Starting api, scheduler, logmanager (Ctrl-C to stop all)..."
 	@trap 'kill 0' INT TERM EXIT; \
-		(cd HadesAPI       && go run .) & \
-		(cd HadesScheduler && go run .) & \
+		(cd HadesAPI        && go run .) & \
+		(cd HadesScheduler  && go run .) & \
 		(cd HadesLogManager && go run .) & \
+		(cd HadesWebhook    && go run .) & \
 		wait
 
 .PHONY: run-api
@@ -34,6 +35,10 @@ run-scheduler: ## Run HadesScheduler locally via go run.
 .PHONY: run-logmanager
 run-logmanager: ## Run HadesLogManager locally via go run.
 	cd HadesLogManager && go run .
+
+.PHONY: run-webhook
+run-webhook: ## Run HadesWebhook locally via go run.
+	cd HadesWebhook && go run .
 
 .PHONY: run-operator
 run-operator: ## Run HadesOperator locally via go run (requires a Kubernetes context).

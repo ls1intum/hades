@@ -39,7 +39,7 @@ jobs:
       - name: gofmt check
         run: |
           set -e
-          changed=$(gofmt -l HadesAPI HadesScheduler HadesLogManager shared)
+          changed=$(gofmt -l HadesAPI HadesScheduler HadesLogManager HadesWebhook shared)
           if [ -n "$changed" ]; then
             echo "::error title=gofmt::Run 'make fmt' locally; the following files need formatting:"
             echo "$changed"
@@ -72,6 +72,8 @@ jobs:
             path: HadesScheduler
           - name: HadesLogManager
             path: HadesLogManager
+          - name: HadesWebhook
+            path: HadesWebhook
           - name: HadesOperator
             path: HadesScheduler/HadesOperator
     steps:

@@ -1,0 +1,40 @@
+{
+  "name": {{ printf "push: %s@%s" .RepoFullName .ShortSHA | json }},
+  "priority": 3,
+  "steps": [
+    {
+      "id": 1,
+      "name": "clone",
+      "image": "ghcr.io/ls1intum/hades/hades-clone-container:latest",
+      "metadata": {
+        "REPOSITORY_DIR": "/shared",
+        "HADES_REPO_URL": {{ .RepoURL | json }},
+        "HADES_REPO_USERNAME": "x-access-token",
+        "HADES_REPO_PASSWORD": {{ env "GIT_TOKEN" | json }},
+        "HADES_REPO_PATH": "./repo",
+        "HADES_REPO_ORDER": "1"
+      }
+    },
+    {
+      "id": 2,
+      "name": "implement",
+      "image": {{ env "CLAUDE_CODE_IMAGE" | json }},
+      "metadata": {
+        "ANTHROPIC_API_KEY": {{ env "ANTHROPIC_API_KEY" | json }},
+        "CLAUDE_PROMPT": {{ env "CLAUDE_PROMPT" | json }},
+        "GIT_TOKEN": {{ env "GIT_TOKEN" | json }},
+        "REPO_URL": {{ .RepoURL | json }}
+      },
+      "script": {{ printf "set -e; cd /shared/repo; git config user.email hades@local; git config user.name Hades; git checkout -b hades/ai-%s; echo '===HADES_RESULT_START==='; claude -p \"$CLAUDE_PROMPT\" --allowedTools 'Edit,Write,Read,Bash' --output-format json; echo '===HADES_RESULT_END==='; git add -A; git diff --cached --quiet || git commit -m 'feat: implement via Claude Code'; git push \"https://x-access-token:${GIT_TOKEN}@${REPO_URL#https://}\" hades/ai-%s" .ShortSHA .ShortSHA | json }}
+    },
+    {
+      "id": 3,
+      "name": "github-comment",
+      "image": "alpine:latest",
+      "metadata": {
+        "GITHUB_TOKEN": {{ env "GITHUB_TOKEN" | json }}
+      },
+      "script": {{ printf "set -e; apk add -q --no-cache curl; curl -s -X POST -H \"Authorization: Bearer $GITHUB_TOKEN\" -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' -d '{\"body\":\"Claude Code completed for %s. Branch [hades\\/ai-%s](%s\\/tree\\/hades\\/ai-%s) is ready for review.\"}' 'https://api.github.com/repos/%s/%s/commits/%s/comments'" .RepoFullName .ShortSHA .RepoURL .ShortSHA .RepoOwner .RepoName .SHA | json }}
+    }
+  ]
+}

@@ -167,6 +167,120 @@ For more complex workflows, you can define multi-step jobs where each step runs 
 }
 ```
 
+### Running LLM / Claude Code Jobs
+
+Hades can run any containerized LLM agent as a regular job step. The Claude Code CLI is
+a natural fit: pass a prompt via `metadata` (which becomes a container env var) and the
+model's answer comes back through the standard log channel.
+
+#### Oneshot prompt
+
+Submit a single-step job that runs `claude -p "$CLAUDE_PROMPT"` and wraps its output in
+sentinels so you can extract it cleanly from the logs:
+
+```json
+{
+  "name": "Claude Code Oneshot",
+  "priority": 3,
+  "steps": [
+    {
+      "id": 1,
+      "name": "claude",
+      "image": "ghcr.io/your-org/claude-code:latest",
+      "metadata": {
+        "ANTHROPIC_API_KEY": "<your-key>",
+        "CLAUDE_PROMPT": "Write a haiku about distributed systems"
+      },
+      "script": "echo '===HADES_RESULT_START==='; claude -p \"$CLAUDE_PROMPT\" --output-format json --dangerously-skip-permissions; echo '===HADES_RESULT_END==='"
+    }
+  ]
+}
+```
+
+After the job succeeds, retrieve the answer:
+
+```fish
+# make run mode (HadesLogManager on :8081)
+curl http://localhost:8081/jobs/<job_id>/logs
+
+# make docker-run mode (HadesLogManager on :8082)
+curl http://localhost:8082/jobs/<job_id>/logs
+```
+
+The response is a JSON array of log entries. The model's answer appears as `message`
+lines between the `===HADES_RESULT_START===` / `===HADES_RESULT_END===` markers.
+
+Using `--output-format json` keeps the answer on one line, which is important because the
+log parser strips a leading RFC3339 timestamp from each line and trims whitespace -
+multi-line output survives, but formatting may be normalised.
+
+#### Agentic "implement this feature" flow
+
+Multi-step jobs share a `/shared` Docker volume, so you can chain a clone step with an
+implement step:
+
+1. **Step 1 - Clone**: use `hades-clone-container` to clone the target repo into `/shared/repo`.
+2. **Step 2 - Implement**: run Claude Code against `/shared/repo`, commit the changes, and
+   push the branch back.
+
+```json
+{
+  "name": "Claude Code Implement Feature",
+  "priority": 3,
+  "steps": [
+    {
+      "id": 1,
+      "name": "Clone",
+      "image": "ghcr.io/ls1intum/hades/hades-clone-container:latest",
+      "metadata": {
+        "REPOSITORY_DIR": "/shared",
+        "HADES_REPO_URL": "https://github.com/your-org/your-repo.git",
+        "HADES_REPO_USERNAME": "x-access-token",
+        "HADES_REPO_PASSWORD": "<git-pat>",
+        "HADES_REPO_PATH": "./repo",
+        "HADES_REPO_ORDER": "1"
+      }
+    },
+    {
+      "id": 2,
+      "name": "Implement",
+      "image": "ghcr.io/your-org/claude-code:latest",
+      "metadata": {
+        "ANTHROPIC_API_KEY": "<your-key>",
+        "CLAUDE_PROMPT": "Add a /healthz endpoint that returns HTTP 200 and {\"status\":\"ok\"}.",
+        "GIT_TOKEN": "<git-pat>",
+        "REPO_URL": "https://github.com/your-org/your-repo.git"
+      },
+      "script": "set -e; cd /shared/repo; git config user.email hades@local; git config user.name Hades; git checkout -b hades/feature; echo '===HADES_RESULT_START==='; claude -p \"$CLAUDE_PROMPT\" --allowedTools 'Edit,Write,Read,Bash' --output-format json; echo '===HADES_RESULT_END==='; git add -A; git diff --cached --quiet || git commit -m 'feat: implement via Claude Code'; git push \"https://x-access-token:${GIT_TOKEN}@${REPO_URL#https://}\" hades/feature"
+    }
+  ]
+}
+```
+
+The "result" is the pushed `hades/feature` branch plus Claude's JSON summary in the logs.
+
+**Key points for Claude Code containers:**
+
+- The image must contain the `claude` CLI and a POSIX shell (`/bin/bash` by default; override
+  with `DOCKER_SCRIPT_EXECUTOR` if needed).
+- Use `--allowedTools 'Edit,Write,Read,Bash'` for the implement step - headless Claude Code
+  cannot edit files or run git commands without explicit tool permission (or
+  `--dangerously-skip-permissions` for a fully open sandbox).
+- Pass secrets (`ANTHROPIC_API_KEY`, `GIT_TOKEN`) via `metadata` - the API strips metadata
+  values from its own logs automatically (`SafePayloadFormat`), but the values are present
+  as container env vars, so avoid scripts that print the full environment.
+- The `/shared` volume is **purged after the job completes** - any work that should survive
+  (e.g. a git push) must happen within the job itself.
+- The log manager only captures logs for jobs it observed transition to `Running` while
+  it was alive. Logs persist for 24 hours in NATS JetStream and can be re-read directly
+  via `hades.logs.<jobID>` even if the log manager was restarted.
+- Containers are **not streamed live** - all container output is published after the
+  step exits, so you see the full answer at once once the job is `Succeeded`.
+
+Ready-to-run Bruno requests for both flows live in `bruno/api/`:
+- `Create Build Job (Claude Code Oneshot).bru`
+- `Create Build Job (Claude Code Implement & Push).bru`
+
 ## Configuration Options
 
 Hades can be configured through environment variables or a `.env` file:
