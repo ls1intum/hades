@@ -89,6 +89,11 @@ type BuildStep struct {
 	// Example: "set -e && cd /shared/example && ./gradlew clean test"
 	Script string `json:"script,omitempty"`
 
+	// If true, the BuildJob pipeline continues to the next step even if this step's container
+	// exits with a non-zero status. Useful for steps that must always run regardless of prior
+	// failures, such as result parsing or cleanup.
+	ContinueOnError bool `json:"continueOnError,omitempty"`
+
 	// Step-specific key-value pairs injected as environment variables into this step's container.
 	// Use for step-specific configuration like repository URLs, file paths, or credentials.
 	// Variables can reference placeholders (e.g., "{{user}}") that get substituted at runtime.
