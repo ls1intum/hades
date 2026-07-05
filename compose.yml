@@ -54,7 +54,7 @@ services:
         condition: service_started
     environment:
       - HADESLOGMANAGER_API_PORT=8081
-      - API_ENDPOINT=${API_ENDPOINT}
+      - ARTEMIS_ADAPTER_URL=${ARTEMIS_ADAPTER_URL}
       - NATS_URL=nats://nats:4222
 
   nats:
