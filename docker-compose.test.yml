@@ -47,6 +47,20 @@ services:
       - DOCKER_MEMORY_LIMIT=${DOCKER_MEMORY_LIMIT:-2g}
     restart: unless-stopped
 
+  hadesLogManager:
+    image: ghcr.io/ls1intum/hades/hades-log-manager:${IMAGE_TAG:?IMAGE_TAG is required}
+    expose:
+      - "8081"
+    networks:
+      - hades
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      - NATS_URL=nats://nats:4222
+      - ARTEMIS_ADAPTER_URL=https://hades-artemis-connector.student.k8s.aet.cit.tum.de/adapter/logs
+    restart: unless-stopped
+
   nats:
     image: nats:2.11.4
     command: ["-js", "-m", "8222"]

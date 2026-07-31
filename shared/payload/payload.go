@@ -32,13 +32,14 @@ type QueuePayload struct {
 // Step represents a single execution step in a job.
 // Each step runs in its own container with the specified image and resources.
 type Step struct {
-	ID          int               `json:"id"`           // Step execution order (starts at 1)
-	Name        string            `json:"name"`         // Human-readable step name
-	Image       string            `json:"image"`        // Container image to use (e.g., "alpine:latest")
-	Script      string            `json:"script"`       // Shell script to execute in the container
-	Metadata    map[string]string `json:"metadata"`     // Step-specific environment variables and metadata
-	CPULimit    uint              `json:"cpu_limit"`    // CPU limit in millicores (e.g., 1000 = 1 CPU core)
-	MemoryLimit string            `json:"memory_limit"` // Memory limit (e.g., "512M", "2G")
+	ID              int               `json:"id"`                // Step execution order (starts at 1)
+	Name            string            `json:"name"`              // Human-readable step name
+	Image           string            `json:"image"`             // Container image to use (e.g., "alpine:latest")
+	Script          string            `json:"script"`            // Shell script to execute in the container
+	ContinueOnError bool              `json:"continue_on_error"` // Whether to continue with the next step if this step fails
+	Metadata        map[string]string `json:"metadata"`          // Step-specific environment variables and metadata
+	CPULimit        uint              `json:"cpu_limit"`         // CPU limit in millicores (e.g., 1000 = 1 CPU core)
+	MemoryLimit     string            `json:"memory_limit"`      // Memory limit (e.g., "512M", "2G")
 }
 
 // IDString returns the step ID as a string.

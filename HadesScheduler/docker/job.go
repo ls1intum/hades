@@ -2,6 +2,8 @@ package docker
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 
@@ -21,6 +23,13 @@ type Job struct {
 type jobIDContextKey string
 
 func (d Job) execute(ctx context.Context) error {
+	// Failures from steps marked ContinueOnError are tolerated by design (e.g. a test step whose
+	// failure is a normal, expected outcome that a later step, such as result parsing, still needs
+	// to report). They're joined here purely for logging and must not fail the overall job - that
+	// would defeat the point of ContinueOnError and would be inconsistent with the Kubernetes
+	// executor, where such a step never fails the job at all.
+	stepErr := error(nil)
+
 	for _, step := range d.Steps {
 		d.logger.Info("Executing step", slog.Any("step", step))
 
@@ -28,6 +37,8 @@ func (d Job) execute(ctx context.Context) error {
 		var envs = make(map[string]string)
 		maps.Copy(envs, d.Metadata)
 		maps.Copy(envs, step.Metadata)
+		envs["UUID"] = d.ID.String()
+		envs["JOB_NAME"] = d.Name
 		step.Metadata = envs
 
 		dockerStep := Step{
@@ -42,8 +53,17 @@ func (d Job) execute(ctx context.Context) error {
 		err := dockerStep.execute(stepCtx)
 		if err != nil {
 			d.logger.Error("Failed to execute step", slog.Any("error", err))
+			if step.ContinueOnError {
+				d.logger.Info("Next step should be executed despite error due to ContinueOnError setting", slog.Any("step", step))
+				stepErr = errors.Join(stepErr, fmt.Errorf("step %v failed with ContinueOnError set: %w", step.ID, err))
+				continue
+			}
 			return err
 		}
+	}
+
+	if stepErr != nil {
+		d.logger.Warn("Job completed with tolerated step failures", slog.Any("error", stepErr))
 	}
 	return nil
 }

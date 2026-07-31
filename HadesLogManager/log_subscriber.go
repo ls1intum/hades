@@ -32,6 +32,7 @@ type DynamicLogManager struct {
 type watcherState struct {
 	ctx    context.Context
 	cancel context.CancelFunc
+	wg     *sync.WaitGroup
 }
 
 // NewDynamicLogManager creates a new DynamicLogManager instance with the provided dependencies.
@@ -164,6 +165,8 @@ func (dlm *DynamicLogManager) cleanupSubscriptions(subs []*nats.Subscription) {
 func (dlm *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID string) {
 	// Create new context for this job outside the lock
 	jobCtx, cancel := context.WithCancel(ctx)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 
 	// Minimize critical section - only lock for map operations
 	dlm.mu.Lock()
@@ -171,16 +174,19 @@ func (dlm *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 	dlm.watchers[jobID] = watcherState{
 		ctx:    jobCtx,
 		cancel: cancel,
+		wg:     wg,
 	}
 	dlm.mu.Unlock()
 
 	// Cancel old watcher outside the lock to avoid potential deadlock
 	if exists {
 		oldWatcher.cancel()
+		oldWatcher.wg.Wait()
 	}
 
 	// Start watching logs for this job
 	go func() {
+		defer wg.Done()
 		defer func() {
 			// Use a more efficient cleanup check
 			dlm.mu.Lock()
@@ -218,13 +224,27 @@ func (dlm *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 //   - jobID: Unique identifier of the job to stop watching logs for
 func (dlm *DynamicLogManager) stopWatchingJobLogs(jobID string) {
 	dlm.mu.Lock()
-	defer dlm.mu.Unlock()
-
-	if watcher, exists := dlm.watchers[jobID]; exists {
+	watcher, exists := dlm.watchers[jobID]
+	if exists {
 		delete(dlm.watchers, jobID)
+	}
+	dlm.mu.Unlock()
+
+	if exists {
 		slog.Info("Stopping log watch", "job_id", jobID)
 		watcher.cancel()
+		watcher.wg.Wait() // Wait outside the lock
 
 		dlm.logAggregator.MarkJobCompleted(jobID)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("Panic while sending job logs", "job_id", jobID, "panic", r)
+				}
+			}()
+			if err := dlm.logAggregator.SendJobLogs(jobID); err != nil {
+				slog.Error("Failed to send job logs", "job_id", jobID, "error", err)
+			}
+		}()
 	}
 }

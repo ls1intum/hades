@@ -70,6 +70,12 @@ spec:
                   Typical pipeline: Step 1 clones code, Step 2 builds it, Step 3 runs tests.
                 items:
                   properties:
+                    continueOnError:
+                      description: |-
+                        If true, the BuildJob pipeline continues to the next step even if this step's container
+                        exits with a non-zero status. Useful for steps that must always run regardless of prior
+                        failures, such as result parsing or cleanup.
+                      type: boolean
                     cpuLimit:
                       anyOf:
                       - type: integer

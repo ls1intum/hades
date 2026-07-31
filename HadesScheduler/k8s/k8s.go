@@ -212,9 +212,10 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 	steps := make([]map[string]interface{}, 0, len(job.Steps))
 	for _, s := range job.Steps {
 		sm := map[string]interface{}{
-			"id":    s.ID,
-			"name":  s.Name,
-			"image": s.Image,
+			"id":              s.ID,
+			"name":            s.Name,
+			"image":           s.Image,
+			"continueOnError": s.ContinueOnError,
 		}
 		if s.Script != "" {
 			sm["script"] = s.Script

@@ -343,13 +343,18 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 			Env: append(
 				envFromMeta(s.Metadata),
 				corev1.EnvVar{Name: "UUID", Value: bj.Name},
+				corev1.EnvVar{Name: "JOB_NAME", Value: bj.Spec.Name},
 			), // Convert metadata to environment variables
 			VolumeMounts: []corev1.VolumeMount{sharedMount},
 		}
 
 		if strings.TrimSpace(s.Script) != "" {
 			c.Command = []string{"/bin/sh", "-c"}
-			c.Args = []string{s.Script}
+			if s.ContinueOnError {
+				c.Args = []string{s.Script + "; exit 0"}
+			} else {
+				c.Args = []string{s.Script}
+			}
 		}
 
 		// Set resource limits if specified
