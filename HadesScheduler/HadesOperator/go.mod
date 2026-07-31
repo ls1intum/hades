@@ -8,7 +8,7 @@ replace github.com/ls1intum/hades/hadesScheduler => ../../HadesScheduler
 
 require (
 	github.com/ls1intum/hades/hadesScheduler v0.0.0-00010101000000-000000000000
-	github.com/ls1intum/hades/shared v0.0.0-20260505155304-a178a43cb5c2
+	github.com/ls1intum/hades/shared v0.0.0-20260731094626-69569351d0f3
 	github.com/nats-io/nats.go v1.52.0
 	k8s.io/api v0.36.1
 	k8s.io/apimachinery v0.36.1
