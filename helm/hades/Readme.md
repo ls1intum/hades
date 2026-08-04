@@ -65,7 +65,7 @@ The Scheduler operates in **`operator` mode** by default (`hadesScheduler.config
     ```bash
     helm upgrade --install hades ./helm/hades -n hades --create-namespace \
       --set ingress.host=hades.example.com \
-      --set tls.secretName=my-secrect
+      --set ingress.tls.secretName=my-secret
     ```
 
 > In the above command:

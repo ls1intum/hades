@@ -15,6 +15,9 @@ hadesApi:
     requests:
       cpu: "200m"
       memory: "256Mi"
+  # Name of an existing Secret holding key AUTH_KEY to protect the /build endpoint.
+  # Empty = no auth (endpoint is open).
+  authKeySecret: ""
 
 hadesScheduler:
   image:
@@ -59,6 +62,26 @@ hadesOperator:
   targetNamespace: ""
   DeleteOnComplete: true
   maxParallelism: "100"
+
+hadesLogManager:
+  image:
+    repository: ghcr.io/ls1intum/hades/hades-log-manager
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 8081
+    targetPort: 8081
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+  # External Artemis adapter endpoint the log manager forwards aggregated job logs to.
+  artemisAdapterUrl: "http://hades-artemis-adapter.hades-artemis-connector.svc.cluster.local:8082/adapter/logs"
 
 rbac:
   hadesScheduler:
