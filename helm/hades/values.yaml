@@ -1,3 +1,7 @@
+# Global debug switch. When true, every Hades container gets DEBUG=true
+# (and the operator additionally gets DEV_MODE=true) for verbose logging.
+debug: false
+
 hadesApi:
   image:
     repository: ghcr.io/ls1intum/hades/hades-api
