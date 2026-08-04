@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "hades-log-manager"
+spec:
+  replicas: {{ .Values.hadesLogManager.replicaCount }}
+  selector:
+    matchLabels:
+      app: hades-log-manager-selector
+  template:
+    metadata:
+      labels:
+        app: hades-log-manager-selector
+    spec:
+      containers:
+        - name: "hades-log-manager"
+          image: "{{ .Values.hadesLogManager.image.repository }}:{{ .Values.hadesLogManager.image.tag }}"
+          imagePullPolicy: {{ .Values.hadesLogManager.image.pullPolicy }}
+          resources:
+            limits:
+              cpu: {{ .Values.hadesLogManager.resources.limits.cpu | quote }}
+              memory: {{ .Values.hadesLogManager.resources.limits.memory | quote }}
+            requests:
+              cpu: {{ .Values.hadesLogManager.resources.requests.cpu | quote }}
+              memory: {{ .Values.hadesLogManager.resources.requests.memory | quote }}
+          ports:
+            - containerPort: {{ .Values.hadesLogManager.service.targetPort }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.hadesLogManager.service.targetPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.hadesLogManager.service.targetPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          env:
+            - name: NATS_URL
+              value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
+            - name: HADESLOGMANAGER_API_PORT
+              value: {{ .Values.hadesLogManager.service.targetPort | quote }}
+            {{- if .Values.hadesLogManager.artemisAdapterUrl }}
+            - name: ARTEMIS_ADAPTER_URL
+              value: {{ .Values.hadesLogManager.artemisAdapterUrl | quote }}
+            {{- end }}

@@ -44,3 +44,10 @@ spec:
           env:
             - name: NATS_URL
               value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
+            {{- if .Values.hadesApi.authKeySecret }}
+            - name: AUTH_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hadesApi.authKeySecret | quote }}
+                  key: AUTH_KEY
+            {{- end }}
