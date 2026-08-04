@@ -31,6 +31,7 @@ type HadesLogManagerConfig struct {
 func main() {
 	// Setup logging
 	utils.SetupLogging()
+	gin.SetMode(gin.ReleaseMode)
 
 	// Load configuration
 	var cfg HadesLogManagerConfig
@@ -38,6 +39,12 @@ func main() {
 		slog.Error("Failed to load configuration", "error", err)
 		os.Exit(1)
 	}
+
+	slog.Info("HadesLogManager configuration",
+		"api_port", cfg.APIPort,
+		"nats_url", cfg.NatsConfig.URL,
+		"nats_tls", cfg.NatsConfig.TLS,
+	)
 
 	// Run main application
 	if err := run(cfg); err != nil {
@@ -70,6 +77,12 @@ func run(cfg HadesLogManagerConfig) error {
 	if err := utils.LoadConfig(&aggregatorConfig); err != nil {
 		return err
 	}
+	slog.Info("Log aggregator configuration",
+		"batch_size", aggregatorConfig.BatchSize,
+		"retention", aggregatorConfig.Retention,
+		"max_job_logs", aggregatorConfig.MaxJobLogs,
+		"artemis_adapter_url", aggregatorConfig.APIendpoint,
+	)
 	logAggregator := NewLogAggregator(ctx, consumer, aggregatorConfig)
 
 	// Create dynamic log manager
@@ -175,7 +188,8 @@ func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *htt
 //   - GET /jobs               — returns a list of all known job IDs (active and completed).
 //   - GET /health             — liveness probe returning a static OK response.
 func setupAPIRoute(aggregator buildlogs.LogAggregator) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Logger(), gin.Recovery())
 	jobs := r.Group("/jobs")
 	{
 		// Get logs for specific job

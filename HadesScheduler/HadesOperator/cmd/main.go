@@ -145,6 +145,17 @@ func main() {
 		setupLog.Error(err, "unable to load NATS configuration")
 		os.Exit(1)
 	}
+
+	setupLog.Info("HadesOperator configuration",
+		"watch_namespace", nsConfig.WatchNamespace,
+		"cluster_wide", nsConfig.WatchNamespace == "",
+		"delete_on_complete", operatorConfig.DeleteOnComplete,
+		"max_parallelism", operatorConfig.MaxParallelism,
+		"dev_mode", enableDevMode,
+		"nats_url", natsConfig.URL,
+		"nats_tls", natsConfig.TLS,
+	)
+
 	nc, err := hadesnats.SetupDefaultNatsConnection(natsConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to setup NATS Connection")

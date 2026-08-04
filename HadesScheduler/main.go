@@ -35,7 +35,13 @@ func main() {
 		slog.Error("Failed to load executor configuration", "error", err)
 		os.Exit(1)
 	}
-	slog.Debug("Executor config", "executor", executorCfg.Executor)
+
+	slog.Info("HadesScheduler configuration",
+		"executor", executorCfg.Executor,
+		"concurrency", cfg.Concurrency,
+		"nats_url", cfg.NatsConfig.URL,
+		"nats_tls", cfg.NatsConfig.TLS,
+	)
 
 	natsConn, err := hadesnats.SetupDefaultNatsConnection(cfg.NatsConfig)
 	if err != nil {

@@ -32,6 +32,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	slog.Info("HadesAPI configuration",
+		"api_port", cfg.APIPort,
+		"nats_url", cfg.NatsConfig.URL,
+		"nats_tls", cfg.NatsConfig.TLS,
+		"auth_enabled", cfg.AuthKey != "",
+	)
+
 	natsConn, err := hadesnats.SetupDefaultNatsConnection(cfg.NatsConfig)
 	if err != nil {
 		slog.Error("Failed to connect to NATS", "error", err)
