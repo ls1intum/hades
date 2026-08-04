@@ -48,6 +48,6 @@ spec:
             - name: AUTH_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.hadesApi.authKeySecret }}
+                  name: {{ .Values.hadesApi.authKeySecret | quote }}
                   key: AUTH_KEY
             {{- end }}

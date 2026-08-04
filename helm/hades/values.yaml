@@ -72,6 +72,9 @@ hadesLogManager:
     type: ClusterIP
     port: 8081
     targetPort: 8081
+  # Keep at 1: the log manager aggregates per-job logs in memory and uses plain
+  # (non-queue, non-durable) NATS subscriptions, so multiple replicas would
+  # independently forward duplicate/split logs to the Artemis adapter.
   replicaCount: 1
   resources:
     limits:
