@@ -205,8 +205,60 @@ func (hlc *HadesLogConsumer) WatchJobLogs(ctx context.Context, jobID string, han
 	return hlc.processBatchedLogs(ctx, consumer, jobID, handler)
 }
 
+// containerLogBatcher accumulates log entries per container so that the
+// per-step grouping (and the ContainerID) is preserved when logs are handed to
+// downstream consumers. Flattening entries across containers would lose the
+// step boundaries that consumers such as the Artemis adapter rely on to locate
+// a specific step's logs.
+type containerLogBatcher struct {
+	jobID   string
+	order   []string // container IDs in first-seen order
+	batches map[string][]LogEntry
+	total   int // total buffered entries across all containers
+}
+
+func newContainerLogBatcher(jobID string) *containerLogBatcher {
+	return &containerLogBatcher{
+		jobID:   jobID,
+		batches: make(map[string][]LogEntry),
+	}
+}
+
+// add buffers the entries of an incoming Log under its ContainerID, preserving
+// first-seen container order.
+func (b *containerLogBatcher) add(l Log) {
+	if len(l.Logs) == 0 {
+		return
+	}
+	if _, ok := b.batches[l.ContainerID]; !ok {
+		b.order = append(b.order, l.ContainerID)
+	}
+	b.batches[l.ContainerID] = append(b.batches[l.ContainerID], l.Logs...)
+	b.total += len(l.Logs)
+}
+
+// size returns the total number of buffered entries across all containers.
+func (b *containerLogBatcher) size() int { return b.total }
+
+// drain returns one Log per container, in first-seen order, each carrying its
+// ContainerID, and resets the buffer.
+func (b *containerLogBatcher) drain() []Log {
+	if b.total == 0 {
+		return nil
+	}
+	out := make([]Log, 0, len(b.order))
+	for _, cid := range b.order {
+		out = append(out, Log{JobID: b.jobID, ContainerID: cid, Logs: b.batches[cid]})
+	}
+	b.order = nil
+	b.batches = make(map[string][]LogEntry)
+	b.total = 0
+	return out
+}
+
 // processBatchedLogs handles the batching and processing of log messages from the consumer.
-// It batches log entries for efficiency and calls the handler periodically.
+// It batches log entries per container for efficiency (preserving the ContainerID and
+// per-step grouping) and calls the handler once per container on each flush.
 func (hlc *HadesLogConsumer) processBatchedLogs(ctx context.Context, consumer jetstream.Consumer, jobID string, handler func(Log)) error {
 	const (
 		batchSize    = defaultBatchSize
@@ -215,14 +267,13 @@ func (hlc *HadesLogConsumer) processBatchedLogs(ctx context.Context, consumer je
 		fetchWait    = defaultFetchWaitTime
 	)
 
-	logBatch := make([]LogEntry, 0, batchSize)
+	batcher := newContainerLogBatcher(jobID)
 	batchTimer := time.NewTimer(batchTimeout)
 	defer batchTimer.Stop()
 
 	flushBatch := func() {
-		if len(logBatch) > 0 {
-			handler(Log{JobID: jobID, Logs: logBatch})
-			logBatch = logBatch[:0] // Reset batch
+		for _, l := range batcher.drain() {
+			handler(l)
 		}
 		batchTimer.Reset(batchTimeout)
 	}
@@ -258,14 +309,14 @@ func (hlc *HadesLogConsumer) processBatchedLogs(ctx context.Context, consumer je
 					continue
 				}
 
-				logBatch = append(logBatch, log.Logs...)
+				batcher.add(log)
 
 				if ackErr := msg.Ack(); ackErr != nil {
 					slog.Warn("Failed to ACK message", "error", ackErr)
 				}
 
 				// Flush batch if it gets too large
-				if len(logBatch) >= batchSize {
+				if batcher.size() >= batchSize {
 					flushBatch()
 				}
 			}
