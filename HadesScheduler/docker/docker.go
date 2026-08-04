@@ -77,11 +77,14 @@ func pullImages(ctx context.Context, client *client.Client, images ...string) er
 
 			response, err := client.ImagePull(ctx, img, image_types.PullOptions{})
 			if err != nil {
-				errorsCh <- fmt.Errorf("failed to pull image %s: %v", img, err)
+				errorsCh <- fmt.Errorf("failed to pull image %s: %w", img, err)
 				return
 			}
 			defer response.Close()
-			io.Copy(io.Discard, response) // consume the response to prevent potential leaks
+			// Consume the response to prevent potential leaks and to surface pull errors.
+			if _, err := io.Copy(io.Discard, response); err != nil {
+				errorsCh <- fmt.Errorf("failed to read image pull response for %s: %w", img, err)
+			}
 		}(image)
 	}
 

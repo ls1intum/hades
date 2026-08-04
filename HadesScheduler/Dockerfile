@@ -24,7 +24,11 @@ FROM gcr.io/distroless/static-debian12
 WORKDIR /app
 
 # Copy the built binary from the builder container into the minimal runtime container
-COPY --from=builder /app/HadesScheduler/hadesCI-scheduler . 
+COPY --from=builder /app/HadesScheduler/hadesCI-scheduler .
+
+# NOTE: This image intentionally runs as root. In docker-executor mode the
+# scheduler talks to the mounted Docker socket (/var/run/docker.sock), which a
+# non-root user typically cannot access.
 
 # Run your Go application
 CMD ["/app/hadesCI-scheduler"]

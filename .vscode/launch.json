@@ -8,7 +8,7 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/HadesAPI",
-            "preLaunchTask": "Start Redis Container", // This will start the Redis container before launching the scheduler - defined in .vscode/tasks.json
+            "preLaunchTask": "Start NATS Container", // This will start the NATS container before launching the scheduler - defined in .vscode/tasks.json
             "env": {
                 "DEBUG": "true",
             }
@@ -19,7 +19,7 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/HadesScheduler",
-            "preLaunchTask": "Start Redis Container", // This will start the Redis container before launching the scheduler - defined in .vscode/tasks.json
+            "preLaunchTask": "Start NATS Container", // This will start the NATS container before launching the scheduler - defined in .vscode/tasks.json
             "env": {
                 "DEBUG": "true",
                 "HADES_EXECUTOR": "docker"
@@ -31,7 +31,7 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/HadesScheduler",
-            "preLaunchTask": "Start Redis Container", // This will start the Redis container before launching the scheduler - defined in .vscode/tasks.json
+            "preLaunchTask": "Start NATS Container", // This will start the NATS container before launching the scheduler - defined in .vscode/tasks.json
             "env": {
                 "DEBUG": "true",
                 "HADES_EXECUTOR": "k8s",

@@ -1,6 +1,5 @@
 # docker compose file for the project with three services
 
-version: '3.7'
 services:
   hadesAPI:
     image: ghcr.io/ls1intum/hades/hades-api

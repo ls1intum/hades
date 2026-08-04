@@ -26,6 +26,7 @@ type DynamicLogManager struct {
 	logAggregator logs.LogAggregator
 	mu            sync.RWMutex
 	watchers      map[string]watcherState // jobID -> watcher state
+	sendWG        sync.WaitGroup          // tracks in-flight log-forwarding goroutines
 }
 
 // watcherState holds the state for a single job watcher
@@ -98,6 +99,8 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 		<-ctx.Done()
 		slog.Info("Shutting down log manager subscriptions")
 		dlm.cleanupSubscriptions(subs)
+		// Wait for in-flight log-forwarding goroutines to finish (or cancel).
+		dlm.sendWG.Wait()
 	}()
 
 	return nil
@@ -136,14 +139,14 @@ func (dlm *DynamicLogManager) handleJobRunning(ctx context.Context, jobID string
 func (dlm *DynamicLogManager) handleJobSucceeded(ctx context.Context, jobID string) {
 	slog.Info("Job succeeded", "job_id", jobID)
 	dlm.logAggregator.UpdateJobStatus(jobID, buildstatus.StatusSucceeded)
-	dlm.stopWatchingJobLogs(jobID)
+	dlm.stopWatchingJobLogs(ctx, jobID)
 }
 
 // handleJobFailed handles job failed status event
 func (dlm *DynamicLogManager) handleJobFailed(ctx context.Context, jobID string) {
 	slog.Info("Job failed", "job_id", jobID)
 	dlm.logAggregator.UpdateJobStatus(jobID, buildstatus.StatusFailed)
-	dlm.stopWatchingJobLogs(jobID)
+	dlm.stopWatchingJobLogs(ctx, jobID)
 }
 
 // cleanupSubscriptions drains all subscriptions
@@ -221,8 +224,9 @@ func (dlm *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 // This method is thread-safe and can be called concurrently from multiple goroutines.
 //
 // Parameters:
+//   - ctx: Context bounding the asynchronous log-forwarding request
 //   - jobID: Unique identifier of the job to stop watching logs for
-func (dlm *DynamicLogManager) stopWatchingJobLogs(jobID string) {
+func (dlm *DynamicLogManager) stopWatchingJobLogs(ctx context.Context, jobID string) {
 	dlm.mu.Lock()
 	watcher, exists := dlm.watchers[jobID]
 	if exists {
@@ -236,13 +240,15 @@ func (dlm *DynamicLogManager) stopWatchingJobLogs(jobID string) {
 		watcher.wg.Wait() // Wait outside the lock
 
 		dlm.logAggregator.MarkJobCompleted(jobID)
+		dlm.sendWG.Add(1)
 		go func() {
+			defer dlm.sendWG.Done()
 			defer func() {
 				if r := recover(); r != nil {
 					slog.Error("Panic while sending job logs", "job_id", jobID, "panic", r)
 				}
 			}()
-			if err := dlm.logAggregator.SendJobLogs(jobID); err != nil {
+			if err := dlm.logAggregator.SendJobLogs(ctx, jobID); err != nil {
 				slog.Error("Failed to send job logs", "job_id", jobID, "error", err)
 			}
 		}()

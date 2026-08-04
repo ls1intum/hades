@@ -24,6 +24,9 @@ permissions:
   packages: write
   actions: write
 
+env:
+  TRAEFIK_IMAGE_TAG: v3.6
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -170,7 +173,7 @@ jobs:
           cp .github-shared/traefik/docker-compose.yml docker-compose.yml
           {
             echo "ENVIRONMENT=hades-test"
-            echo "IMAGE_TAG=v3.6"
+            echo "IMAGE_TAG=${TRAEFIK_IMAGE_TAG}"
             echo "HARICA_ACME_CA_SERVER=${{ secrets.HARICA_ACME_CA_SERVER }}"
             echo "HARICA_ACME_EAB_KID=${{ secrets.HARICA_ACME_EAB_KID }}"
             echo "HARICA_ACME_EAB_HMAC=${{ secrets.HARICA_ACME_EAB_HMAC }}"

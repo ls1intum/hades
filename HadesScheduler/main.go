@@ -22,17 +22,20 @@ type HadesSchedulerConfig struct {
 }
 
 func main() {
-	if isDebug := os.Getenv("DEBUG"); isDebug == "true" {
-		slog.SetLogLoggerLevel(slog.LevelDebug)
-		slog.Warn("DEBUG MODE ENABLED")
-	}
+	utils.SetupLogging()
 
 	var cfg HadesSchedulerConfig
-	utils.LoadConfig(&cfg)
+	if err := utils.LoadConfig(&cfg); err != nil {
+		slog.Error("Failed to load configuration", "error", err)
+		os.Exit(1)
+	}
 
 	var executorCfg utils.ExecutorConfig
-	utils.LoadConfig(&executorCfg)
-	slog.Debug("Executor config: ", "config", executorCfg)
+	if err := utils.LoadConfig(&executorCfg); err != nil {
+		slog.Error("Failed to load executor configuration", "error", err)
+		os.Exit(1)
+	}
+	slog.Debug("Executor config", "executor", executorCfg.Executor)
 
 	natsConn, err := hadesnats.SetupDefaultNatsConnection(cfg.NatsConfig)
 	if err != nil {
@@ -62,7 +65,10 @@ func main() {
 		slog.Info("Started HadesScheduler in Docker mode")
 
 		var dockerCfg docker.EnvConfig
-		utils.LoadConfig(&dockerCfg)
+		if err := utils.LoadConfig(&dockerCfg); err != nil {
+			slog.Error("Failed to load Docker executor configuration", "error", err)
+			os.Exit(1)
+		}
 		slog.Debug("Docker config", "config", dockerCfg)
 
 		publisher, err := log.NewNATSPublisher(natsConn)

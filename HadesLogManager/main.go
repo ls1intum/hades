@@ -34,7 +34,10 @@ func main() {
 
 	// Load configuration
 	var cfg HadesLogManagerConfig
-	utils.LoadConfig(&cfg)
+	if err := utils.LoadConfig(&cfg); err != nil {
+		slog.Error("Failed to load configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// Run main application
 	if err := run(cfg); err != nil {
@@ -64,7 +67,9 @@ func run(cfg HadesLogManagerConfig) error {
 
 	// Create log aggregator
 	var aggregatorConfig AggregatorConfig
-	utils.LoadConfig(&aggregatorConfig)
+	if err := utils.LoadConfig(&aggregatorConfig); err != nil {
+		return err
+	}
 	logAggregator := NewLogAggregator(ctx, consumer, aggregatorConfig)
 
 	// Create dynamic log manager

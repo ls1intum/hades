@@ -24,7 +24,10 @@ FROM gcr.io/distroless/static-debian12
 WORKDIR /app
 
 # Copy the built binary from the builder container into the minimal runtime container
-COPY --from=builder /app/HadesAPI/hadesCI-api . 
+COPY --from=builder /app/HadesAPI/hadesCI-api .
+
+# Run as a non-root user
+USER 65532:65532
 
 # Run your Go application
 CMD ["/app/hadesCI-api"]

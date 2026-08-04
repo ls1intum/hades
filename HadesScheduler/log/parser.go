@@ -116,7 +116,7 @@ func processStream(buf *bytes.Buffer, streamType string, entries *[]logs.LogEntr
 // It handles both structured application logs and simple container logs.
 func parseLogLine(line, stream string) logs.LogEntry {
 	var timestamp time.Time
-	message := line
+	var message string
 
 	// Regex pattern matches structured logs with format: time="..." level="..." msg="..."
 	if logLineRegex.MatchString(line) {
