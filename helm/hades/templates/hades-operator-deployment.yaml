@@ -34,6 +34,12 @@ spec:
               containerPort: 8081
 
           env:
+            - name: DEBUG
+              value: {{ .Values.debug | quote }}
+            # The operator's log verbosity is controlled by controller-runtime's
+            # DEV_MODE; wire it to the same toggle so debug mode is effective here.
+            - name: DEV_MODE
+              value: {{ .Values.debug | quote }}
             - name: NATS_URL
               value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
             {{- if not .Values.hadesOperator.clusterWide }}

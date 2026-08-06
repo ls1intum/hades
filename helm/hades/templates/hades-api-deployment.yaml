@@ -42,6 +42,8 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
           env:
+            - name: DEBUG
+              value: {{ .Values.debug | quote }}
             - name: NATS_URL
               value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
             {{- if .Values.hadesApi.authKeySecret }}
