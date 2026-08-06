@@ -94,14 +94,15 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 	}
 	subs = append(subs, sub)
 
-	// Clean up subscriptions when context is done
-	go func() {
-		<-ctx.Done()
-		slog.Info("Shutting down log manager subscriptions")
-		dlm.cleanupSubscriptions(subs)
-		// Wait for in-flight log-forwarding goroutines to finish (or cancel).
-		dlm.sendWG.Wait()
-	}()
+	// Block until the context is cancelled, then clean up inline. Because the
+	// caller runs StartListening inside the application's shutdown WaitGroup,
+	// returning only after cleanup means the process actually waits for the
+	// drain + in-flight log forwarding to finish instead of racing exit.
+	<-ctx.Done()
+	slog.Info("Shutting down log manager subscriptions")
+	dlm.cleanupSubscriptions(subs)
+	// Wait for in-flight log-forwarding goroutines to finish (or cancel).
+	dlm.sendWG.Wait()
 
 	return nil
 }

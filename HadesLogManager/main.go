@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -75,7 +76,7 @@ func run(cfg HadesLogManagerConfig) error {
 	// Create log aggregator
 	var aggregatorConfig AggregatorConfig
 	if err := utils.LoadConfig(&aggregatorConfig); err != nil {
-		return err
+		return fmt.Errorf("loading aggregator configuration: %w", err)
 	}
 	slog.Info("Log aggregator configuration",
 		"batch_size", aggregatorConfig.BatchSize,

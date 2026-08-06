@@ -16,6 +16,10 @@ import (
 
 const (
 	httpClientTimeout = 10 * time.Second
+	// defaultRetention is used when LOG_RETENTION is unset or non-positive. A
+	// non-positive retention would otherwise make completed jobs eligible for
+	// flushing immediately.
+	defaultRetention = time.Hour
 )
 
 // NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
@@ -54,6 +58,14 @@ type AggregatorConfig struct {
 // Returns:
 //   - LogAggregator: A new instance ready to aggregate logs
 func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) buildlogs.LogAggregator {
+	// Normalize retention once so every downstream use (cleanup cadence and the
+	// expiry comparison) works from a single, guaranteed-positive value.
+	if config.Retention <= 0 {
+		slog.Warn("Non-positive LOG_RETENTION; falling back to default",
+			"configured", config.Retention, "default", defaultRetention)
+		config.Retention = defaultRetention
+	}
+
 	la := &NATSLogAggregator{
 		hlc: hlc,
 		cfg: config,
