@@ -16,6 +16,8 @@ import (
 	"github.com/ls1intum/hades/shared/utils"
 )
 
+// HadesSchedulerConfig holds the scheduler's runtime configuration. The
+// executor is selected separately via utils.ExecutorConfig (HADES_EXECUTOR).
 type HadesSchedulerConfig struct {
 	Concurrency uint `env:"CONCURRENCY" envDefault:"1"`
 	NatsConfig  hadesnats.ConnectionConfig

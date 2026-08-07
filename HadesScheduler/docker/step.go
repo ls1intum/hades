@@ -14,6 +14,10 @@ import (
 	"github.com/ls1intum/hades/shared/utils"
 )
 
+// Step is a single job step bound to the Docker client and options used to run
+// it. Executing a Step pulls the image, creates a container mounting the shared
+// volume at /shared, applies CPU/memory limits, runs the script, streams the
+// container logs to the publisher, and reports a non-zero exit as an error.
 type Step struct {
 	cli    *client.Client
 	logger *slog.Logger

@@ -156,6 +156,26 @@ deps-tidy: ## Run go mod tidy in every module.
 helm-deps: ## Refresh Helm chart subchart lock file.
 	helm dependency update ./helm/hades
 
+##@ Documentation
+
+SWAG_VERSION ?= v1.16.6
+HELM_DOCS_VERSION ?= v1.14.2
+
+.PHONY: docs-api
+docs-api: ## Regenerate the OpenAPI specs for HadesAPI and HadesLogManager.
+	@echo "==> HadesAPI"
+	cd HadesAPI && go run github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) init --parseDependency --parseInternal -g main.go -o docs
+	@echo "==> HadesLogManager"
+	cd HadesLogManager && go run github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION) init --parseDependency --parseInternal -g main.go -o docs
+
+.PHONY: docs-helm
+docs-helm: ## Regenerate the Helm chart values table (helm/hades/Readme.md) from values.yaml comments.
+	go run github.com/norwoodj/helm-docs/cmd/helm-docs@$(HELM_DOCS_VERSION) \
+		--chart-search-root helm/hades \
+		--template-files Readme.md.gotmpl \
+		--output-file Readme.md \
+		--ignore-non-descriptions
+
 ##@ CI
 
 .PHONY: ci

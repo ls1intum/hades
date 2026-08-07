@@ -1,8 +1,14 @@
-# Hades: A Scalable Job Scheduler for Container Workloads
+<p align="center">
+  <img src="docs/assets/hades-icon.svg" alt="Hades logo" width="128" height="128" />
+</p>
+
+<h1 align="center">Hades: A Scalable Job Scheduler for Container Workloads</h1>
 
 Welcome to Hades, a robust job scheduler designed with scalability in mind. Hades' primary mission is to provide a straightforward, scalable, and adaptable solution for executing containerized workloads in various environments, from educational programming courses to research computing clusters.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **Documentation:** see [`docs/`](./docs/README.md) for the full documentation index (API reference, configuration reference, and architecture), organized for users, administrators, and developers.
 
 ## Design Goals
 
@@ -181,13 +187,18 @@ For more complex workflows, you can define multi-step jobs where each step runs 
 
 ## Configuration Options
 
-Hades can be configured through environment variables or a `.env` file:
+Hades is configured through environment variables (or a `.env` file for local runs). The most common settings:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `HADES_EXECUTOR` | Execution platform: `docker` or `k8s` | `docker` |
 | `CONCURRENCY` | Number of jobs to process concurrently | `1` |
 | `API_PORT` | Port for the Hades API | `8080` |
+| `AUTH_KEY` | HTTP Basic Auth key for the API (empty = no auth) | `` |
+| `NATS_URL` | NATS server URL | `nats://localhost:4222` |
+| `DEBUG` | Verbose (debug-level) logging | `false` |
+
+See **[docs/configuration.md](./docs/configuration.md)** for the complete, per-component reference (Docker/Kubernetes executor, operator, and Log Manager options). A ready-to-copy `.env.example` lives at the repository root.
 
 ## Development Workflow
 
@@ -206,6 +217,8 @@ A top-level [`Makefile`](./Makefile) wraps the most common development tasks. Ru
 | `make cover` | Generate and open the HadesAPI coverage report. |
 | `make test-operator` / `make test-operator-e2e` | Run HadesOperator envtest unit tests, or Kind-based e2e tests. |
 | `make fmt` / `make lint` | Format code with `gofmt` or run `go vet`. |
+| `make docs-api` | Regenerate the OpenAPI specs for HadesAPI and HadesLogManager (run after changing a handler annotation or DTO). |
+| `make docs-helm` | Regenerate the Helm chart values table from `values.yaml` comments (run after changing chart values). |
 | `make vuln` | Run `govulncheck` (auto-installs it on first use). |
 | `make deps-check` / `make deps-update` / `make deps-tidy` | List outdated direct dependencies, bump them, or run `go mod tidy` across all modules. |
 | `make helm-deps` | Refresh the Helm chart subchart lock file. |

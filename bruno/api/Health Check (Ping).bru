@@ -1,13 +1,13 @@
 meta {
-  name: Get Jobs
+  name: Health Check (Ping)
   type: http
-  seq: 4
+  seq: 1
 }
 
 get {
-  url: http://{{logmanager_url}}/jobs
+  url: http://{{hostname}}/ping
   body: none
-  auth: inherit
+  auth: none
 }
 
 settings {

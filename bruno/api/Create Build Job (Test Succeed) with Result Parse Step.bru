@@ -1,13 +1,18 @@
 meta {
-  name: Create Build Job (Test Fail) with Result Parse Step
+  name: Create Build Job (Test Succeed) with Result Parse Step
   type: http
-  seq: 6
+  seq: 5
 }
 
 post {
   url: http://{{hostname}}/build
   body: json
-  auth: none
+  auth: basic
+}
+
+auth:basic {
+  username: hades
+  password: {{auth_key}}
 }
 
 body:json {
@@ -23,14 +28,17 @@ body:json {
       "GLOBAL": "test"
     },
     "timestamp": "2021-01-01T00:00:00.000Z",
-    "priority": 3, // optional, default 3
+    "priority": 1, // optional, default 3
     "steps": [
       {
         "id": 1, // mandatory to declare the order of execution
         "name": "Clone",
         "image": "ghcr.io/ls1intum/hades/hades-clone-container:latest", // mandatory
         "volumeMounts": [
-          { "name": "shared", "mountPath": "/shared" }
+          {
+            "name": "shared",
+            "mountPath": "/shared"
+          }
         ],
         "workingDir": "/shared",
         "metadata": {
@@ -57,10 +65,7 @@ body:json {
             "mountPath": "/shared"
           }
         ],
-        "script": "set -e && cd /shared/example && ./gradlew --status && ./gradlew clean test",
-        "metadata": {
-          "CONTINUE_ON_ERROR": "true"
-        }
+        "script": "set -e && cd /shared/example && ./gradlew --status && ./gradlew clean test"
       },
       {
         "id": 3,
@@ -85,5 +90,5 @@ vars:pre-request {
   user: 
   password: 
   test_repo: https://github.com/Mtze/Artemis-Java-Test.git
-  assignment_repo: https://github.com/Mtze/Artemis-Java-Template.git
+  assignment_repo: https://github.com/Mtze/Artemis-Java-Solution.git
 }

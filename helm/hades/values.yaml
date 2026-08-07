@@ -1,17 +1,22 @@
-# Global debug switch. When true, every Hades container gets DEBUG=true
-# (and the operator additionally gets DEV_MODE=true) for verbose logging.
+# -- Global debug switch. When true, every Hades container gets `DEBUG=true`
+# (and the operator additionally gets `DEV_MODE=true`) for verbose logging.
 debug: false
 
 hadesApi:
   image:
     repository: ghcr.io/ls1intum/hades/hades-api
     tag: latest
+    # -- Image pull policy for the API.
     pullPolicy: Always
   service:
     type: ClusterIP
+    # -- Service port for the API.
     port: 8080
+    # -- Container port the API listens on.
     targetPort: 8080
+  # -- Number of API replicas.
   replicaCount: 1
+  # -- Resource requests and limits for the API pod.
   resources:
     limits:
       cpu: "500m"
@@ -19,20 +24,23 @@ hadesApi:
     requests:
       cpu: "200m"
       memory: "256Mi"
-  # Name of an existing Secret holding key AUTH_KEY to protect the /build endpoint.
-  # Empty = no auth (endpoint is open).
+  # -- Name of an existing Secret holding key `AUTH_KEY` to protect the `/build`
+  # endpoint. Empty = no auth (endpoint is open).
   authKeySecret: ""
 
 hadesScheduler:
   image:
     repository: ghcr.io/ls1intum/hades/hades-scheduler
     tag: latest
+    # -- Image pull policy for the scheduler.
     pullPolicy: Always
   service:
     type: ClusterIP
     port: 8080
     targetPort: 8080
+  # -- Number of scheduler replicas.
   replicaCount: 1
+  # -- Resource requests and limits for the scheduler pod.
   resources:
     limits:
       cpu: "500m"
@@ -40,19 +48,24 @@ hadesScheduler:
     requests:
       cpu: "200m"
       memory: "256Mi"
+  # -- Executor backend (`k8s` for in-cluster execution).
   executor: "k8s"
+  # -- Kubernetes client mode: `operator` (default) or `serviceaccount` (legacy).
   configMode: "operator"
 
 hadesOperator:
   image:
     repository: ghcr.io/ls1intum/hades/hades-operator
     tag: latest
+    # -- Image pull policy for the operator.
     pullPolicy: Always
   service:
     type: ClusterIP
     port: 8080
     targetPort: 8080
+  # -- Number of operator replicas.
   replicaCount: 1
+  # -- Resource requests and limits for the operator pod.
   resources:
     limits:
       cpu: "500m"
@@ -60,26 +73,34 @@ hadesOperator:
     requests:
       cpu: "200m"
       memory: "256Mi"
+  # -- Grant cluster-wide RBAC instead of namespace-scoped.
   clusterWide: false
   leaderElection:
+    # -- Enable leader election for the operator (recommended with >1 replica).
     enabled: true
+  # -- Namespace the operator watches for BuildJob CRs (empty = release namespace).
   targetNamespace: ""
+  # -- Delete BuildJob CRs (and their Jobs) once they finish.
   DeleteOnComplete: true
+  # -- Maximum number of Jobs the operator admits concurrently; excess are suspended.
   maxParallelism: "100"
 
 hadesLogManager:
   image:
     repository: ghcr.io/ls1intum/hades/hades-log-manager
     tag: latest
+    # -- Image pull policy for the log manager.
     pullPolicy: Always
   service:
     type: ClusterIP
+    # -- Service port for the log manager.
     port: 8081
     targetPort: 8081
-  # Keep at 1: the log manager aggregates per-job logs in memory and uses plain
+  # -- Keep at 1: the log manager aggregates per-job logs in memory and uses plain
   # (non-queue, non-durable) NATS subscriptions, so multiple replicas would
   # independently forward duplicate/split logs to the Artemis adapter.
   replicaCount: 1
+  # -- Resource requests and limits for the log manager pod.
   resources:
     limits:
       cpu: "500m"
@@ -87,38 +108,48 @@ hadesLogManager:
     requests:
       cpu: "200m"
       memory: "256Mi"
-  # External Artemis adapter endpoint the log manager forwards aggregated job logs to.
+  # -- External Artemis adapter endpoint the log manager forwards aggregated job logs to.
   artemisAdapterUrl: "http://hades-artemis-adapter.hades-artemis-connector.svc.cluster.local:8082/adapter/logs"
 
 rbac:
   hadesScheduler:
+    # -- ServiceAccount name for the scheduler.
     serviceAccountName: hades-scheduler
     role:
       name: hades-scheduler-role
   hadesOperator:
+    # -- ServiceAccount name for the operator.
     serviceAccountName: hades-operator
     role:
       name: hades-operator-role
 
 ingress:
+  # -- Enable the Ingress for the API.
   enabled: true
+  # -- Ingress class name.
   className: "nginx"
 
+  # -- Public hostname for the API.
   host: hades.student.k8s.aet.cit.tum.de
 
   tls:
+    # -- Enable TLS on the Ingress.
     enabled: true
+    # -- Secret name holding the TLS certificate.
     secretName: hades-tls
 
+  # -- Extra annotations for the Ingress (e.g. cert-manager issuer).
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 
 nats:
   config:
     jetstream:
+      # -- Enable JetStream (required by Hades).
       enabled: true
       memoryStore:
         enabled: true
+        # -- Maximum in-memory JetStream store size.
         maxSize: 1Gi
       # fileStore:
       #   enabled: true
@@ -127,5 +158,7 @@ nats:
       #     enabled: true
       #     size: 10Gi
       #   maxSize: 10Gi
+  # -- In-cluster NATS service hostname.
   host: "hades-nats.hades.svc.cluster.local"
+  # -- NATS client port.
   port: 4222
