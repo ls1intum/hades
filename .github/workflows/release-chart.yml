@@ -1,8 +1,8 @@
 name: Release Helm Chart
 
-# Packages the Helm chart and pushes it to GHCR as an OCI artifact (alongside
-# the Docker images). A new version is published only when
-# helm/hades/Chart.yaml's `version` changes. Install with:
+# Validates the Helm chart on pull requests, and on pushes to main publishes it
+# to GHCR as an OCI artifact (alongside the Docker images). A new version is
+# published only when helm/hades/Chart.yaml's `version` changes. Install with:
 #   helm install hades oci://ghcr.io/ls1intum/charts/hades --version <version> \
 #     -n hades --create-namespace
 #
@@ -14,15 +14,42 @@ on:
       - main
     paths:
       - "helm/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "helm/**"
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write # push the chart to GHCR
 
 jobs:
-  release:
+  # Runs on chart pull requests so a broken chart can't be published on merge.
+  validate:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint and template
+        run: |
+          helm repo add nats https://nats-io.github.io/k8s/helm/charts/
+          helm dependency build helm/hades
+          helm lint helm/hades
+          helm template hades helm/hades > /dev/null
+
+  # Publishes only on pushes to main (and manual dispatch), never on PRs.
+  release:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push the chart to GHCR
     steps:
       - name: Checkout
         uses: actions/checkout@v6

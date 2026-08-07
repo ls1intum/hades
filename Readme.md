@@ -114,8 +114,9 @@ For production deployments, Hades is designed to run natively within a Kubernete
    ```
 
    > **Note:** Helm does not upgrade CRDs after the first install. When a release
-   > changes the `BuildJob` CRD, apply it manually:
-   > `kubectl apply -f https://raw.githubusercontent.com/ls1intum/hades/main/helm/hades/crds/build.hades.tum.de_buildjobs.yaml`
+   > changes the `BuildJob` CRD, apply it manually from the same chart version you
+   > installed (not from the mutable `main` branch):
+   > `helm show crds oci://ghcr.io/ls1intum/charts/hades --version 0.2.0 | kubectl apply -f -`
 
 3. **Detailed Documentation**: For advanced configuration (Ingress, TLS, resource limits) and step-by-step setup, please refer to the: [Hades Helm Chart Guide](./helm/hades/Readme.md)
 
@@ -259,9 +260,9 @@ Checklist when cutting a chart release:
    app, not the chart, and does not need to follow SemVer).
 3. **CRDs are not upgraded by Helm.** Files under `helm/hades/crds/` are only
    applied on first install and never on `helm upgrade`. If a release changes
-   the `BuildJob` CRD, bump the chart version, note it in the release, and apply
-   the CRD manually on existing clusters:
-   `kubectl apply -f helm/hades/crds/build.hades.tum.de_buildjobs.yaml`.
+   the `BuildJob` CRD, bump the chart version, note it in the release, and tell
+   users to apply the CRD from the matching chart version on existing clusters:
+   `helm show crds oci://ghcr.io/ls1intum/charts/hades --version <version> | kubectl apply -f -`.
 4. **Subchart dependencies** (currently `nats`): if you change a dependency
    version in `Chart.yaml`, run `helm dependency update helm/hades` and commit
    the updated `Chart.lock`. CI vendors the subchart at package time; the
