@@ -19,7 +19,6 @@ package main
 import (
 	"flag"
 	"os"
-	"strconv"
 
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/utils"
@@ -52,8 +51,8 @@ type NSConfig struct {
 }
 
 type OperatorConfig struct {
-	DeleteOnComplete string `env:"DELETE_ON_COMPLETE" envDefault:"true"`
-	MaxParallelism   uint   `env:"MAX_PARALLELISM" envDefault:"100"`
+	DeleteOnComplete bool `env:"DELETE_ON_COMPLETE" envDefault:"true"`
+	MaxParallelism   uint `env:"MAX_PARALLELISM" envDefault:"100"`
 }
 
 func init() {
@@ -83,12 +82,16 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	var nsConfig NSConfig
-	utils.LoadConfig(&nsConfig)
+	if err := utils.LoadConfig(&nsConfig); err != nil {
+		setupLog.Error(err, "unable to load namespace configuration")
+		os.Exit(1)
+	}
 
 	var operatorConfig OperatorConfig
-	utils.LoadConfig(&operatorConfig)
-
-	delOnComplete, _ := strconv.ParseBool(operatorConfig.DeleteOnComplete)
+	if err := utils.LoadConfig(&operatorConfig); err != nil {
+		setupLog.Error(err, "unable to load operator configuration")
+		os.Exit(1)
+	}
 
 	if operatorConfig.MaxParallelism == 0 {
 		setupLog.WithValues("env", "MAX_PARALLELISM").
@@ -138,7 +141,21 @@ func main() {
 	}
 
 	var natsConfig hadesnats.ConnectionConfig
-	utils.LoadConfig(&natsConfig)
+	if err := utils.LoadConfig(&natsConfig); err != nil {
+		setupLog.Error(err, "unable to load NATS configuration")
+		os.Exit(1)
+	}
+
+	setupLog.Info("HadesOperator configuration",
+		"watch_namespace", nsConfig.WatchNamespace,
+		"cluster_wide", nsConfig.WatchNamespace == "",
+		"delete_on_complete", operatorConfig.DeleteOnComplete,
+		"max_parallelism", operatorConfig.MaxParallelism,
+		"dev_mode", enableDevMode,
+		"nats_url", natsConfig.URL,
+		"nats_tls", natsConfig.TLS,
+	)
+
 	nc, err := hadesnats.SetupDefaultNatsConnection(natsConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to setup NATS Connection")
@@ -161,7 +178,7 @@ func main() {
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
 		K8sClient:        kcs,
-		DeleteOnComplete: delOnComplete,
+		DeleteOnComplete: operatorConfig.DeleteOnComplete,
 		MaxParallelism:   operatorConfig.MaxParallelism,
 		Publisher:        publisher,
 	}).SetupWithManager(mgr); err != nil {

@@ -1,8 +1,7 @@
 ---
-version: '3.7'
 services:
   hadesScheduler:
-    image: ghcr.io/mtze/hades/hades-scheduler:{{ hades_scheduler_version }}
+    image: ghcr.io/ls1intum/hades/hades-scheduler:{{ hades_scheduler_version }}
     volumes:
       - type: bind
         source: /var/run/docker.sock
@@ -17,6 +16,6 @@ services:
       - NATS_TLS_ENABLED={{ hades_nats_tls_enabled }}
       - HADES_EXECUTOR={{ hades_executor }}
       - CONCURRENCY={{ hades_scheduler_concurrency }}
-      - HADES_DEBUG={{ hades_scheduler_debug }}
+      - DEBUG={{ hades_scheduler_debug }}
 networks:
   hades:

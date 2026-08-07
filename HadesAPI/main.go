@@ -25,24 +25,31 @@ type HadesAPIConfig struct {
 var cfg HadesAPIConfig
 
 func main() {
-	if isDebug := os.Getenv("DEBUG"); isDebug == "true" {
-		slog.SetLogLoggerLevel(slog.LevelDebug)
-		slog.Warn("DEBUG MODE ENABLED")
+	utils.SetupLogging()
+
+	if err := utils.LoadConfig(&cfg); err != nil {
+		slog.Error("Failed to load configuration", "error", err)
+		os.Exit(1)
 	}
 
-	utils.LoadConfig(&cfg)
+	slog.Info("HadesAPI configuration",
+		"api_port", cfg.APIPort,
+		"nats_url", cfg.NatsConfig.URL,
+		"nats_tls", cfg.NatsConfig.TLS,
+		"auth_enabled", cfg.AuthKey != "",
+	)
 
 	natsConn, err := hadesnats.SetupDefaultNatsConnection(cfg.NatsConfig)
 	if err != nil {
 		slog.Error("Failed to connect to NATS", "error", err)
-		return
+		os.Exit(1)
 	}
 	defer natsConn.Close()
 
 	producer, err := hadesnats.NewHadesPublisher(natsConn)
 	if err != nil {
 		slog.Error("Failed to create HadesProducer", "error", err)
-		return
+		os.Exit(1)
 	}
 
 	slog.Info("Starting HadesAPI on port", "port", cfg.APIPort)

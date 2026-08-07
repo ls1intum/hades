@@ -120,7 +120,7 @@ func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, con
 			)
 			return context.Canceled
 		}
-		return fmt.Errorf("timeout waiting for container %s: %v", containerName, err)
+		return fmt.Errorf("timeout waiting for container %s: %w", containerName, err)
 	}
 
 	slog.Debug("Container completed",

@@ -20,16 +20,16 @@ const (
 type ExecutorConfig struct {
 	// Executor is the executor to use for running the jobs (default: docker)
 	// Possible values: docker, k8s
-	Executor             string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
-	CleanupSharedVolumes bool   `env:"CLEANUP" envDefault:"false"`
+	Executor string `env:"HADES_EXECUTOR,notEmpty" envDefault:"docker"`
 }
 
 // LoadConfig loads configuration from environment variables and .env file.
 // It will log warnings if the .env file cannot be loaded, but will not fail
 // since environment variables may be provided directly.
+//
+// The config struct itself is never logged, as it may contain secrets
+// (auth keys, passwords). Callers should treat a returned error as fatal.
 func LoadConfig(cfg interface{}) error {
-	slog.Debug("Loading config", "config", cfg)
-
 	// Try to load .env file, but don't fail if it doesn't exist
 	if err := godotenv.Load(); err != nil {
 		slog.With("error", err).Warn("Error loading .env file")
@@ -41,7 +41,7 @@ func LoadConfig(cfg interface{}) error {
 		return fmt.Errorf("failed to parse environment variables: %w", err)
 	}
 
-	slog.Debug("Config loaded", "config", cfg)
+	slog.Debug("Configuration loaded")
 	return nil
 }
 

@@ -70,7 +70,7 @@ func NewDefaultScheduler() (*Scheduler, error) {
 	return scheduler, nil
 }
 
-func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
+func (d *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	var jobLogger *slog.Logger
 	var containerLogsOptions container.LogConfig
 
@@ -85,11 +85,19 @@ func (d Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 		return err
 	}
 
-	// Delete the shared volume after the job is done
+	// Delete the shared volume after the job is done. Use a fresh context with
+	// its own timeout so cleanup still runs even if the job context (ctx) has
+	// already been cancelled, e.g. during a graceful shutdown - otherwise the
+	// shared-<jobID> volume would leak.
 	defer func() {
+		// Give any auto-removing containers a moment to detach from the volume.
 		time.Sleep(500 * time.Millisecond)
-		if err := deleteSharedVolume(ctx, d.cli, volumeName); err != nil {
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := deleteSharedVolume(cleanupCtx, d.cli, volumeName); err != nil {
 			jobLogger.Error("Failed to delete shared volume", slog.Any("error", err))
+			return
 		}
 
 		jobLogger.Info("Volume deleted", slog.Any("volume", volumeName))

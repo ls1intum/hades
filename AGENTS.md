@@ -8,7 +8,7 @@ Hades is a job scheduler for containerized CI workloads (originally for programm
 
 ## Repo layout
 
-Go workspace (`go.work`, Go 1.25) with five modules:
+Go workspace (`go.work`, Go 1.26) with five modules:
 
 | Module                              | Binary / role                                                                                                                                                                       |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -54,8 +54,6 @@ The top-level `Makefile` wraps the common workflows (`make help` lists every tar
 - **CLI mode:** `make run` runs `HadesAPI`, `HadesScheduler`, and `HadesLogManager` via `go run` and auto-starts NATS in Docker.
 - **Docker mode:** `make docker-run` brings up `hadesAPI` (8081→8080), `hadesScheduler` (docker executor), and `nats` via `compose.yml`. API requests: see `bruno/api/*.bru`.
 - **K8s mode:** `helm upgrade --install hades ./helm/hades -n hades --create-namespace`. The chart deploys API, scheduler (configMode=operator), operator, and embedded NATS JetStream.
-
-`CODE_REVIEW.md` lists historical issues - several have already been fixed (graceful shutdown in API/scheduler, namespace `AlreadyExists` handling, `Kubeconfig` field exported). Re-verify against current code before acting on any item there.
 
 ## Conventions
 

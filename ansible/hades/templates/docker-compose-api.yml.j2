@@ -1,8 +1,7 @@
 ---
-version: '3.7'
 services:
   hadesAPI:
-    image: ghcr.io/mtze/hades/hades-api:{{ hades_api_version }}
+    image: ghcr.io/ls1intum/hades/hades-api:{{ hades_api_version }}
     ports:
       - "{{hades_api_port}}:8080"
     networks:
@@ -15,12 +14,12 @@ services:
       - NATS_USERNAME={{ hades_nats_username }}
       - NATS_PASSWORD={{ hades_nats_password }}
       - NATS_TLS_ENABLED={{ hades_nats_tls_enabled }}
-      - HADES_DEBUG={{ hades_api_debug }}
-      - AUTH_KEY
+      - DEBUG={{ hades_api_debug }}
+      - AUTH_KEY={{ hades_api_auth_key | default('') }}
 
 
   nats:
-    image: nats:latest
+    image: nats:2.11.4
     command: ["-js", "-m", "8222"]
     ports:
       - "4222:4222"

@@ -24,6 +24,9 @@ permissions:
   packages: write
   actions: write
 
+env:
+  TRAEFIK_IMAGE_TAG: v3.6
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -171,6 +174,79 @@ jobs:
           {
             echo "ENVIRONMENT=hades-test"
             echo "IMAGE_TAG=v3.6"
+            echo "HARICA_ACME_CA_SERVER=${{ secrets.HARICA_ACME_CA_SERVER }}"
+            echo "HARICA_ACME_EAB_KID=${{ secrets.HARICA_ACME_EAB_KID }}"
+            echo "HARICA_ACME_EAB_HMAC=${{ secrets.HARICA_ACME_EAB_HMAC }}"
+          } > .env
+
+      - name: Copy Traefik files to VM
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          proxy_host: ${{ vars.DEPLOYMENT_GATEWAY_HOST }}
+          proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
+          proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
+          proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
+          timeout: 2m
+          source: "docker-compose.yml,.env"
+          target: /opt/traefik
+          strip_components: 0
+
+      - name: Bring up Traefik
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          proxy_host: ${{ vars.DEPLOYMENT_GATEWAY_HOST }}
+          proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
+          proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
+          proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
+          script: |
+            set -e
+            BASE_PATH="/opt/traefik"
+            if [ ! -f "$BASE_PATH/acme.json" ]; then
+              touch "$BASE_PATH/acme.json"
+            fi
+            chmod 600 "$BASE_PATH/acme.json"
+            docker compose -f "$BASE_PATH/docker-compose.yml" --env-file="$BASE_PATH/.env" up --pull=always -d
+
+      - name: Checkout shared Traefik configuration
+        uses: actions/checkout@v6
+        with:
+          repository: ls1intum/.github
+          path: .github-shared
+
+      - name: Tear down existing Traefik (if present)
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ vars.VM_HOST }}
+          username: ${{ vars.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          proxy_host: ${{ vars.DEPLOYMENT_GATEWAY_HOST }}
+          proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
+          proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
+          proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
+          script: |
+            set -e
+            BASE_PATH="/opt/traefik"
+            COMPOSE_FILE="$BASE_PATH/docker-compose.yml"
+            if [ -f "$COMPOSE_FILE" ]; then
+              echo "$COMPOSE_FILE found."
+              docker compose -f "$COMPOSE_FILE" --env-file="$BASE_PATH/.env" down --remove-orphans --rmi all
+            else
+              echo "$COMPOSE_FILE does not exist. Skipping docker compose down."
+            fi
+
+      - name: Prepare Traefik compose and env files
+        shell: bash
+        run: |
+          cp .github-shared/traefik/docker-compose.yml docker-compose.yml
+          {
+            echo "ENVIRONMENT=hades-test"
+            echo "IMAGE_TAG=${TRAEFIK_IMAGE_TAG}"
             echo "HARICA_ACME_CA_SERVER=${{ secrets.HARICA_ACME_CA_SERVER }}"
             echo "HARICA_ACME_EAB_KID=${{ secrets.HARICA_ACME_EAB_KID }}"
             echo "HARICA_ACME_EAB_HMAC=${{ secrets.HARICA_ACME_EAB_HMAC }}"

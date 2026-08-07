@@ -24,7 +24,10 @@ FROM gcr.io/distroless/static-debian12
 WORKDIR /app
 
 # Copy the built binary from the builder container into the minimal runtime container
-COPY --from=builder /app/HadesLogManager/hades-log-manager . 
+COPY --from=builder /app/HadesLogManager/hades-log-manager .
+
+# Run as a non-root user
+USER 65532:65532
 
 # Run your Go application
 CMD ["/app/hades-log-manager"]

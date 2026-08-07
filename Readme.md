@@ -97,7 +97,7 @@ For production deployments, Hades is designed to run natively within a Kubernete
    - A Kubernetes cluster (v1.25+)
    - [Helm](https://helm.sh/docs/intro/install/) (v3.12+) installed locally.
 
-2. **Deployment**: We provide a comprehensive Helm Chart that packages the API, Scheduler, and NATS broker. The scheduler uses a `ServiceAccount` to manage job lifecycles within the cluster.
+2. **Deployment**: We provide a comprehensive Helm Chart that packages the API, Scheduler, Operator, and NATS broker. By default the scheduler runs in `operator` mode, delegating job lifecycle management to the HadesOperator via `BuildJob` custom resources.
    
    ```fish
    # Quick install
@@ -199,7 +199,7 @@ A top-level [`Makefile`](./Makefile) wraps the most common development tasks. Ru
 | `make helm-deps` | Refresh the Helm chart subchart lock file. |
 | `make ci` | Mirror the CI run locally (`lint` + `test`). |
 
-Tests live alongside the code in each module, and CI (`.github/workflows/ci.yml`) currently runs the `shared` and `HadesAPI` suites on every push and pull request.
+Tests live alongside the code in each module, and CI (`.github/workflows/ci.yml`) runs the `shared`, `HadesAPI`, `HadesScheduler`, `HadesLogManager`, and `HadesOperator` suites (a build matrix) on every push and pull request.
 The HadesOperator e2e target requires [Kind](https://kind.sigs.k8s.io/) to be installed locally.
 
 ## Deployment

@@ -58,6 +58,14 @@ const (
 	LabelPriority  = "hades.tum.de/priority"
 )
 
+// ManagedByValue is the value of the LabelManagedBy label applied to Jobs the
+// operator owns.
+const ManagedByValue = "hades-operator"
+
+// phasePending is the BuildJob status phase for a job that has been created but
+// not yet started. Other phases reuse the buildstatus.Status* constants.
+const phasePending = "Pending"
+
 // BuildJobReconciler reconciles a BuildJob object
 type BuildJobReconciler struct {
 	client.Client
@@ -316,12 +324,12 @@ func (r *BuildJobReconciler) setStatusPending(ctx context.Context, nn types.Name
 		if latest.DeletionTimestamp != nil {
 			return nil
 		}
-		if latest.Status.Phase == "Pending" {
+		if latest.Status.Phase == phasePending {
 			return nil
 		}
 		base := latest.DeepCopy()
 		now := metav1.Now()
-		latest.Status.Phase = "Pending"
+		latest.Status.Phase = phasePending
 		latest.Status.Message = msg
 		if latest.Status.StartTime == nil {
 			latest.Status.StartTime = &now
@@ -389,7 +397,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 		}
 
 		// If requests are not set, but limits are, set requests = limits
-		if (c.Resources.Requests == nil || len(c.Resources.Requests) == 0) && len(c.Resources.Limits) > 0 {
+		if len(c.Resources.Requests) == 0 && len(c.Resources.Limits) > 0 {
 			c.Resources.Requests = corev1.ResourceList{}
 			for k, v := range c.Resources.Limits {
 				c.Resources.Requests[k] = v
@@ -428,7 +436,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 	}
 
 	labels := map[string]string{
-		LabelManagedBy: "hades-operator",
+		LabelManagedBy: ManagedByValue,
 		LabelBuildJob:  bj.Name,
 	}
 
@@ -488,34 +496,18 @@ func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string)
 	return false, false, ""
 }
 
-func jobDone(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string) {
-	for _, c := range k8sJob.Status.Conditions {
-		switch c.Type {
-		case batchv1.JobComplete:
-			if c.Status == corev1.ConditionTrue {
-				return true, true, c.Message
-			}
-		case batchv1.JobFailed:
-			if c.Status == corev1.ConditionTrue {
-				return true, false, c.Message
-			}
-		}
-	}
-	return false, false, ""
-}
-
 // countActiveJobs counts the number of non-completed, non-suspended Jobs in the given namespace.
 func (r *BuildJobReconciler) countActiveJobs(ctx context.Context, namespace string) (uint, error) {
 	var jl batchv1.JobList
 	if err := r.List(ctx, &jl,
 		client.InNamespace(namespace),
-		client.MatchingLabels{"hades.tum.de/managed-by": "hades-operator"},
+		client.MatchingLabels{LabelManagedBy: ManagedByValue},
 	); err != nil {
 		return 0, err
 	}
 	active := 0
 	for _, j := range jl.Items {
-		done, _, _ := jobDone(&j)
+		done, _, _ := jobFinished(&j)
 		if done {
 			continue
 		}
@@ -532,7 +524,7 @@ func (r *BuildJobReconciler) admitOneSuspendedJob(ctx context.Context, namespace
 	var jl batchv1.JobList
 	if err := r.List(ctx, &jl,
 		client.InNamespace(namespace),
-		client.MatchingLabels{LabelManagedBy: "hades-operator"},
+		client.MatchingLabels{LabelManagedBy: ManagedByValue},
 	); err != nil {
 		return err
 	}
@@ -558,7 +550,7 @@ func (r *BuildJobReconciler) pickBestSuspendedJob(ctx context.Context, jobs []ba
 	for i := range jobs {
 		j := &jobs[i]
 
-		done, _, _ := jobDone(j)
+		done, _, _ := jobFinished(j)
 		if done || j.Spec.Suspend == nil || !*j.Spec.Suspend {
 			continue
 		}

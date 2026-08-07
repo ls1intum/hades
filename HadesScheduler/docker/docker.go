@@ -3,6 +3,7 @@ package docker
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	image_types "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/buildlogs"
@@ -77,11 +79,17 @@ func pullImages(ctx context.Context, client *client.Client, images ...string) er
 
 			response, err := client.ImagePull(ctx, img, image_types.PullOptions{})
 			if err != nil {
-				errorsCh <- fmt.Errorf("failed to pull image %s: %v", img, err)
+				errorsCh <- fmt.Errorf("failed to pull image %s: %w", img, err)
 				return
 			}
 			defer response.Close()
-			io.Copy(io.Discard, response) // consume the response to prevent potential leaks
+			// Decode the pull response stream to completion so that errors the
+			// daemon reports in-band (auth failures, missing manifests, ...) are
+			// surfaced - not just transport errors returned by ImagePull itself.
+			// A plain io.Copy would drain the bytes but ignore those JSON records.
+			if err := jsonmessage.DisplayJSONMessagesStream(response, io.Discard, 0, false, nil); err != nil {
+				errorsCh <- fmt.Errorf("failed to pull image %s: %w", img, err)
+			}
 		}(image)
 	}
 
@@ -89,14 +97,14 @@ func pullImages(ctx context.Context, client *client.Client, images ...string) er
 	wg.Wait()
 	close(errorsCh)
 
-	// Collect errors
-	var errors []error
+	// Collect errors, keeping them wrapped so callers can still use errors.Is/As.
+	var pullErrs []error
 	for err := range errorsCh {
-		errors = append(errors, err)
+		pullErrs = append(pullErrs, err)
 	}
 
-	if len(errors) > 0 {
-		return fmt.Errorf("encountered %d errors while pulling images: %+v", len(errors), errors)
+	if len(pullErrs) > 0 {
+		return fmt.Errorf("encountered %d errors while pulling images: %w", len(pullErrs), errors.Join(pullErrs...))
 	}
 
 	return nil

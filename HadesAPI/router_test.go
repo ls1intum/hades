@@ -233,7 +233,7 @@ func (suite *APISuite) TestInvalidJSON() {
 	suite.router.ServeHTTP(w, req)
 
 	assert.Equal(suite.T(), 400, w.Code)
-	assert.Equal(suite.T(), "Failed to bind JSON", w.Body.String())
+	assert.Equal(suite.T(), `Invalid request payload: "name" is required`, w.Body.String())
 }
 
 func TestAPISuite(t *testing.T) {

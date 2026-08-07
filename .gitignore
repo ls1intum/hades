@@ -22,9 +22,6 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
-
 ### macOS ###
 # General
 .DS_Store
@@ -77,4 +74,3 @@ Temporary Items
 .history
 .ionide
 .claude/settings.local.json
-CODE_REVIEW.md

@@ -16,6 +16,10 @@ import (
 
 const (
 	httpClientTimeout = 10 * time.Second
+	// defaultRetention is used when LOG_RETENTION is unset or non-positive. A
+	// non-positive retention would otherwise make completed jobs eligible for
+	// flushing immediately.
+	defaultRetention = time.Hour
 )
 
 // NATSLogAggregator implements LogAggregator using in-memory storage for fast log retrieval.
@@ -54,6 +58,14 @@ type AggregatorConfig struct {
 // Returns:
 //   - LogAggregator: A new instance ready to aggregate logs
 func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) buildlogs.LogAggregator {
+	// Normalize retention once so every downstream use (cleanup cadence and the
+	// expiry comparison) works from a single, guaranteed-positive value.
+	if config.Retention <= 0 {
+		slog.Warn("Non-positive LOG_RETENTION; falling back to default",
+			"configured", config.Retention, "default", defaultRetention)
+		config.Retention = defaultRetention
+	}
+
 	la := &NATSLogAggregator{
 		hlc: hlc,
 		cfg: config,
@@ -65,9 +77,15 @@ func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, conf
 	return la
 }
 
-// cleanupLoop runs periodic cleanup of completed jobs
+// cleanupLoop runs periodic cleanup of completed jobs. It ticks at the
+// configured retention interval (floored at one minute) so that completed jobs
+// are flushed within roughly one retention period of expiring.
 func (la *NATSLogAggregator) cleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(time.Hour)
+	interval := la.cfg.Retention
+	if interval < time.Minute {
+		interval = time.Minute
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -188,9 +206,17 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 }
 
 // SendJobLogs retrieves all stored logs for jobID, marshals them to JSON, and
-// sends them via an HTTP POST to the configured APIendpoint. It returns an error
-// if marshalling, request creation, or the HTTP call itself fails.
-func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
+// sends them via an HTTP POST to the configured APIendpoint. The request is
+// bound to ctx so it is cancelled on shutdown. It returns an error if
+// marshalling, request creation, the HTTP call, or a non-2xx response occurs.
+//
+// If no APIendpoint is configured, the call is a no-op.
+func (la *NATSLogAggregator) SendJobLogs(ctx context.Context, jobID string) error {
+	if la.cfg.APIendpoint == "" {
+		slog.Debug("No log adapter endpoint configured, skipping log forwarding", "job_id", jobID)
+		return nil
+	}
+
 	logs := la.GetJobLogs(jobID)
 
 	jsonData, err := json.Marshal(logs)
@@ -199,7 +225,7 @@ func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
 	}
 	slog.Debug("Marshaled logs to JSON", "job_id", jobID)
 
-	req, err := http.NewRequest("POST", la.cfg.APIendpoint, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, la.cfg.APIendpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -207,12 +233,15 @@ func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: httpClientTimeout}
 	resp, err := client.Do(req)
-
 	if err != nil {
 		return fmt.Errorf("sending HTTP request: %w", err)
 	}
-
 	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("log adapter returned non-success status %s for job %s", resp.Status, jobID)
+	}
+
 	slog.Info("Sent job logs to adapter", "job_id", jobID, "status", resp.Status)
 	return nil
 }
@@ -227,8 +256,6 @@ func (la *NATSLogAggregator) SendJobLogs(jobID string) error {
 //
 // Returns:
 //   - []buildlogs.Log: All logs of each container for the specified job, or empty slice if not found
-//
-// func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 func (la *NATSLogAggregator) GetJobLogs(jobID string) []buildlogs.Log {
 	value, exists := la.logs.Load(jobID)
 	if !exists {

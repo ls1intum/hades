@@ -5,6 +5,8 @@ SHELL := /usr/bin/env bash
 GO_MODULES := HadesAPI HadesScheduler HadesScheduler/HadesOperator HadesLogManager shared
 GO_PATHS   := $(addsuffix /...,$(addprefix ./,$(GO_MODULES)))
 
+GOLANGCI_LINT_VERSION ?= v2.1.0
+
 COMPOSE      ?= docker compose
 COMPOSE_FILE ?= compose.yml
 
@@ -104,8 +106,18 @@ fmt: ## Format all Go code.
 	gofmt -s -w $(GO_MODULES)
 
 .PHONY: lint
-lint: ## Run go vet across all Go modules.
+lint: ## Run go vet and golangci-lint across all Go modules.
 	go vet $(GO_PATHS)
+	@GOLANGCI_LINT=$$(command -v golangci-lint || echo "$$(go env GOPATH)/bin/golangci-lint"); \
+	if ! [ -x "$$GOLANGCI_LINT" ]; then \
+		echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION); \
+		GOLANGCI_LINT="$$(go env GOPATH)/bin/golangci-lint"; \
+	fi; \
+	for m in $(GO_MODULES); do \
+		echo "==> golangci-lint $$m"; \
+		(cd $$m && "$$GOLANGCI_LINT" run --config $(CURDIR)/.golangci.yml ./...); \
+	done
 
 .PHONY: vuln
 vuln: ## Run govulncheck across all Go modules.

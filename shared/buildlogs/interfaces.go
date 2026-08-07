@@ -12,7 +12,7 @@ type LogAggregator interface {
 	FlushJob(jobID string) error
 	GetJobLogs(jobID string) []Log
 	GetAllJobs() []string
-	SendJobLogs(jobID string) error
+	SendJobLogs(ctx context.Context, jobID string) error
 	MarkJobCompleted(jobID string)
 	UpdateJobStatus(jobID string, status buildstatus.JobStatus)
 	GetJobStatus(jobID string) (buildstatus.JobStatus, error)

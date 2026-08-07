@@ -56,8 +56,10 @@ func NewK8sScheduler(nc *nats.Conn) (*Scheduler, error) {
 	slog.Debug("Initializing Kubernetes scheduler")
 
 	var k8sCfg K8sConfig
-	utils.LoadConfig(&k8sCfg)
-	slog.Debug("Kubernetes config", "config", k8sCfg)
+	if err := utils.LoadConfig(&k8sCfg); err != nil {
+		return nil, fmt.Errorf("loading Kubernetes config: %w", err)
+	}
+	slog.Debug("Kubernetes config", "config_mode", k8sCfg.ConfigMode, "namespace", k8sCfg.K8sNamespace)
 
 	slog.Info("Initializing Kubernetes client")
 	scheduler, err := initializeClusterAccess(k8sCfg)
@@ -105,7 +107,9 @@ func initializeKubeconfigAccess(k8sCfg K8sConfig) (Scheduler, error) {
 	slog.Info("Using kubeconfig for Kubernetes access")
 
 	var k8sConfigKub K8sConfigKubeconfig
-	utils.LoadConfig(&k8sConfigKub)
+	if err := utils.LoadConfig(&k8sConfigKub); err != nil {
+		return Scheduler{}, fmt.Errorf("loading kubeconfig config: %w", err)
+	}
 
 	clientset, err := initializeKubeconfig(k8sConfigKub)
 	if err != nil {
@@ -123,7 +127,9 @@ func initializeServiceAccountAccess(k8sCfg K8sConfig) (Scheduler, error) {
 	slog.Info("Using service account for Kubernetes access")
 
 	var k8sConfigSvc K8sConfigServiceaccount
-	utils.LoadConfig(&k8sConfigSvc)
+	if err := utils.LoadConfig(&k8sConfigSvc); err != nil {
+		return Scheduler{}, fmt.Errorf("loading service account config: %w", err)
+	}
 
 	clientset := initializeInCluster()
 	if clientset == nil {
@@ -195,7 +201,9 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 	}
 
 	var gvrCfg BuildJobGVRConfig
-	utils.LoadConfig(&gvrCfg)
+	if err := utils.LoadConfig(&gvrCfg); err != nil {
+		return fmt.Errorf("loading BuildJob GVR config: %w", err)
+	}
 	buildJobGVR := gvrCfg.ToGVR()
 
 	labels := map[string]interface{}{
