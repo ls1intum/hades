@@ -40,7 +40,7 @@ A user submits a multi-step job to the **API**, which enqueues it on **NATS JetS
 - **NATS (JetStream)** - The message broker that decouples job submission from execution, enabling reliable async processing and back-pressure.
 - **Scheduler** - Consumes events from NATS and dispatches jobs to the configured executor backend.
 - **Hades Operator** - A Kubernetes controller that reconciles `BuildJob` custom resources into Kubernetes `Job`s (production execution path).
-- **Log Manager** - Subscribes to job status and log events on NATS and exposes aggregated per-job logs over an HTTP API. Local-development aid.
+- **Log Manager** - Subscribes to job status and log events on NATS and exposes aggregated per-job logs over an HTTP API. Deployed by the Helm chart and also runnable locally with `make run`.
 
 ### Executor Backends
 

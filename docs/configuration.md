@@ -79,7 +79,7 @@ Plus the [NATS](#nats-connection-all-components) variables (the operator publish
 
 ## HadesLogManager
 
-Local-development component (not part of the Helm deployment).
+Deployed by the Helm chart (`hades-log-manager`); also run locally via `make run`.
 
 | Variable | Default | Description | Source |
 | -------- | ------- | ----------- | ------ |

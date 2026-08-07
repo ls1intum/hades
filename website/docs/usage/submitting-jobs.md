@@ -104,5 +104,5 @@ curl http://localhost:8081/jobs/<id>/logs
 ```
 
 :::note
-The Log Manager is a local-development aid and is not part of the production Helm deployment. See the [API Reference](../reference/api) for the interactive Log Manager OpenAPI spec.
+The Log Manager is deployed by the Helm chart (`hades-log-manager`) and can also be run locally with `make run`. See the [API Reference](../reference/api) for the interactive Log Manager OpenAPI spec.
 :::

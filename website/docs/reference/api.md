@@ -32,4 +32,4 @@ See [Submitting Jobs](../usage/submitting-jobs) for the payload schema and examp
 | `GET` | `/jobs/{jobId}/logs` | Aggregated log entries. |
 | `GET` | `/health` | Liveness probe. |
 
-The Log Manager is a local-development aid and is not part of the production Helm deployment.
+The Log Manager is deployed by the Helm chart (`hades-log-manager`) and can also be run locally with `make run`.

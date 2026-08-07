@@ -5,7 +5,7 @@ Hades exposes two small HTTP services. This page is the human-readable reference
 | Service | Default address | Purpose |
 | ------- | --------------- | ------- |
 | **HadesAPI** | `http://localhost:8080` | Submit jobs; health check. |
-| **HadesLogManager** | `http://localhost:8081` | Inspect aggregated build logs and status (local development only). |
+| **HadesLogManager** | `http://localhost:8081` | Inspect aggregated build logs and status. |
 
 ---
 
@@ -123,7 +123,7 @@ Steps of a job share a per-job volume, so a file written by one step is visible 
 
 ## Interactive OpenAPI spec
 
-Each service serves a Swagger UI **only when `DEBUG=true`** (the spec is never exposed in production):
+HadesLogManager serves an interactive Swagger UI **only when `DEBUG=true`** (the spec is never exposed in production):
 
 - HadesAPI: `http://localhost:8080/swagger/index.html`
 - HadesLogManager: `http://localhost:8081/swagger/index.html`

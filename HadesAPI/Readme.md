@@ -17,11 +17,12 @@ It does **not** run jobs itself and holds no state.
 | `GET` | `/ping` | none | Liveness probe (`{"status":"ok","timestamp":...}`). |
 | `POST` | `/build` | Basic (when `AUTH_KEY` set) | Validate and enqueue a job. Returns the assigned `job_id`. |
 
-The full request/response contract and the job payload schema are in [docs/api.md](../docs/api.md). When started with `DEBUG=true`, an interactive Swagger UI is served at `/swagger/index.html` (spec in [`docs/`](docs)).
+The full request/response contract and the job payload schema are in [docs/api.md](../docs/api.md) and the [published API reference](https://ls1intum.github.io/hades/docs/reference/api).
 
 ### Example
 
 ```bash
+# When AUTH_KEY is set, add:  -u "hades:$AUTH_KEY"
 curl -X POST -H "Content-Type: application/json" \
   -d '{"name":"Example","steps":[{"id":1,"name":"hi","image":"alpine:latest","script":"echo hello"}]}' \
   http://localhost:8080/build

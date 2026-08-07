@@ -82,7 +82,7 @@ The operator also accepts standard controller-runtime flags: `--health-probe-bin
 
 ## HadesLogManager
 
-Local-development component (not part of the Helm deployment).
+Deployed by the Helm chart (`hades-log-manager`); also run locally via `make run`.
 
 | Variable | Default | Description |
 | -------- | ------- | ----------- |

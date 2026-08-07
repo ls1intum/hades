@@ -1,7 +1,8 @@
 // Package k8s implements the Kubernetes executor. Depending on K8S_CONFIG_MODE
 // it either creates a BuildJob custom resource for the HadesOperator to
-// reconcile (mode "operator", the production default) or builds a batch Job
-// directly (legacy modes "serviceaccount" and "kubeconfig").
+// reconcile (mode "operator") or builds a batch Job directly (legacy modes
+// "serviceaccount" and "kubeconfig"). The in-code default is "kubeconfig" (see
+// K8sConfig), but every Hades deployment (Helm, .env.example) sets "operator".
 package k8s
 
 import (

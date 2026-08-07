@@ -6,7 +6,7 @@ HadesScheduler consumes queued jobs from NATS JetStream and executes each job's 
 
 The scheduler subscribes to the priority-bucketed job subjects (`hades.jobs.{high,medium,low}`), pulls jobs up to `CONCURRENCY` at a time, and dispatches each to an **executor** chosen by the `HADES_EXECUTOR` environment variable.
 
-```
+```text
 NATS (hades.jobs.*) ──► HadesScheduler ──► executor ──► containers (one per step)
 ```
 
