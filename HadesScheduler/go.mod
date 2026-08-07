@@ -6,7 +6,7 @@ replace github.com/ls1intum/hades/shared => ../shared
 
 require (
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/ls1intum/hades/shared v0.0.0-20260731094431-f95c1b4a6d91
+	github.com/ls1intum/hades/shared v0.0.0-20260807151514-bf83e84106cc
 	github.com/nats-io/nats.go v1.52.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
