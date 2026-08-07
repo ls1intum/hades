@@ -100,11 +100,23 @@ For production deployments, Hades is designed to run natively within a Kubernete
 2. **Deployment**: We provide a comprehensive Helm Chart that packages the API, Scheduler, Operator, and NATS broker. By default the scheduler runs in `operator` mode, delegating job lifecycle management to the HadesOperator via `BuildJob` custom resources.
    
    ```fish
-   # Quick install
+   # Install from the published Helm repository (recommended)
+   helm repo add hades https://ls1intum.github.io/hades
+   helm repo update
+   helm upgrade --install hades hades/hades -n hades --create-namespace
+   ```
+
+   Or install from a local checkout of this repository:
+
+   ```fish
    helm repo add nats https://nats-io.github.io/k8s/helm/charts
    helm dependency build ./helm/hades/
    helm upgrade --install hades ./helm/hades -n hades --create-namespace
    ```
+
+   > **Note:** Helm does not upgrade CRDs after the first install. When a release
+   > changes the `BuildJob` CRD, apply it manually:
+   > `kubectl apply -f https://raw.githubusercontent.com/ls1intum/hades/main/helm/hades/crds/build.hades.tum.de_buildjobs.yaml`
 
 3. **Detailed Documentation**: For advanced configuration (Ingress, TLS, resource limits) and step-by-step setup, please refer to the: [Hades Helm Chart Guide](./helm/hades/Readme.md)
 

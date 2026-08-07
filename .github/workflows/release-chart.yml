@@ -1,0 +1,52 @@
+name: Release Helm Chart
+
+# Packages the Helm chart, publishes it as a GitHub Release, and updates the
+# Helm repository index on the gh-pages branch. A new release is cut only when
+# helm/hades/Chart.yaml's `version` changes.
+#
+# One-time setup (repo admin): enable GitHub Pages with the source set to the
+# `gh-pages` branch (Settings -> Pages). The chart is then installable via:
+#   helm repo add hades https://ls1intum.github.io/hades
+#   helm install hades hades/hades -n hades --create-namespace
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "helm/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write # create releases and push to gh-pages
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      # chart-releaser packages with `helm package`, which needs the subchart
+      # (nats) vendored into charts/. Add the repo and build the dependency.
+      - name: Vendor chart dependencies
+        run: |
+          helm repo add nats https://nats-io.github.io/k8s/helm/charts/
+          helm dependency build helm/hades
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.7.0
+        with:
+          charts_dir: helm
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
