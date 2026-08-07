@@ -89,6 +89,10 @@ ui-dev: ## Run the dashboard SPA dev server (proxies /api to localhost:8080).
 ui-test: ## Run the dashboard SPA tests.
 	cd HadesAPI/web && npm ci && npm test
 
+.PHONY: ui-e2e
+ui-e2e: ## Run the dashboard Playwright e2e suite (boots NATS + API via docker).
+	cd HadesAPI/web && npm ci && npx playwright install chromium && npm run test:e2e
+
 .PHONY: docker-build
 docker-build: ## Build all Hades container images.
 	docker build -t hades-api:dev      -f HadesAPI/Dockerfile .

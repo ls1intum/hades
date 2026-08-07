@@ -37,9 +37,30 @@ stage automatically).
 ## Test / typecheck
 
 ```fish
-make ui-test    # vitest
+make ui-test    # vitest (component/unit tests)
 npm run lint    # tsc --noEmit
 ```
+
+## End-to-end tests (Playwright)
+
+`e2e/` contains a Playwright suite that exercises the **whole stack** in a real
+browser: `e2e/serve.sh` boots a NATS container and `HadesAPI` (with the dashboard
+enabled and the SPA embedded), and the specs cover login/logout, the jobs list,
+job detail with secret redaction, live SSE updates, the logs graceful-degradation
+path, and the metrics overview.
+
+```fish
+make ui-e2e                       # installs the browser, boots the stack, runs the suite
+# or, from HadesAPI/web:
+npx playwright install chromium
+npm run test:e2e                  # headless
+npm run test:e2e:ui               # interactive UI mode
+```
+
+Requirements: Docker (for the NATS container), Go, and Node. The suite uses a
+fixed test login (`admin` / `test-password`); the API is started on port `8099`
+and NATS on `4223` so it does not collide with a local dev stack. It runs in CI
+via `.github/workflows/e2e.yml`.
 
 ## Layout
 
