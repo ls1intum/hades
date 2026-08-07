@@ -6,11 +6,15 @@ on:
       - main
     paths-ignore:
       - "**.md"
+      # Chart-only changes are handled by release-chart.yml; don't also run the
+      # full build/test/deploy pipeline here (one trigger per target).
+      - "helm/**"
   pull_request:
     branches:
       - main
     paths-ignore:
       - "**.md"
+      - "helm/**"
   release:
     types: [released, prereleased]
   workflow_dispatch:

@@ -242,6 +242,39 @@ For production deployments in a VM:
 Hades includes Ansible playbooks for automated deployment.
 See the `ansible/hades/README.md` file for more details.
 
+### Releasing the Helm Chart
+
+The chart is published to GHCR as an OCI artifact by
+`.github/workflows/release-chart.yml`. It runs on pushes to `main` that touch
+`helm/**` (or via `workflow_dispatch`) and publishes to
+`oci://ghcr.io/ls1intum/charts/hades`.
+
+Checklist when cutting a chart release:
+
+1. **Bump `version` in `helm/hades/Chart.yaml`** (SemVer). This is the single
+   source of truth: the workflow **only publishes when the version does not
+   already exist** in GHCR, so a change to `helm/**` without a version bump is a
+   no-op. Never re-tag an already-published version - always bump.
+2. **Update `appVersion`** if the deployed application changed (it tracks the
+   app, not the chart, and does not need to follow SemVer).
+3. **CRDs are not upgraded by Helm.** Files under `helm/hades/crds/` are only
+   applied on first install and never on `helm upgrade`. If a release changes
+   the `BuildJob` CRD, bump the chart version, note it in the release, and apply
+   the CRD manually on existing clusters:
+   `kubectl apply -f helm/hades/crds/build.hades.tum.de_buildjobs.yaml`.
+4. **Subchart dependencies** (currently `nats`): if you change a dependency
+   version in `Chart.yaml`, run `helm dependency update helm/hades` and commit
+   the updated `Chart.lock`. CI vendors the subchart at package time; the
+   `charts/` directory itself is not committed.
+5. **Validate before merging**: `helm lint helm/hades`,
+   `helm template helm/hades`, and ideally a throwaway
+   `helm install` in a scratch namespace.
+6. **Package visibility**: the GHCR chart package must be **public** for
+   anonymous `helm install` (same as the container images). Set once in the org
+   Packages settings after the first publish.
+7. **Keep the install snippet in sync**: update the `--version` in the
+   Kubernetes install instructions above when you cut a new version.
+
 ## Dependency Management
 
 Hades uses [Renovate](https://docs.renovatebot.com/) (configured in `renovate.json`) to open automated PRs for dependency updates across Go modules, Helm charts, Docker base images, and GitHub Actions.
