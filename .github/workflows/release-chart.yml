@@ -1,0 +1,78 @@
+name: Release Helm Chart
+
+# Validates the Helm chart on pull requests, and on pushes to main publishes it
+# to GHCR as an OCI artifact (alongside the Docker images). A new version is
+# published only when helm/hades/Chart.yaml's `version` changes. Install with:
+#   helm install hades oci://ghcr.io/ls1intum/charts/hades --version <version> \
+#     -n hades --create-namespace
+#
+# The chart lives in GHCR, so this does not touch GitHub Pages (used for docs).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "helm/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "helm/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs on chart pull requests so a broken chart can't be published on merge.
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint and template
+        run: |
+          helm repo add nats https://nats-io.github.io/k8s/helm/charts/
+          helm dependency build helm/hades
+          helm lint helm/hades
+          helm template hades helm/hades > /dev/null
+
+  # Publishes only on pushes to main (and manual dispatch), never on PRs.
+  release:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push the chart to GHCR
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Package and push chart
+        run: |
+          set -euo pipefail
+          version=$(helm show chart helm/hades | awk '/^version:/{print $2}')
+
+          # Skip if this version is already published so unrelated helm/**
+          # changes don't overwrite a released chart.
+          if helm show chart "oci://ghcr.io/ls1intum/charts/hades" --version "$version" >/dev/null 2>&1; then
+            echo "hades $version is already published to GHCR; nothing to do."
+            exit 0
+          fi
+
+          helm repo add nats https://nats-io.github.io/k8s/helm/charts/
+          helm dependency build helm/hades
+          helm package helm/hades --destination dist
+          helm push "dist/hades-${version}.tgz" "oci://ghcr.io/ls1intum/charts"

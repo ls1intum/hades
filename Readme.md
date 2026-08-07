@@ -100,11 +100,23 @@ For production deployments, Hades is designed to run natively within a Kubernete
 2. **Deployment**: We provide a comprehensive Helm Chart that packages the API, Scheduler, Operator, and NATS broker. By default the scheduler runs in `operator` mode, delegating job lifecycle management to the HadesOperator via `BuildJob` custom resources.
    
    ```fish
-   # Quick install
+   # Install the published chart from GHCR (recommended)
+   helm upgrade --install hades oci://ghcr.io/ls1intum/charts/hades \
+     --version 0.2.0 -n hades --create-namespace
+   ```
+
+   Or install from a local checkout of this repository:
+
+   ```fish
    helm repo add nats https://nats-io.github.io/k8s/helm/charts
    helm dependency build ./helm/hades/
    helm upgrade --install hades ./helm/hades -n hades --create-namespace
    ```
+
+   > **Note:** Helm does not upgrade CRDs after the first install. When a release
+   > changes the `BuildJob` CRD, apply it manually from the same chart version you
+   > installed (not from the mutable `main` branch):
+   > `helm show crds oci://ghcr.io/ls1intum/charts/hades --version 0.2.0 | kubectl apply -f -`
 
 3. **Detailed Documentation**: For advanced configuration (Ingress, TLS, resource limits) and step-by-step setup, please refer to the: [Hades Helm Chart Guide](./helm/hades/Readme.md)
 
@@ -230,6 +242,39 @@ For production deployments in a VM:
 
 Hades includes Ansible playbooks for automated deployment.
 See the `ansible/hades/README.md` file for more details.
+
+### Releasing the Helm Chart
+
+The chart is published to GHCR as an OCI artifact by
+`.github/workflows/release-chart.yml`. It runs on pushes to `main` that touch
+`helm/**` (or via `workflow_dispatch`) and publishes to
+`oci://ghcr.io/ls1intum/charts/hades`.
+
+Checklist when cutting a chart release:
+
+1. **Bump `version` in `helm/hades/Chart.yaml`** (SemVer). This is the single
+   source of truth: the workflow **only publishes when the version does not
+   already exist** in GHCR, so a change to `helm/**` without a version bump is a
+   no-op. Never re-tag an already-published version - always bump.
+2. **Update `appVersion`** if the deployed application changed (it tracks the
+   app, not the chart, and does not need to follow SemVer).
+3. **CRDs are not upgraded by Helm.** Files under `helm/hades/crds/` are only
+   applied on first install and never on `helm upgrade`. If a release changes
+   the `BuildJob` CRD, bump the chart version, note it in the release, and tell
+   users to apply the CRD from the matching chart version on existing clusters:
+   `helm show crds oci://ghcr.io/ls1intum/charts/hades --version <version> | kubectl apply -f -`.
+4. **Subchart dependencies** (currently `nats`): if you change a dependency
+   version in `Chart.yaml`, run `helm dependency update helm/hades` and commit
+   the updated `Chart.lock`. CI vendors the subchart at package time; the
+   `charts/` directory itself is not committed.
+5. **Validate before merging**: `helm lint helm/hades`,
+   `helm template helm/hades`, and ideally a throwaway
+   `helm install` in a scratch namespace.
+6. **Package visibility**: the GHCR chart package must be **public** for
+   anonymous `helm install` (same as the container images). Set once in the org
+   Packages settings after the first publish.
+7. **Keep the install snippet in sync**: update the `--version` in the
+   Kubernetes install instructions above when you cut a new version.
 
 ## Dependency Management
 
