@@ -1,0 +1,60 @@
+name: Verify OpenAPI specs up-to-date
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [ "**" ]
+    paths:
+      - 'HadesAPI/**/*.go'
+      - 'HadesLogManager/**/*.go'
+      - 'shared/payload/**'
+      - 'HadesAPI/docs/**'
+      - 'HadesLogManager/docs/**'
+      - 'Makefile'
+      - '.github/workflows/verify-openapi.yml'
+  pull_request:
+    branches: [ "**" ]
+    paths:
+      - 'HadesAPI/**/*.go'
+      - 'HadesLogManager/**/*.go'
+      - 'shared/payload/**'
+      - 'HadesAPI/docs/**'
+      - 'HadesLogManager/docs/**'
+      - 'Makefile'
+      - '.github/workflows/verify-openapi.yml'
+
+jobs:
+  verify:
+    name: Verify generated OpenAPI specs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache: true
+
+      - name: Regenerate OpenAPI specs
+        run: make docs-api
+
+      - name: Check specs are up-to-date
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only committed specs are verified. `git diff` ignores untracked files,
+          # so a module whose OpenAPI spec is not yet committed is simply skipped.
+          if ! git diff --exit-code -- HadesAPI/docs HadesLogManager/docs; then
+            echo "::error title=OpenAPI specs out of date::A handler annotation or a request/response DTO changed without regenerating the spec. Run 'make docs-api' locally and commit the updated HadesAPI/docs and HadesLogManager/docs."
+            exit 1
+          fi
+          echo "OpenAPI specs are up-to-date ✅"
