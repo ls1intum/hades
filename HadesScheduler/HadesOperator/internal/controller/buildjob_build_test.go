@@ -1,0 +1,69 @@
+package controller
+
+import (
+	"fmt"
+	"testing"
+
+	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+func initContainer(t *testing.T, job *batchv1.Job, name string) corev1.Container {
+	t.Helper()
+	for _, c := range job.Spec.Template.Spec.InitContainers {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("init container %q not found", name)
+	return corev1.Container{}
+}
+
+func envValue(c corev1.Container, name string) (string, bool) {
+	for _, e := range c.Env {
+		if e.Name == name {
+			return e.Value, true
+		}
+	}
+	return "", false
+}
+
+// A continueOnError step must not abort the pod: its init container has to exit 0
+// even when the script uses `set -e` or an explicit non-zero exit, so later steps
+// (e.g. the result parser) still run. A normal step must keep failing on error.
+func TestBuildK8sJob_ContinueOnError(t *testing.T) {
+	failingScript := "set -e; ./gradlew test"
+	bj := &buildv1.BuildJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "job-1"},
+		Spec: buildv1.BuildJobSpec{
+			Name: "job-1",
+			Steps: []buildv1.BuildStep{
+				{ID: 1, Name: "clone", Image: "alpine", Script: "echo clone"},
+				{ID: 2, Name: "test", Image: "alpine", Script: failingScript, ContinueOnError: true},
+			},
+		},
+	}
+
+	job := buildK8sJob(bj, "job-1", true, false)
+
+	// Normal step: run the script directly so a failure fails the container.
+	normal := initContainer(t, job, fmt.Sprintf(BuildStepPrefix, 1))
+	if len(normal.Args) != 1 || normal.Args[0] != "echo clone" {
+		t.Errorf("normal step args = %v, want [\"echo clone\"]", normal.Args)
+	}
+	if _, ok := envValue(normal, "HADES_STEP_SCRIPT"); ok {
+		t.Errorf("normal step should not set HADES_STEP_SCRIPT")
+	}
+
+	// continueOnError step: script runs in a nested shell whose status is ignored.
+	coe := initContainer(t, job, fmt.Sprintf(BuildStepPrefix, 2))
+	wantArgs := `/bin/sh -c "$HADES_STEP_SCRIPT" || true`
+	if len(coe.Args) != 1 || coe.Args[0] != wantArgs {
+		t.Errorf("continueOnError step args = %v, want [%q]", coe.Args, wantArgs)
+	}
+	if got, ok := envValue(coe, "HADES_STEP_SCRIPT"); !ok || got != failingScript {
+		t.Errorf("continueOnError step HADES_STEP_SCRIPT = %q (present=%v), want %q", got, ok, failingScript)
+	}
+}

@@ -351,7 +351,16 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 		if strings.TrimSpace(s.Script) != "" {
 			c.Command = []string{"/bin/sh", "-c"}
 			if s.ContinueOnError {
-				c.Args = []string{s.Script + "; exit 0"}
+				// Init containers have no native "continue on error": a non-zero
+				// exit aborts the pod and skips the remaining steps. Run the
+				// script in a nested shell whose exit status is discarded (|| true)
+				// so this container always exits 0 and later steps (e.g. the
+				// result parser) still run. This is robust even when the script
+				// uses `set -e` or ends in an explicit non-zero `exit`, both of
+				// which would bypass a naive "<script>; exit 0". The script is
+				// passed via an env var to avoid shell-quoting issues.
+				c.Env = append(c.Env, corev1.EnvVar{Name: "HADES_STEP_SCRIPT", Value: s.Script})
+				c.Args = []string{`/bin/sh -c "$HADES_STEP_SCRIPT" || true`}
 			} else {
 				c.Args = []string{s.Script}
 			}
