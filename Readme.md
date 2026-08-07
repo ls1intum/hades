@@ -8,7 +8,7 @@ Welcome to Hades, a robust job scheduler designed with scalability in mind. Hade
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Documentation:** see [`docs/`](./docs/README.md) for the full documentation index (API reference, configuration reference, and architecture), organized for users, administrators, and developers.
+> **📖 Documentation:** the full docs live at **[ls1intum.github.io/hades](https://ls1intum.github.io/hades/)** (a Docusaurus site, source in [`website/`](./website)). The in-repo [`docs/`](./docs/README.md) index and per-component READMEs cover the same material for offline/agent use.
 
 ## Design Goals
 

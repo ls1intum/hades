@@ -176,6 +176,19 @@ docs-helm: ## Regenerate the Helm chart values table (helm/hades/Readme.md) from
 		--output-file Readme.md \
 		--ignore-non-descriptions
 
+.PHONY: docs-site-sync
+docs-site-sync: ## Sync generated artifacts (OpenAPI specs, helm values) into the Docusaurus site.
+	@mkdir -p website/static/openapi website/docs/deployment
+	@if [ -f HadesAPI/docs/swagger.json ]; then cp HadesAPI/docs/swagger.json website/static/openapi/hades-api.json; echo "synced hades-api.json"; else echo "skip hades-api.json (generate with 'make docs-api')"; fi
+	@if [ -f HadesLogManager/docs/swagger.json ]; then cp HadesLogManager/docs/swagger.json website/static/openapi/log-manager.json; echo "synced log-manager.json"; fi
+	@printf -- '---\ntitle: Values Reference\nsidebar_position: 3\n---\n\n<!-- Generated from helm/hades/Readme.md by `make docs-helm` + `make docs-site-sync`. Do not edit by hand. -->\n\n' > website/docs/deployment/helm-values.md
+	@sed '1{/^# Hades Helm Chart$$/d;}' helm/hades/Readme.md >> website/docs/deployment/helm-values.md
+	@echo "synced helm-values.md"
+
+.PHONY: docs-site
+docs-site: docs-site-sync ## Build the Docusaurus site (runs docs-site-sync first).
+	cd website && yarn install --frozen-lockfile && yarn build
+
 ##@ CI
 
 .PHONY: ci

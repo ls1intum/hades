@@ -1,5 +1,7 @@
 # Hades Documentation
 
+> The published documentation site is at **[ls1intum.github.io/hades](https://ls1intum.github.io/hades/)** (Docusaurus, source in [`../website`](../website)). This in-repo index mirrors the same material for offline and agent use.
+
 Start here. This index routes you to the right material by audience. For a project overview, design goals, and the high-level architecture diagram, see the top-level [Readme.md](../Readme.md).
 
 ## For users - submitting and running jobs
