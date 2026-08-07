@@ -73,6 +73,22 @@ docker-logs: ## Tail logs from the local docker compose stack.
 build: ## Build all Go modules.
 	go build $(GO_PATHS)
 
+.PHONY: ui-install
+ui-install: ## Install the dashboard SPA dependencies (HadesAPI/web).
+	cd HadesAPI/web && npm ci
+
+.PHONY: ui-build
+ui-build: ## Build the dashboard SPA into HadesAPI/web/dist (embedded by the API).
+	cd HadesAPI/web && npm ci && npm run build
+
+.PHONY: ui-dev
+ui-dev: ## Run the dashboard SPA dev server (proxies /api to localhost:8080).
+	cd HadesAPI/web && npm run dev
+
+.PHONY: ui-test
+ui-test: ## Run the dashboard SPA tests.
+	cd HadesAPI/web && npm ci && npm test
+
 .PHONY: docker-build
 docker-build: ## Build all Hades container images.
 	docker build -t hades-api:dev      -f HadesAPI/Dockerfile .

@@ -12,18 +12,18 @@ Go workspace (`go.work`, Go 1.26) with five modules:
 
 | Module                              | Binary / role                                                                                                                                                                       |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HadesAPI/`                         | Gin HTTP server. `POST /build` validates a payload, assigns a UUID, publishes to NATS by priority. `GET /ping` health check. Optional Basic Auth via `AUTH_KEY`.                    |
+| `HadesAPI/`                         | Gin HTTP server. `POST /build` validates a payload, assigns a UUID, publishes to NATS by priority (and now also publishes `hades.jobstatus.Queued`). `GET /ping` health check. Optional Basic Auth via `AUTH_KEY`. Also hosts the optional **dashboard** (`HadesAPI/dashboard/` + embedded SPA in `HadesAPI/web/`).            |
 | `HadesScheduler/`                   | NATS consumer. Reads `HADES_EXECUTOR` and dispatches to either the `docker/` or `k8s/` package.                                                                                     |
 | `HadesScheduler/docker/`            | Runs each step as a Docker container; shares state between steps via a per-job named volume `shared-<uuid>`.                                                                        |
 | `HadesScheduler/k8s/`               | Three sub-modes selected by `K8S_CONFIG_MODE`: `kubeconfig`, `serviceaccount` (legacy: builds a `batchv1.Job` directly), or `operator` (creates a `BuildJob` CR via dynamic client). |
 | `HadesScheduler/HadesOperator/`     | Standalone kubebuilder operator. Watches `BuildJob` CRs (`build.hades.tum.de/v1`) and reconciles them into `batchv1.Job`s with one initContainer per step plus a finalizer pod.     |
 | `HadesLogManager/`                  | Subscribes to `hades.jobstatus.*` and `hades.joblog.*` on NATS, aggregates logs in-memory (`sync.Map`), exposes `GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status` on port 8081.      |
-| `shared/`                           | Cross-module: `payload` (DTOs), `nats` (publisher/consumer/connection), `buildlogs` (log types + `LogPublisher`/`LogAggregator` interfaces), `buildstatus` (job status enum + subjects), `utils` (env config loader, memory-limit parsing), `prio.go` (priority enum: high/medium/low ←→ ints). |
+| `shared/`                           | Cross-module: `payload` (DTOs), `nats` (publisher/consumer/connection), `buildlogs` (log types + `LogPublisher`/`LogAggregator` interfaces), `buildstatus` (job status enum + subjects), `redact` (metadata secret masking used by the API + dashboard), `utils` (env config loader, memory-limit parsing), `prio.go` (priority enum: high/medium/low ←→ ints). |
 
 ## Key contracts
 
 - **Queue subjects:** `hades.jobs.{high,medium,low}` (priority-bucketed JetStream subjects).
-- **Status subjects:** `hades.jobstatus.{Queued,Running,Succeeded,Failed,Stopped}` (payload = job ID string).
+- **Status subjects:** `hades.jobstatus.{Queued,Running,Succeeded,Failed,Stopped}` (payload = job ID string). `HadesAPI` publishes `Queued` on enqueue; the scheduler/operator publish `Running`/`Succeeded`/`Failed`. `HadesLogManager` and the dashboard subscribe to the whole `hades.jobstatus.*` lifecycle.
 - **Log subjects:** see `shared/buildlogs/buildlog_stream.go`.
 - **Job DTO:** `shared/payload/payload.go` (`QueuePayload` with ordered `Step`s; each step has `image`, optional `script`, `metadata` env vars, `cpu_limit`, `memory_limit`).
 - **CRD:** `BuildJob` in `HadesScheduler/HadesOperator/api/v1/buildjob_types.go`. **Important:** if you change `BuildJobSpec`, run `make -C HadesScheduler/HadesOperator manifests generate` and commit `helm/hades/crds/build.hades.tum.de_buildjobs.yaml` and `zz_generated.deepcopy.go` - the `verify-crd.yml` GitHub workflow will fail otherwise. The `BuildJobSpec` is intentionally duplicated from `shared/payload`; keep them in sync manually.
@@ -45,7 +45,9 @@ helm lint ./helm/hades
 helm template hades ./helm/hades -n hades
 ```
 
-CI (`.github/workflows/ci.yml`) runs `lint` (`make lint` + `gofmt`), `build` (`make build`), and a `test` matrix over `shared`, `HadesAPI`, `HadesScheduler`, `HadesLogManager`, and `HadesScheduler/HadesOperator`. It then builds and pushes Docker images for `hades-api`, `hades-scheduler`, and `hades-operator` to `ghcr.io/ls1intum/hades/`. `HadesLogManager` runs locally via `make run` but currently has no Dockerfile, no helm template, no compose service, and no CI image build/deploy path.
+CI (`.github/workflows/ci.yml`) runs `lint` (`make lint` + `gofmt`), `build` (`make build`), a `ui` job (typecheck + `vitest` + build of `HadesAPI/web`), and a `test` matrix over `shared`, `HadesAPI`, `HadesScheduler`, `HadesLogManager`, and `HadesScheduler/HadesOperator`. It then builds and pushes Docker images for `hades-api`, `hades-scheduler`, `hades-operator`, and `hades-log-manager` to `ghcr.io/ls1intum/hades/`. `HadesLogManager` has a `Dockerfile`, a Helm deployment (ClusterIP service `hades-log-manager-service:8081`, single-replica), and a CI image build; it is **not** on the ingress and is reached only internally (e.g. by the dashboard's authenticated logs proxy).
+
+The `hades-api` image is a **multi-stage** build: a Node stage builds the dashboard SPA (`HadesAPI/web`) and the Go stage embeds `HadesAPI/web/dist` via `//go:embed`. A placeholder `dist/index.html` is committed so `go build`/`go run` work before a UI build; `make ui-build` produces the real assets (git-ignored).
 
 ## Running locally
 
@@ -67,7 +69,8 @@ The top-level `Makefile` wraps the common workflows (`make help` lists every tar
 - Don't bypass the operator path by writing a new direct-K8s scheduler; the operator is the strategic direction.
 - Don't add fields to `BuildJobSpec` without regenerating the CRD (CI will block the PR).
 - Don't introduce package-level mutable globals for dependencies - the codebase has been moving away from them (see `setupRouter` taking `JobPublisher` as a parameter).
-- Don't assume `HadesLogManager` is part of the deployed system when reasoning about production end-to-end flows; it is currently CLI-only (no Dockerfile / helm template).
+- `HadesLogManager` is deployed (Helm + image) but ClusterIP-internal and single-replica (in-memory aggregation); don't put it on the ingress or scale it past one replica. The same single-replica constraint applies to the API's in-memory dashboard read-model.
+- The dashboard treats all job/step `Metadata` as potentially secret: redact via `shared/redact` before returning any payload; never add an endpoint that returns raw metadata. Step `script` bodies and job logs are shown verbatim (a known, documented gap).
 
 
 ## Pull Requests

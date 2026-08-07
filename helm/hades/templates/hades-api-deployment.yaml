@@ -53,3 +53,28 @@ spec:
                   name: {{ .Values.hadesApi.authKeySecret | quote }}
                   key: AUTH_KEY
             {{- end }}
+            {{- if .Values.hadesApi.dashboard.secretName }}
+            # Dashboard credentials. When this Secret is set the operator UI is
+            # served and protected; when empty the /api routes return 503.
+            - name: DASHBOARD_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hadesApi.dashboard.secretName | quote }}
+                  key: DASHBOARD_USERNAME
+            - name: DASHBOARD_PASSWORD_HASH
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hadesApi.dashboard.secretName | quote }}
+                  key: DASHBOARD_PASSWORD_HASH
+            - name: DASHBOARD_SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hadesApi.dashboard.secretName | quote }}
+                  key: DASHBOARD_SESSION_SECRET
+            - name: LOG_MANAGER_URL
+              value: {{ .Values.hadesApi.dashboard.logManagerURL | quote }}
+            {{- if .Values.hadesApi.dashboard.redactMode }}
+            - name: SECRET_REDACT_MODE
+              value: {{ .Values.hadesApi.dashboard.redactMode | quote }}
+            {{- end }}
+            {{- end }}

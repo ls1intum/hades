@@ -36,6 +36,8 @@ Hades is built upon the following key components:
 
 - **Log Manager** *(local development only)*: Subscribes to job status and log events on NATS, aggregates per-job logs in memory, and exposes them through an HTTP API (`GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status`, default port `8081`). Run via `make run` for local workflows; not currently part of the Docker compose stack or the production Helm deployment.
 
+- **Dashboard**: An optional, secured web UI served by the API itself (embedded SPA + `/api/*` JSON/SSE endpoints). It shows queued/running/recently-completed jobs, a redacted job detail view, live logs, and system metrics, and updates live over Server-Sent Events. See [Dashboard](#dashboard) below.
+
 ## How It Works
 
 Hades processes jobs through a sequence of well-defined steps:
@@ -179,6 +181,73 @@ For more complex workflows, you can define multi-step jobs where each step runs 
 }
 ```
 
+## Dashboard
+
+Hades ships an optional, secured **web dashboard** served by `HadesAPI` itself.
+The API embeds a React/TypeScript single-page app (Vite, Tailwind, shadcn/ui) and
+exposes a small JSON + Server-Sent-Events API under `/api`; no separate service is
+introduced. The dashboard shows queued/running/recently-completed jobs, a job
+detail view (steps, scripts, resource limits, and metadata with secrets redacted),
+live logs, and system metrics, all updating live.
+
+### How it gets its data
+
+- **Job list, status, metrics, live updates** come from the API's subscription to
+  the NATS `hades.jobstatus.*` lifecycle events. The API now also publishes
+  `Queued` on enqueue so newly submitted jobs appear immediately.
+- **Job detail** is read on demand from the `HADES_JOBS` JetStream KV bucket (the
+  full submitted payload) and **redacted** before it leaves the process.
+- **Logs** are proxied to the internal `HadesLogManager` service, which remains the
+  log aggregator (the proxy is authenticated, so that internal service is never
+  exposed directly).
+
+Read-side state is in-memory and recent-only (bounded by `DASHBOARD_JOB_RETENTION`),
+so both `HadesAPI` and `HadesLogManager` must stay at a single replica.
+
+### Enabling it
+
+The dashboard is **disabled unless configured** (its `/api` routes return `503` and
+the SPA is not served). Set three variables to enable it:
+
+| Variable | Description |
+|----------|-------------|
+| `DASHBOARD_USERNAME` | Login username |
+| `DASHBOARD_PASSWORD_HASH` | bcrypt hash of the password (e.g. `htpasswd -bnBC 12 "" 'yourpass' \| tr -d ':\n'`) |
+| `DASHBOARD_SESSION_SECRET` | Random string (>=16 chars) used to sign session cookies |
+
+Optional: `DASHBOARD_SESSION_TTL` (default `12h`), `DASHBOARD_JOB_RETENTION`
+(default `1h`), `LOG_MANAGER_URL` (default the in-cluster log manager),
+`SECRET_REDACT_MODE` (`smart` default, or `all`), and `SECRET_KEY_PATTERNS`.
+
+Login uses a signed, `HttpOnly; Secure; SameSite=Strict` session cookie; all
+`/api/*` routes require a valid session.
+
+### Secret handling
+
+Job metadata (job- and step-level) is injected into containers as environment
+variables and routinely carries credentials. The dashboard redacts it
+**server-side** before any JSON is sent: values are masked when the key looks
+sensitive (`token`, `password`, `secret`, ...) **or** the value itself looks like a
+secret (credentials embedded in a URL, a PEM block, a JWT, a high-entropy token).
+Keys stay visible so operators can see which variables exist; `SECRET_REDACT_MODE=all`
+masks every value. **Caveat:** step **scripts** and job **logs** are shown verbatim
+and are *not* scrubbed.
+
+### Local development
+
+```fish
+make ui-build   # build the SPA into HadesAPI/web/dist (embedded by the API)
+make run        # run API + scheduler + log manager (+ NATS) with your dashboard env set
+# then open http://localhost:8080/
+```
+
+For SPA development with hot reload, run `make ui-dev` (Vite dev server on `:5173`,
+proxying `/api` to the API). See [`HadesAPI/web/README.md`](./HadesAPI/web/README.md).
+
+In Kubernetes, set `hadesApi.dashboard.secretName` (a Secret with the three
+`DASHBOARD_*` keys) in the Helm chart; the chart then wires the env and adds the
+`/` and `/api` ingress paths.
+
 ## Configuration Options
 
 Hades can be configured through environment variables or a `.env` file:
@@ -200,6 +269,7 @@ A top-level [`Makefile`](./Makefile) wraps the most common development tasks. Ru
 | `make docker-run` / `make docker-stop` / `make docker-logs` | Start, stop, or tail the full docker compose stack. |
 | `make docker-run-api` / `make docker-run-scheduler` / `make docker-run-nats` | Start an individual service via docker compose. |
 | `make build` | Compile every Go module in the workspace. |
+| `make ui-build` / `make ui-dev` / `make ui-test` | Build, dev-serve, or test the dashboard SPA (`HadesAPI/web`). |
 | `make docker-build` | Build all Hades container images. |
 | `make test` | Run unit tests across every Go module. |
 | `make test-race` | Same as `make test` with the race detector. |

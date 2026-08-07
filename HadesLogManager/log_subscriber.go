@@ -57,9 +57,11 @@ func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, agg
 }
 
 // StartListening begins listening for job status changes on NATS subjects and manages
-// log watching accordingly. It subscribes to three status events:
-//   - hades.jobstatus.running: Starts log watching for the job
-//   - hades.jobstatus.success/failed: Stops log watching for the job
+// log watching accordingly. It subscribes to the job lifecycle status events
+// (subjects are formatted via buildstatus.StatusSubject, e.g. "hades.jobstatus.Running"):
+//   - Queued: records the job as visible before it runs (no log watching yet)
+//   - Running: starts log watching for the job
+//   - Succeeded / Failed / Stopped: stops log watching for the job
 //
 // The method expects job IDs to be sent as string data in NATS messages.
 //
@@ -69,11 +71,20 @@ func NewDynamicLogManager(nc *nats.Conn, logConsumer *logs.HadesLogConsumer, agg
 // Returns:
 //   - error: Any error that occurred while setting up NATS subscriptions
 func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
-	subs := make([]*nats.Subscription, 0, 3)
+	subs := make([]*nats.Subscription, 0, 5)
+
+	// Subscribe to queued status - record the job so it is visible in GET /jobs
+	// before it starts running. Nothing watches logs yet at this point.
+	sub, err := dlm.subscribeToStatus(ctx, buildstatus.StatusQueued, dlm.handleJobQueued)
+	if err != nil {
+		return err
+	}
+	subs = append(subs, sub)
 
 	// Subscribe to running status - start watching logs
-	sub, err := dlm.subscribeToStatus(ctx, buildstatus.StatusRunning, dlm.handleJobRunning)
+	sub, err = dlm.subscribeToStatus(ctx, buildstatus.StatusRunning, dlm.handleJobRunning)
 	if err != nil {
+		dlm.cleanupSubscriptions(subs)
 		return err
 	}
 	subs = append(subs, sub)
@@ -88,6 +99,14 @@ func (dlm *DynamicLogManager) StartListening(ctx context.Context) error {
 
 	// Subscribe to failed status - stop watching logs
 	sub, err = dlm.subscribeToStatus(ctx, buildstatus.StatusFailed, dlm.handleJobFailed)
+	if err != nil {
+		dlm.cleanupSubscriptions(subs)
+		return err
+	}
+	subs = append(subs, sub)
+
+	// Subscribe to stopped status - stop watching logs (terminal, like failed)
+	sub, err = dlm.subscribeToStatus(ctx, buildstatus.StatusStopped, dlm.handleJobStopped)
 	if err != nil {
 		dlm.cleanupSubscriptions(subs)
 		return err
@@ -127,6 +146,22 @@ func (dlm *DynamicLogManager) extractJobID(msg *nats.Msg) (string, error) {
 		return "", ErrEmptyJobID
 	}
 	return string(msg.Data), nil
+}
+
+// handleJobQueued records a job as queued. It does not watch logs yet - no
+// container exists until the job starts running - it only makes the job visible
+// via GET /jobs so the dashboard can show queued work.
+func (dlm *DynamicLogManager) handleJobQueued(_ context.Context, jobID string) {
+	slog.Info("Job queued", "job_id", jobID)
+	dlm.logAggregator.UpdateJobStatus(jobID, buildstatus.StatusQueued)
+}
+
+// handleJobStopped handles the terminal job stopped status event, treating it
+// like a failure for log-watching purposes.
+func (dlm *DynamicLogManager) handleJobStopped(ctx context.Context, jobID string) {
+	slog.Info("Job stopped", "job_id", jobID)
+	dlm.logAggregator.UpdateJobStatus(jobID, buildstatus.StatusStopped)
+	dlm.stopWatchingJobLogs(ctx, jobID)
 }
 
 // handleJobRunning handles the job running status event

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/ls1intum/hades/shared/payload"
+	"github.com/ls1intum/hades/shared/redact"
 )
 
 // PayloadInput constrains the accepted input types for SafePayloadFormat.
@@ -33,15 +34,10 @@ func SafePayloadFormat[T PayloadInput](input T) string {
 }
 
 func sanitizeAndMarshal(job payload.QueuePayload) string {
-	job.Metadata = make(map[string]string)
-	// Copy the steps slice so we don't mutate the caller's underlying array.
-	stepsCopy := make([]payload.Step, len(job.Steps))
-	copy(stepsCopy, job.Steps)
-	for i := range stepsCopy {
-		stepsCopy[i].Metadata = make(map[string]string)
-	}
-	job.Steps = stepsCopy
-	jsonTmp, err := json.Marshal(job)
+	// Drop all metadata (keys and values) before logging; key names add no
+	// value to log output. The dashboard uses redact.Redactor instead, which
+	// keeps keys but masks sensitive values.
+	jsonTmp, err := json.Marshal(redact.Drop(job))
 	if err != nil {
 		slog.Error("Failed to marshal sanitized payload", "error", err)
 		return ""

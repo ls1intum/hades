@@ -22,6 +22,18 @@ hadesApi:
   # Name of an existing Secret holding key AUTH_KEY to protect the /build endpoint.
   # Empty = no auth (endpoint is open).
   authKeySecret: ""
+  # -- Operator dashboard (web UI) served by the API.
+  dashboard:
+    # -- Name of an existing Secret with keys `DASHBOARD_USERNAME`,
+    # `DASHBOARD_PASSWORD_HASH` (a bcrypt hash), and `DASHBOARD_SESSION_SECRET`
+    # (>=16 chars). Empty = dashboard disabled (its `/api` routes return 503 and
+    # the SPA is not served).
+    secretName: ""
+    # -- Internal URL of HadesLogManager used by the dashboard's logs proxy.
+    logManagerURL: "http://hades-log-manager-service:8081"
+    # -- Secret redaction mode for job metadata: "smart" (default, key + value
+    # heuristics) or "all" (mask every value). Empty uses the smart default.
+    redactMode: ""
 
 hadesScheduler:
   image:
