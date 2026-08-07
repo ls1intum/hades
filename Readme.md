@@ -149,6 +149,27 @@ Submit this job using:
 curl -X POST -H "Content-Type: application/json" -d @job.json http://localhost:8080/build
 ```
 
+#### Forwarding logs (`callback_url`)
+
+To have the Log Manager forward a job's aggregated logs somewhere (for example the
+Artemis adapter), add an optional top-level `callback_url` to the request. It must
+be an absolute `http`/`https` URL. If omitted, the job's logs are not forwarded.
+
+```json
+{
+  "name": "Example Job",
+  "callback_url": "http://localhost:8082/adapter/logs",
+  "steps": [
+    {
+      "id": 1,
+      "name": "Hello World",
+      "image": "alpine:latest",
+      "script": "echo 'Hello, Hades!'"
+    }
+  ]
+}
+```
+
 ### Multi-Step Job Example
 
 For more complex workflows, you can define multi-step jobs where each step runs in a different container:

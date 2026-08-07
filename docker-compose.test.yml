@@ -56,7 +56,6 @@ services:
         condition: service_healthy
     environment:
       - NATS_URL=nats://nats:4222
-      - ARTEMIS_ADAPTER_URL=https://hades-artemis-connector.student.k8s.aet.cit.tum.de/adapter/logs
     restart: unless-stopped
 
   nats:

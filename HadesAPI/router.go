@@ -99,6 +99,14 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher) {
 		}
 	}
 
+	if p.QueuePayload.CallbackURL != "" {
+		if err := utils.ValidateCallbackURL(p.QueuePayload.CallbackURL); err != nil {
+			slog.Error("Invalid callback_url", "error", err)
+			c.String(http.StatusBadRequest, "Invalid callback_url: "+err.Error())
+			return
+		}
+	}
+
 	p.QueuePayload.ID = uuid.New()
 	slog.Debug("Received build request ", "payload", SafePayloadFormat(p.QueuePayload))
 

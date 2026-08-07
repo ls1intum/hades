@@ -1,11 +1,13 @@
 package payload
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStep_IDString(t *testing.T) {
@@ -85,6 +87,32 @@ func TestRESTPayload_DefaultPriority(t *testing.T) {
 
 	assert.Equal(t, DefaultPriority, payload.Priority)
 	assert.Equal(t, 3, payload.Priority)
+}
+
+func TestQueuePayload_CallbackURL_RoundTrip(t *testing.T) {
+	t.Run("present when set", func(t *testing.T) {
+		p := QueuePayload{Name: "job", CallbackURL: "https://example.com/adapter/logs"}
+		data, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), `"callback_url":"https://example.com/adapter/logs"`)
+
+		var back QueuePayload
+		require.NoError(t, json.Unmarshal(data, &back))
+		assert.Equal(t, p.CallbackURL, back.CallbackURL)
+	})
+
+	t.Run("omitted when empty", func(t *testing.T) {
+		p := QueuePayload{Name: "job"}
+		data, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.NotContains(t, string(data), "callback_url")
+	})
+
+	t.Run("legacy payload without field yields empty", func(t *testing.T) {
+		var p QueuePayload
+		require.NoError(t, json.Unmarshal([]byte(`{"name":"job"}`), &p))
+		assert.Equal(t, "", p.CallbackURL)
+	})
 }
 
 func TestStep_AllFields(t *testing.T) {

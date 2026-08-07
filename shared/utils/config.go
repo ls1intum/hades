@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -72,4 +73,24 @@ func ParseMemoryLimit(limit string) (int64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported memory unit %q: must be G (gigabytes) or M (megabytes)", unit)
 	}
+}
+
+// ValidateCallbackURL checks that raw is a well-formed absolute http or https
+// URL with a host. It is used both when a job is submitted (fail-fast) and
+// before the log manager forwards logs to the URL (defense in depth).
+func ValidateCallbackURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid callback URL %q: %w", raw, err)
+	}
+	if !u.IsAbs() {
+		return fmt.Errorf("callback URL must be absolute: %q", raw)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("callback URL scheme must be http or https, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("callback URL must include a host: %q", raw)
+	}
+	return nil
 }

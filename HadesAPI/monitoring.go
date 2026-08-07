@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"net/url"
 
 	"log/slog"
 
@@ -41,6 +42,15 @@ func sanitizeAndMarshal(job payload.QueuePayload) string {
 		stepsCopy[i].Metadata = make(map[string]string)
 	}
 	job.Steps = stepsCopy
+	// Strip any query/fragment from the callback URL so tokens carried there
+	// don't leak into logs.
+	if job.CallbackURL != "" {
+		if u, err := url.Parse(job.CallbackURL); err == nil {
+			u.RawQuery = ""
+			u.Fragment = ""
+			job.CallbackURL = u.String()
+		}
+	}
 	jsonTmp, err := json.Marshal(job)
 	if err != nil {
 		slog.Error("Failed to marshal sanitized payload", "error", err)

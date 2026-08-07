@@ -1,8 +1,9 @@
 {
-    "name": "", 
+    "name": "",
     "metadata": {},
     "timestamp": "2021-01-01T00:00:00.000Z",
     "priority": 1, // optional, default 3
+    "callback_url": "http://localhost:8082/adapter/logs", // optional; where aggregated logs are forwarded. If omitted, logs are not forwarded.
     "jobs" : [
         {
             "id" : 1, // mandatory to declare the order of execution
