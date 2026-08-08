@@ -1,8 +1,14 @@
-# Hades: A Scalable Job Scheduler for Container Workloads
+<p align="center">
+  <img src="docs/assets/hades-icon.svg" alt="Hades logo" width="128" height="128" />
+</p>
+
+<h1 align="center">Hades: A Scalable Job Scheduler for Container Workloads</h1>
 
 Welcome to Hades, a robust job scheduler designed with scalability in mind. Hades' primary mission is to provide a straightforward, scalable, and adaptable solution for executing containerized workloads in various environments, from educational programming courses to research computing clusters.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **📖 Documentation:** the full docs live at **[ls1intum.github.io/hades](https://ls1intum.github.io/hades/)** (a Docusaurus site, source in [`website/`](./website)). The in-repo [`docs/`](./docs/README.md) index and per-component READMEs cover the same material for offline/agent use.
 
 ## Design Goals
 
@@ -34,7 +40,7 @@ Hades is built upon the following key components:
 
   - **Kubernetes Executor (Deprecated)**: The legacy Kubernetes execution mode.
 
-- **Log Manager** *(local development only)*: Subscribes to job status and log events on NATS, aggregates per-job logs in memory, and exposes them through an HTTP API (`GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status`, default port `8081`). Run via `make run` for local workflows; not currently part of the Docker compose stack or the production Helm deployment.
+- **Log Manager**: Subscribes to job status and log events on NATS, aggregates per-job logs in memory, and exposes them through an HTTP API (`GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status`, default port `8081`). It has its own Dockerfile and is deployed by the Helm chart (`hades-log-manager`). It is not part of the `compose.yml` stack, so run it locally with `make run`.
 
 - **Dashboard**: An optional, secured web UI served by the API itself (embedded SPA + `/api/*` JSON/SSE endpoints). It shows queued/running/recently-completed jobs, a redacted job detail view, live logs, and system metrics, and updates live over Server-Sent Events. See [Dashboard](#dashboard) below.
 
@@ -269,13 +275,18 @@ In Kubernetes, set `hadesApi.dashboard.secretName` (a Secret with the three
 
 ## Configuration Options
 
-Hades can be configured through environment variables or a `.env` file:
+Hades is configured through environment variables (or a `.env` file for local runs). The most common settings:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `HADES_EXECUTOR` | Execution platform: `docker` or `k8s` | `docker` |
 | `CONCURRENCY` | Number of jobs to process concurrently | `1` |
 | `API_PORT` | Port for the Hades API | `8080` |
+| `AUTH_KEY` | HTTP Basic Auth key for the API (empty = no auth) | `` |
+| `NATS_URL` | NATS server URL | `nats://localhost:4222` |
+| `DEBUG` | Verbose (debug-level) logging | `false` |
+
+See **[docs/configuration.md](./docs/configuration.md)** for the complete, per-component reference (Docker/Kubernetes executor, operator, and Log Manager options). A ready-to-copy `.env.example` lives at the repository root.
 
 ## Development Workflow
 
@@ -295,6 +306,8 @@ A top-level [`Makefile`](./Makefile) wraps the most common development tasks. Ru
 | `make cover` | Generate and open the HadesAPI coverage report. |
 | `make test-operator` / `make test-operator-e2e` | Run HadesOperator envtest unit tests, or Kind-based e2e tests. |
 | `make fmt` / `make lint` | Format code with `gofmt` or run `go vet`. |
+| `make docs-api` | Regenerate the OpenAPI specs for HadesAPI and HadesLogManager (run after changing a handler annotation or DTO). |
+| `make docs-helm` | Regenerate the Helm chart values table from `values.yaml` comments (run after changing chart values). |
 | `make vuln` | Run `govulncheck` (auto-installs it on first use). |
 | `make deps-check` / `make deps-update` / `make deps-tidy` | List outdated direct dependencies, bump them, or run `go mod tidy` across all modules. |
 | `make helm-deps` | Refresh the Helm chart subchart lock file. |

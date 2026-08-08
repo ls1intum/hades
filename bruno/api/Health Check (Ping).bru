@@ -1,0 +1,16 @@
+meta {
+  name: Health Check (Ping)
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://{{hostname}}/ping
+  body: none
+  auth: none
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

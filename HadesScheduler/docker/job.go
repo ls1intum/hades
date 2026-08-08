@@ -12,6 +12,9 @@ import (
 	"github.com/ls1intum/hades/shared/payload"
 )
 
+// Job is a single queued job bound to the Docker client and options used to run
+// it. Its steps execute in order and share the job's volume; see the execute
+// method for the ContinueOnError semantics.
 type Job struct {
 	cli    *client.Client
 	logger *slog.Logger
