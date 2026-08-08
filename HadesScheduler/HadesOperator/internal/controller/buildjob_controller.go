@@ -35,6 +35,7 @@ import (
 
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 	"github.com/ls1intum/hades/hadesScheduler/log"
+	hades "github.com/ls1intum/hades/shared"
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/nats-io/nats.go"
@@ -55,7 +56,10 @@ const defaultPriority = 1
 const (
 	LabelManagedBy = "hades.tum.de/managed-by"
 	LabelBuildJob  = "hades.tum.de/buildjob"
-	LabelPriority  = "hades.tum.de/priority"
+	// LabelPriority is the Job/Pod label carrying the job priority. It shares the
+	// key with the scheduler's job-metadata contract (hades.MetadataKeyPriority)
+	// so the value set by the scheduler surfaces unchanged as a label here.
+	LabelPriority = hades.MetadataKeyPriority
 )
 
 // ManagedByValue is the value of the LabelManagedBy label applied to Jobs the

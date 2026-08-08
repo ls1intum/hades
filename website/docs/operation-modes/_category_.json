@@ -1,0 +1,9 @@
+{
+  "label": "Operation Modes",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Hades supports multiple executor backends. Choose the one that fits your environment."
+  }
+}
+

@@ -1,0 +1,87 @@
+basePath: /
+info:
+  contact: {}
+  description: Read-only API for inspecting build-job logs and status aggregated by
+    the Hades Log Manager. This service is a local-development aid and is not part
+    of the production Helm deployment.
+  title: HadesLogManager API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      description: Liveness probe returning a static OK response.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+  /jobs:
+    get:
+      description: Returns a list of all known job IDs (active and completed).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List jobs
+      tags:
+      - jobs
+  /jobs/{jobId}/logs:
+    get:
+      description: Returns all aggregated log entries for the given job ID.
+      parameters:
+      - description: Job ID
+        in: path
+        name: jobId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get job logs
+      tags:
+      - jobs
+  /jobs/{jobId}/status:
+    get:
+      description: Returns the current build status for the given job ID, or 404 if
+        the job is unknown.
+      parameters:
+      - description: Job ID
+        in: path
+        name: jobId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get job status
+      tags:
+      - jobs
+swagger: "2.0"

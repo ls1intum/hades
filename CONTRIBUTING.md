@@ -1,60 +1,58 @@
 # Contributing to Hades
 
-We love your input! We want to make contributing to Hades as easy and transparent as possible, whether it's:
+Thanks for contributing! This guide covers the Hades-specific workflow. For the architecture and internal layout, read [AGENTS.md](./AGENTS.md); for docs orientation, see [docs/README.md](./docs/README.md).
 
-- Reporting a bug
-- Discussing the current state of the code
-- Submitting a fix
-- Proposing new features
-- Becoming a maintainer
+## Development setup
 
-## Development Process
+Hades is a Go workspace (`go.work`, Go 1.26) with five modules. The top-level [`Makefile`](./Makefile) wraps every common task (`make help` lists them).
 
-We use GitHub to host code, to track issues and feature requests, as well as accept pull requests.
+```bash
+# Run API + scheduler + log manager locally (auto-starts NATS in Docker)
+make run
 
-### Pull Requests
+# Build and test the whole workspace
+make build
+make test
+```
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Docker must be running: some tests (e.g. `HadesAPI/router_test.go`) spin up NATS via testcontainers.
 
-### Development Workflow
+## Before opening a pull request
 
-1. Set up your development environment by following the instructions in the README.md
-2. Make your changes and test them thoroughly
-3. Ensure your code follows the Go style guidelines
-4. Add tests for new functionality
-5. Update documentation as needed
+1. **Format and lint:** `make fmt` and `make lint`.
+2. **Test:** `make test` (or `make ci` to mirror CI: lint + test). Operator changes: `make test-operator`.
+3. **Regenerate derived docs when relevant:**
+   - Changed an HTTP handler annotation or a request/response DTO → `make docs-api`.
+   - Changed Helm chart values → `make docs-helm`.
+4. **Regenerate the CRD when you change `BuildJobSpec`:** if you edit
+   `HadesScheduler/HadesOperator/api/v1/buildjob_types.go`, run
+   `make -C HadesScheduler/HadesOperator manifests generate` and commit the
+   updated `helm/hades/crds/build.hades.tum.de_buildjobs.yaml` and
+   `zz_generated.deepcopy.go`. The `verify-crd` GitHub workflow fails otherwise.
+   The `BuildJobSpec` is intentionally duplicated from `shared/payload`; keep the
+   two in sync manually.
+5. **Document the change:** update the relevant README/docs alongside the code
+   (see the documentation-discipline note below).
+6. Use the [pull request template](./.github/pull_request_template.md).
 
-## Style Guidelines
+## Conventions
 
-- Follow the standard Go style guidelines
-- Use descriptive variable and function names
-- Document public functions and types
-- Write clear commit messages explaining what and why rather than how
+- **Logging:** `log/slog` everywhere (`DEBUG=true` for debug level); the operator uses controller-runtime's `zap` logger.
+- **Config:** each binary has its own `Config` struct loaded via `utils.LoadConfig` (`caarlos0/env` + `joho/godotenv`). Document new variables in [docs/configuration.md](./docs/configuration.md).
+- **Errors:** wrap and return (`fmt.Errorf("...: %w", err)`); avoid `log.Fatal` in libraries.
+- **Dependencies:** don't introduce package-level mutable globals for dependencies; pass them in (see `setupRouter`).
+- Follow the standard Go style; document exported types and functions.
 
-## Code of Conduct
+## Documenting changes
 
-### Our Pledge
+Keep documentation in step with code: when you add or change behavior, update the
+corresponding README, `docs/` page, or generated reference in the **same** change.
+An inaccurate doc is worse than a missing one.
 
-In the interest of fostering an open and welcoming environment, we pledge to make participation in our project and our community a harassment-free experience for everyone.
+## Reporting bugs and proposing features
 
-### Our Standards
-
-Examples of behavior that contributes to creating a positive environment include:
-
-- Using welcoming and inclusive language
-- Being respectful of differing viewpoints and experiences
-- Gracefully accepting constructive criticism
-- Focusing on what is best for the community
-- Showing empathy towards other community members
-
-### Our Responsibilities
-
-Project maintainers are responsible for clarifying the standards of acceptable behavior and are expected to take appropriate and fair corrective action in response to any instances of unacceptable behavior.
+Open a GitHub issue describing the problem or proposal. For bugs, include steps to reproduce, expected vs. actual behavior, and relevant logs.
 
 ## License
 
-By contributing to Hades, you agree that your contributions will be licensed under the project's MIT License.
+By contributing, you agree that your contributions are licensed under the project's MIT License (the `HadesOperator` submodule is Apache-2.0).
