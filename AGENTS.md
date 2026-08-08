@@ -74,7 +74,7 @@ The top-level `Makefile` wraps the common workflows (`make help` lists every tar
 - Don't bypass the operator path by writing a new direct-K8s scheduler; the operator is the strategic direction.
 - Don't add fields to `BuildJobSpec` without regenerating the CRD (CI will block the PR).
 - Don't introduce package-level mutable globals for dependencies - the codebase has been moving away from them (see `setupRouter` taking `JobPublisher` as a parameter).
-- Don't assume `HadesLogManager` is part of the deployed system when reasoning about production end-to-end flows; it is currently CLI-only (no Dockerfile / helm template).
+- Don't forget `HadesLogManager` when reasoning about production end-to-end flows - the Helm chart deploys its Deployment and Service (it just isn't in the `compose.yml` stack).
 
 
 ## Pull Requests
