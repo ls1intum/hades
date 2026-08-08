@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
+import { onUnauthorized } from "@/lib/auth-events";
 
 interface AuthContextValue {
   username: string | null;
@@ -18,14 +19,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api
       .session()
       .then((s) => setUsername(s.username))
-      .catch((err) => {
-        if (!(err instanceof ApiError) || err.status !== 401) {
-          // Non-auth errors (e.g. 503 dashboard disabled) still leave us logged out.
-        }
+      .catch(() => {
+        // Any failure (401 not-logged-in, or 503 dashboard disabled) leaves us
+        // logged out; the router sends the user to the login page.
         setUsername(null);
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // When any authenticated request returns 401 (session expired/revoked), clear
+  // auth so the router redirects to login instead of hanging on error states.
+  useEffect(() => onUnauthorized(() => setUsername(null)), []);
 
   const login = useCallback(async (u: string, p: string) => {
     const res = await api.login(u, p);

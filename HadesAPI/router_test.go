@@ -256,7 +256,7 @@ func (suite *APISuite) TestDashboardEndToEnd() {
 	dashCfg := dashboard.Config{
 		Username:      "admin",
 		PasswordHash:  string(hash),
-		SessionSecret: "0123456789abcdef-secret",
+		SessionSecret: "0123456789abcdef-0123456789abcdef-secret",
 		JobRetention:  time.Hour,
 		LogManagerURL: "http://127.0.0.1:0",
 	}
@@ -330,6 +330,16 @@ func (suite *APISuite) TestDashboardEndToEnd() {
 	req, _ = http.NewRequest("GET", "/api/jobs", nil)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 401, w.Code)
+}
+
+func (suite *APISuite) TestSecurityHeaders() {
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/ping", nil)
+	suite.router.ServeHTTP(w, req)
+	assert.Equal(suite.T(), "nosniff", w.Header().Get("X-Content-Type-Options"))
+	assert.Equal(suite.T(), "DENY", w.Header().Get("X-Frame-Options"))
+	assert.Contains(suite.T(), w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'")
+	assert.Contains(suite.T(), w.Header().Get("Content-Security-Policy"), "default-src 'self'")
 }
 
 func TestAPISuite(t *testing.T) {

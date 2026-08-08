@@ -63,6 +63,8 @@ export function LoginPage() {
                 value={user}
                 onChange={(e) => setUser(e.target.value)}
                 required
+                aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
               />
             </div>
             <div className="space-y-1.5">
@@ -76,10 +78,12 @@ export function LoginPage() {
                 value={pass}
                 onChange={(e) => setPass(e.target.value)}
                 required
+                aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
               />
             </div>
             {error && (
-              <p role="alert" className="text-sm text-destructive">
+              <p id="login-error" role="alert" className="text-sm text-destructive">
                 {error}
               </p>
             )}

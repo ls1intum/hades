@@ -25,10 +25,43 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+// contentSecurityPolicy is scoped to what the embedded SPA needs: same-origin
+// scripts (hashed asset bundles, no inline JS), same-origin plus inline styles
+// (Tailwind + Recharts inject style attributes), data: images (the favicon),
+// and same-origin fetch/EventSource. Framing is denied.
+const contentSecurityPolicy = "default-src 'self'; " +
+	"script-src 'self'; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data:; " +
+	"font-src 'self'; " +
+	"connect-src 'self'; " +
+	"object-src 'none'; " +
+	"base-uri 'self'; " +
+	"form-action 'self'; " +
+	"frame-ancestors 'none'"
+
+// securityHeaders sets defensive response headers on every route. The strict CSP
+// is skipped for the DEBUG-only Swagger UI, which relies on inline scripts/styles.
+func securityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		// Ignored over plain HTTP; activates once served via TLS.
+		h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		if !strings.HasPrefix(c.Request.URL.Path, "/swagger") {
+			h.Set("Content-Security-Policy", contentSecurityPolicy)
+		}
+		c.Next()
+	}
+}
+
 func setupRouter(authKey string, producer hades.JobPublisher, statusPublisher buildstatus.StatusPublisher, dash *dashboard.Server) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.ErrorLogger())
 	r.Use(gin.Recovery())
+	r.Use(securityHeaders())
 
 	// Report validation errors using the JSON field names (e.g. "name")
 	// rather than the Go struct field names (e.g. "Name").

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func testServer(t *testing.T, enabled bool) *Server {
 		}
 		cfg.Username = "admin"
 		cfg.PasswordHash = string(hash)
-		cfg.SessionSecret = "0123456789abcdef-secret"
+		cfg.SessionSecret = "0123456789abcdef-0123456789abcdef-secret"
 	}
 	auth, err := newAuthenticator(cfg)
 	if err != nil {
@@ -193,10 +194,12 @@ func TestListJobsReflectsTracker(t *testing.T) {
 	}
 }
 
+const testJobID = "11111111-2222-3333-4444-555555555555"
+
 func TestJobLogsProxy(t *testing.T) {
 	// Stub log manager.
 	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if !strings.HasSuffix(req.URL.Path, "/jobs/job-1/logs") {
+		if !strings.HasSuffix(req.URL.Path, "/jobs/"+testJobID+"/logs") {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -211,7 +214,7 @@ func TestJobLogsProxy(t *testing.T) {
 	cookie := login(t, r)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/jobs/job-1/logs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/"+testJobID+"/logs", nil)
 	req.AddCookie(cookie)
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "logs") {
@@ -226,7 +229,7 @@ func TestJobLogsProxyUnavailable(t *testing.T) {
 	cookie := login(t, r)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/jobs/job-1/logs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/"+testJobID+"/logs", nil)
 	req.AddCookie(cookie)
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusServiceUnavailable {
@@ -299,6 +302,33 @@ func TestSummarizeDurations(t *testing.T) {
 	}
 	if summarizeDurations(nil).Count != 0 {
 		t.Fatal("expected empty durations for nil input")
+	}
+}
+
+func TestLockoutMapBounded(t *testing.T) {
+	s := testServer(t, true)
+	// Far more distinct keys than the cap; the map must not grow unbounded.
+	for i := 0; i < maxFailureEntries+500; i++ {
+		s.auth.recordFailure("key-" + strconv.Itoa(i))
+	}
+	s.auth.mu.Lock()
+	n := len(s.auth.failures)
+	s.auth.mu.Unlock()
+	if n > maxFailureEntries {
+		t.Fatalf("failures map grew to %d, cap is %d", n, maxFailureEntries)
+	}
+}
+
+func TestJobLogsRejectsNonUUID(t *testing.T) {
+	s := testServer(t, true)
+	r := newRouter(s)
+	cookie := login(t, r)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/jobs/not-a-uuid/logs", nil)
+	req.AddCookie(cookie)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for non-UUID job id, got %d", w.Code)
 	}
 }
 

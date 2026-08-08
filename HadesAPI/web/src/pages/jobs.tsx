@@ -38,7 +38,7 @@ export function JobsPage() {
         ))}
       </div>
 
-      <JobsTable jobs={jobs.data} loading={jobs.isLoading} />
+      <JobsTable jobs={jobs.data} loading={jobs.isLoading} error={jobs.isError} />
     </div>
   );
 }

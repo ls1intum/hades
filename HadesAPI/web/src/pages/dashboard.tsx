@@ -29,7 +29,7 @@ export function DashboardPage() {
         </p>
       </div>
 
-      <MetricsCards metrics={metrics.data} />
+      <MetricsCards metrics={metrics.data} error={metrics.isError} />
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -38,7 +38,7 @@ export function DashboardPage() {
             <Link to="/jobs">View all</Link>
           </Button>
         </div>
-        <JobsTable jobs={recent} loading={jobs.isLoading} />
+        <JobsTable jobs={recent} loading={jobs.isLoading} error={jobs.isError} />
       </section>
     </div>
   );

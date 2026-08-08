@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -157,6 +158,12 @@ func (s *Server) handleJobDetail(c *gin.Context) {
 // service is never exposed directly.
 func (s *Server) handleJobLogs(c *gin.Context) {
 	id := c.Param("id")
+	// The id is forwarded into an upstream URL path; require a well-formed UUID
+	// so nothing but a job id can ever reach the log manager.
+	if _, err := uuid.Parse(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid job id"})
+		return
+	}
 	target, err := url.JoinPath(s.cfg.LogManagerURL, "jobs", id, "logs")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid log manager URL"})

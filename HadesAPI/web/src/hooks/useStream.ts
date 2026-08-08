@@ -49,20 +49,35 @@ export function useStream(enabled: boolean): boolean {
   return connected;
 }
 
-function patchJob(
+// maxListLength caps how many jobs a live-patched list holds, so a busy cluster
+// cannot grow a tab's memory without bound between the periodic full refetches.
+const MAX_LIST_LENGTH = 500;
+
+export function patchJob(
   qc: ReturnType<typeof useQueryClient>,
   job: JobSummary,
 ): void {
-  // Update every cached jobs list (filtered variants included).
-  qc.setQueriesData<JobSummary[]>({ queryKey: ["jobs"] }, (prev) => {
-    const list = prev ?? [];
-    const idx = list.findIndex((j) => j.id === job.id);
-    const merged =
-      idx >= 0
-        ? Object.assign([...list], { [idx]: { ...list[idx], ...job } })
-        : [job, ...list];
-    return merged as JobSummary[];
-  });
+  // Update each cached jobs list, respecting its status filter. The query key is
+  // ["jobs", filter] where filter is "" (all) or a specific status.
+  const queries = qc.getQueryCache().findAll({ queryKey: ["jobs"] });
+  for (const query of queries) {
+    const filter = (query.queryKey[1] as string | undefined) ?? "";
+    const matches = filter === "" || job.status === filter;
+    qc.setQueryData<JobSummary[]>(query.queryKey, (prev) => {
+      const list = prev ?? [];
+      const idx = list.findIndex((j) => j.id === job.id);
+      if (!matches) {
+        // Job no longer belongs in this filtered list: drop it if present.
+        return idx >= 0 ? list.filter((j) => j.id !== job.id) : list;
+      }
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...list[idx], ...job };
+        return next;
+      }
+      return [job, ...list].slice(0, MAX_LIST_LENGTH);
+    });
+  }
   // Merge into an open detail view if present.
   qc.setQueryData(["job", job.id], (prev: unknown) =>
     prev ? { ...(prev as object), ...job } : prev,

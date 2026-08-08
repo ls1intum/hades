@@ -1,6 +1,7 @@
 package redact
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -134,6 +135,72 @@ func TestDrop_EmptiesMetadata_NoMutation(t *testing.T) {
 	}
 	if len(job.Metadata) == 0 || len(job.Steps[0].Metadata) == 0 {
 		t.Error("Drop mutated the original job")
+	}
+}
+
+func TestText_ScrubsScriptSecrets(t *testing.T) {
+	r := Default()
+	// The exact leak the reviewer reproduced end-to-end.
+	in := "export API_KEY=sk-live-abcdef123456; git clone https://user:p4ssw0rd@github.com/x/y.git"
+	out := r.Text(in)
+	if strings.Contains(out, "sk-live-abcdef123456") {
+		t.Errorf("API_KEY leaked: %q", out)
+	}
+	if strings.Contains(out, "p4ssw0rd") {
+		t.Errorf("URL password leaked: %q", out)
+	}
+	// Structure preserved.
+	if !strings.Contains(out, "git clone https://user:") || !strings.Contains(out, "@github.com/x/y.git") {
+		t.Errorf("structure not preserved: %q", out)
+	}
+}
+
+func TestText_VariousSecretForms(t *testing.T) {
+	r := Default()
+	cases := []struct{ in, mustNotContain string }{
+		{"GIT_PASSWORD=hunter2", "hunter2"},
+		{"export AUTH_TOKEN='ghp_abcDEF123456'", "ghp_abcDEF123456"},
+		{"curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r'", "dBjftJeZ4CVPmB92K27uhbUJU1p1r"},
+		{"echo ZmFrZS1oaWdoLWVudHJvcHktdG9rZW4tMTIzNDU2Nzg5MA > /tmp/x", "ZmFrZS1oaWdoLWVudHJvcHktdG9rZW4tMTIzNDU2Nzg5MA"},
+		{"psql postgres://admin:s3cr3t@db:5432/app", "s3cr3t"},
+	}
+	for _, c := range cases {
+		out := r.Text(c.in)
+		if strings.Contains(out, c.mustNotContain) {
+			t.Errorf("Text(%q) leaked %q -> %q", c.in, c.mustNotContain, out)
+		}
+		if !strings.Contains(out, Mask) {
+			t.Errorf("Text(%q) did not mask -> %q", c.in, out)
+		}
+	}
+}
+
+func TestText_LeavesInnocuousScriptsAlone(t *testing.T) {
+	r := Default()
+	in := "echo 'building the project'\nmake build\nls -la /shared"
+	if out := r.Text(in); out != in {
+		t.Errorf("innocuous script altered: %q -> %q", in, out)
+	}
+	if r.Text("") != "" {
+		t.Error("empty script should stay empty")
+	}
+}
+
+func TestPayload_RedactsStepScript(t *testing.T) {
+	r := Default()
+	job := payload.QueuePayload{
+		Steps: []payload.Step{{
+			ID:     1,
+			Script: "git clone https://u:token123456789012345678@h/r.git",
+		}},
+	}
+	out := r.Payload(job)
+	if strings.Contains(out.Steps[0].Script, "token123456789012345678") {
+		t.Errorf("step script secret leaked: %q", out.Steps[0].Script)
+	}
+	// Original not mutated.
+	if !strings.Contains(job.Steps[0].Script, "token123456789012345678") {
+		t.Error("Payload mutated original step script")
 	}
 }
 

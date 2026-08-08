@@ -13,6 +13,15 @@ import (
 // cleanupInterval bounds how often finished jobs are swept from the tracker.
 const cleanupInterval = time.Minute
 
+// staleJobTTL is a hard ceiling after which even non-terminal jobs are evicted.
+// A job stuck in Queued/Running (e.g. a lost terminal-status event or a hung
+// job) would otherwise be retained forever.
+const staleJobTTL = 24 * time.Hour
+
+// maxTrackedJobs caps the tracker map; when exceeded, the oldest records are
+// evicted so an adversarial or runaway submitter cannot exhaust memory.
+const maxTrackedJobs = 10000
+
 // JobSummary is the list/stream representation of a tracked job. Name and
 // StepCount are populated by the list handler from the KV payload; the tracker
 // itself fills the rest.
@@ -222,15 +231,41 @@ func (t *tracker) cleanupLoop(ctx context.Context) {
 	}
 }
 
-// sweep removes finished jobs whose retention has elapsed.
+// sweep removes finished jobs past retention, evicts jobs stuck in a
+// non-terminal state past the hard stale ceiling, and enforces the map cap.
 func (t *tracker) sweep() {
-	cutoff := time.Now().Add(-t.retention)
+	now := time.Now()
+	terminalCutoff := now.Add(-t.retention)
+	staleCutoff := now.Add(-staleJobTTL)
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	for id, rec := range t.jobs {
-		if isTerminal(rec.status) && rec.updatedAt.Before(cutoff) {
+		if isTerminal(rec.status) {
+			if rec.updatedAt.Before(terminalCutoff) {
+				delete(t.jobs, id)
+			}
+		} else if rec.updatedAt.Before(staleCutoff) {
 			delete(t.jobs, id)
 		}
+	}
+
+	t.enforceCapLocked()
+}
+
+// enforceCapLocked evicts the oldest records while the map exceeds the cap.
+// Caller must hold the write lock.
+func (t *tracker) enforceCapLocked() {
+	for len(t.jobs) > maxTrackedJobs {
+		var oldestID string
+		var oldest time.Time
+		first := true
+		for id, rec := range t.jobs {
+			if first || rec.updatedAt.Before(oldest) {
+				oldestID, oldest, first = id, rec.updatedAt, false
+			}
+		}
+		delete(t.jobs, oldestID)
 	}
 }
 

@@ -19,6 +19,14 @@ function initialTheme(): Theme {
     : "light";
 }
 
+/**
+ * applyInitialTheme sets the theme class on <html> synchronously. Call it from
+ * the entry module before React renders to avoid a flash of the wrong theme.
+ */
+export function applyInitialTheme(): void {
+  document.documentElement.classList.toggle("dark", initialTheme() === "dark");
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(initialTheme);
 

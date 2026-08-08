@@ -35,4 +35,15 @@ describe("JobsTable", () => {
     const { container } = renderWithProviders(<JobsTable loading />);
     expect(container.querySelector(".animate-pulse")).toBeTruthy();
   });
+
+  it("renders an error state distinct from empty", () => {
+    renderWithProviders(<JobsTable jobs={[]} error />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/failed to load/i);
+  });
+
+  it("job rows are keyboard-accessible", () => {
+    renderWithProviders(<JobsTable jobs={jobs} />);
+    const row = screen.getByRole("link", { name: /open job build-app/i });
+    expect(row).toHaveAttribute("tabindex", "0");
+  });
 });

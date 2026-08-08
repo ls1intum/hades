@@ -213,14 +213,26 @@ the SPA is not served). Set three variables to enable it:
 |----------|-------------|
 | `DASHBOARD_USERNAME` | Login username |
 | `DASHBOARD_PASSWORD_HASH` | bcrypt hash of the password (e.g. `htpasswd -bnBC 12 "" 'yourpass' \| tr -d ':\n'`) |
-| `DASHBOARD_SESSION_SECRET` | Random string (>=16 chars) used to sign session cookies |
+| `DASHBOARD_SESSION_SECRET` | Random string (>=32 chars) used to sign session cookies |
 
 Optional: `DASHBOARD_SESSION_TTL` (default `12h`), `DASHBOARD_JOB_RETENTION`
 (default `1h`), `LOG_MANAGER_URL` (default the in-cluster log manager),
-`SECRET_REDACT_MODE` (`smart` default, or `all`), and `SECRET_KEY_PATTERNS`.
+`SECRET_REDACT_MODE` (`smart` default, or `all`), `SECRET_KEY_PATTERNS`,
+`DASHBOARD_TRUSTED_PROXIES`, and `DASHBOARD_COOKIE_INSECURE`.
 
 Login uses a signed, `HttpOnly; Secure; SameSite=Strict` session cookie; all
-`/api/*` routes require a valid session.
+`/api/*` routes require a valid session, with rate-limited login lockout.
+
+### Security notes
+
+- **Deploy behind TLS.** The session cookie is `Secure`, so login only works over
+  HTTPS (or `http://localhost`). For a rare plain-HTTP dev setup, set
+  `DASHBOARD_COOKIE_INSECURE=true` - never in production.
+- **Set `DASHBOARD_TRUSTED_PROXIES`** to your ingress' address range when behind a
+  reverse proxy. Otherwise `X-Forwarded-For` is ignored (the login lockout keys on
+  the direct, un-spoofable address).
+- Responses carry `Content-Security-Policy`, `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, and HSTS.
 
 ### Secret handling
 
@@ -229,9 +241,16 @@ variables and routinely carries credentials. The dashboard redacts it
 **server-side** before any JSON is sent: values are masked when the key looks
 sensitive (`token`, `password`, `secret`, ...) **or** the value itself looks like a
 secret (credentials embedded in a URL, a PEM block, a JWT, a high-entropy token).
-Keys stay visible so operators can see which variables exist; `SECRET_REDACT_MODE=all`
-masks every value. **Caveat:** step **scripts** and job **logs** are shown verbatim
-and are *not* scrubbed.
+Step **scripts** are scanned with the same heuristics and have inline secrets
+masked. Keys stay visible so operators can see which variables exist;
+`SECRET_REDACT_MODE=all` masks every metadata value.
+
+**Residual exposure (by design):** job **logs** are proxied and shown *verbatim* -
+a secret a job echoes to stdout will be visible (the log panel warns about this).
+Script redaction is best-effort heuristic scrubbing, not a guarantee. Sessions are
+stateless HMAC tokens, so `logout` and expiry are enforced by the cookie/TTL but a
+leaked token cannot be revoked before it expires - keep `DASHBOARD_SESSION_TTL`
+modest and rotate `DASHBOARD_SESSION_SECRET` to invalidate all sessions at once.
 
 ### Local development
 

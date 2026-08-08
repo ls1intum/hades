@@ -73,7 +73,13 @@ via `.github/workflows/e2e.yml`.
 
 ## Security notes
 
-- Secret metadata is redacted **server-side**; the client only ever renders the
-  mask token and shows it as a "redacted" chip.
-- Job **logs** and step **scripts** are shown verbatim and are **not** scrubbed -
-  the logs view carries a visible warning to that effect.
+- Secret metadata **and** step scripts are redacted **server-side** (key- and
+  value-heuristics); the client only ever renders the mask token, shown as a
+  "redacted" chip.
+- Job **logs** are proxied and shown verbatim - the logs view carries a visible
+  warning that they may contain secrets Hades does not scrub.
+- All `/api/*` calls are same-origin with a `HttpOnly; Secure; SameSite=Strict`
+  session cookie. A 401 on any authenticated request clears auth and redirects to
+  the login page (see `src/lib/api.ts` + `src/lib/auth-events.ts`).
+- The app is served under a strict `Content-Security-Policy` (same-origin scripts,
+  no inline JS); keep new code free of inline `<script>` and remote asset loads.

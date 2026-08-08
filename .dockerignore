@@ -1,0 +1,9 @@
+# Keep the Docker build context lean and deterministic. The dashboard SPA is
+# built inside the image (Node stage); a developer's local node_modules / built
+# dist must not leak into the build context or the Go build stage.
+**/node_modules
+HadesAPI/web/dist
+HadesAPI/web/playwright-report
+HadesAPI/web/test-results
+.worktrees
+.git

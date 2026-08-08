@@ -71,7 +71,7 @@ export function JobDetailPage() {
           <Tabs defaultValue="steps">
             <TabsList>
               <TabsTrigger value="steps">
-                Steps ({job.data.steps.length})
+                Steps ({(job.data.steps ?? []).length})
               </TabsTrigger>
               <TabsTrigger value="metadata">Metadata</TabsTrigger>
               <TabsTrigger value="logs">Logs</TabsTrigger>
@@ -83,7 +83,7 @@ export function JobDetailPage() {
                   The full job definition has aged out of storage.
                 </p>
               )}
-              {job.data.steps.map((step) => (
+              {(job.data.steps ?? []).map((step) => (
                 <Card key={step.id}>
                   <CardHeader className="pb-2">
                     <div className="flex flex-wrap items-center gap-2">

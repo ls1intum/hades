@@ -3,8 +3,12 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { App } from "./App";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider, applyInitialTheme } from "@/components/theme-provider";
 import "./index.css";
+
+// Apply the stored/preferred theme before first paint to avoid a flash. This
+// runs from a same-origin module (no inline script), so it satisfies the CSP.
+applyInitialTheme();
 
 const queryClient = new QueryClient({
   defaultOptions: {

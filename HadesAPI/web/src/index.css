@@ -24,9 +24,12 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
 
-  --success: oklch(0.62 0.17 149);
-  --warning: oklch(0.75 0.15 80);
-  --info: oklch(0.62 0.16 250);
+  /* Status colors are tuned so white text (success/info) and black text
+     (warning) clear WCAG AA 4.5:1 for the small badge text. Verify with a
+     contrast checker before changing lightness. */
+  --success: oklch(0.44 0.14 150);
+  --warning: oklch(0.8 0.14 85);
+  --info: oklch(0.48 0.17 255);
 }
 
 .dark {
@@ -50,9 +53,11 @@
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
 
-  --success: oklch(0.7 0.17 149);
-  --warning: oklch(0.8 0.15 80);
-  --info: oklch(0.7 0.16 250);
+  /* Kept dark enough for white text (success/info) to clear AA on the badge
+     itself, independent of the surrounding card. */
+  --success: oklch(0.46 0.14 150);
+  --warning: oklch(0.82 0.14 85);
+  --info: oklch(0.5 0.17 255);
 }
 
 @theme inline {

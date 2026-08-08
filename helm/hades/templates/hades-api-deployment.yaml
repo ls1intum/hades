@@ -77,4 +77,20 @@ spec:
             - name: SECRET_REDACT_MODE
               value: {{ .Values.hadesApi.dashboard.redactMode | quote }}
             {{- end }}
+            {{- if .Values.hadesApi.dashboard.secretKeyPatterns }}
+            - name: SECRET_KEY_PATTERNS
+              value: {{ .Values.hadesApi.dashboard.secretKeyPatterns | quote }}
+            {{- end }}
+            - name: DASHBOARD_SESSION_TTL
+              value: {{ .Values.hadesApi.dashboard.sessionTTL | quote }}
+            - name: DASHBOARD_JOB_RETENTION
+              value: {{ .Values.hadesApi.dashboard.jobRetention | quote }}
+            {{- if .Values.hadesApi.dashboard.trustedProxies }}
+            - name: DASHBOARD_TRUSTED_PROXIES
+              value: {{ join "," .Values.hadesApi.dashboard.trustedProxies | quote }}
+            {{- end }}
+            {{- if .Values.hadesApi.dashboard.cookieInsecure }}
+            - name: DASHBOARD_COOKIE_INSECURE
+              value: "true"
+            {{- end }}
             {{- end }}

@@ -1,3 +1,4 @@
+import { emitUnauthorized } from "./auth-events";
 import type { JobDetail, JobSummary, LogsResponse, Metrics } from "./types";
 
 /** ApiError carries the HTTP status so callers can special-case 401. */
@@ -9,6 +10,10 @@ export class ApiError extends Error {
   }
 }
 
+// Endpoints where a 401 is an expected, local outcome (wrong password / the
+// initial "am I logged in?" probe) rather than a session that just expired.
+const NON_SESSION_401 = new Set(["/api/login", "/api/session"]);
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     credentials: "same-origin",
@@ -16,6 +21,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (!res.ok) {
+    // A 401 on an authenticated request means the session expired/was revoked;
+    // signal the app to clear auth and redirect to login.
+    if (res.status === 401 && !NON_SESSION_401.has(path)) {
+      emitUnauthorized();
+    }
     let message = res.statusText;
     try {
       const body = await res.json();

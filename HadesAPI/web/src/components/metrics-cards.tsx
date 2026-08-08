@@ -1,24 +1,13 @@
-import {
-  Bar,
-  BarChart,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-} from "recharts";
+import { lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Metrics } from "@/lib/types";
 import { formatDuration } from "@/lib/utils";
 
+// Lazy so Recharts is not in the initial/login bundle.
+const StatusChart = lazy(() => import("@/components/status-chart"));
+
 const STATUS_ORDER = ["Queued", "Running", "Succeeded", "Failed", "Stopped"];
-const STATUS_COLOR: Record<string, string> = {
-  Queued: "var(--color-muted-foreground)",
-  Running: "var(--color-info)",
-  Succeeded: "var(--color-success)",
-  Failed: "var(--color-destructive)",
-  Stopped: "var(--color-warning)",
-};
 
 function Stat({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
@@ -36,7 +25,23 @@ function Stat({ label, value, hint }: { label: string; value: React.ReactNode; h
   );
 }
 
-export function MetricsCards({ metrics }: { metrics?: Metrics }) {
+export function MetricsCards({
+  metrics,
+  error,
+}: {
+  metrics?: Metrics;
+  error?: boolean;
+}) {
+  if (error && !metrics) {
+    return (
+      <div
+        role="alert"
+        className="rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-sm text-destructive"
+      >
+        Failed to load metrics. Retrying…
+      </div>
+    );
+  }
   if (!metrics) {
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -80,35 +85,9 @@ export function MetricsCards({ metrics }: { metrics?: Metrics }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-4">
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={chartData}>
-              <XAxis
-                dataKey="status"
-                tickLine={false}
-                axisLine={false}
-                fontSize={12}
-                stroke="var(--color-muted-foreground)"
-              />
-              <Tooltip
-                cursor={{ fill: "var(--color-muted)", opacity: 0.3 }}
-                contentStyle={{
-                  background: "var(--color-popover)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 8,
-                  color: "var(--color-popover-foreground)",
-                  fontSize: 12,
-                }}
-              />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {chartData.map((d) => (
-                  <Cell
-                    key={d.status}
-                    fill={STATUS_COLOR[d.status] ?? "var(--color-primary)"}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <Suspense fallback={<Skeleton className="h-[180px] w-full" />}>
+            <StatusChart data={chartData} />
+          </Suspense>
         </CardContent>
       </Card>
     </div>

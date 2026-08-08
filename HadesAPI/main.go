@@ -23,6 +23,12 @@ type HadesAPIConfig struct {
 	APIPort    uint `env:"API_PORT,notEmpty" envDefault:"8080"`
 	NatsConfig hadesnats.ConnectionConfig
 	AuthKey    string `env:"AUTH_KEY"`
+	// TrustedProxies are the CIDRs/IPs of front proxies (e.g. the ingress) that
+	// may set X-Forwarded-For. Empty (default) trusts none, so ClientIP() uses
+	// the direct RemoteAddr and cannot be spoofed via a forged XFF header - which
+	// the dashboard login lockout relies on. Set this to your ingress' address
+	// range when deployed behind a reverse proxy.
+	TrustedProxies []string `env:"DASHBOARD_TRUSTED_PROXIES" envSeparator:","`
 }
 
 var cfg HadesAPIConfig
@@ -92,6 +98,14 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 
 	r := setupRouter(cfg.AuthKey, producer, producer, dash)
+
+	// Only trust X-Forwarded-For from explicitly configured proxies; otherwise
+	// ClientIP() falls back to the un-spoofable RemoteAddr. This keeps the login
+	// lockout keyed on a value the client cannot forge.
+	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		slog.Error("Failed to set trusted proxies", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr:        fmt.Sprintf(":%d", cfg.APIPort),

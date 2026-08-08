@@ -16,14 +16,26 @@ import { formatDuration, relativeTime } from "@/lib/utils";
 export function JobsTable({
   jobs,
   loading,
+  error,
 }: {
   jobs?: JobSummary[];
   loading?: boolean;
+  error?: boolean;
 }) {
   const navigate = useNavigate();
 
   if (loading) {
     return <Skeleton className="h-64 w-full" />;
+  }
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="rounded-lg border border-destructive/40 bg-destructive/5 p-10 text-center text-sm text-destructive"
+      >
+        Failed to load jobs. Retrying…
+      </div>
+    );
   }
   if (!jobs || jobs.length === 0) {
     return (
@@ -47,11 +59,22 @@ export function JobsTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {jobs.map((job) => (
+          {jobs.map((job) => {
+            const open = () => navigate(`/jobs/${job.id}`);
+            return (
             <TableRow
               key={job.id}
-              className="cursor-pointer"
-              onClick={() => navigate(`/jobs/${job.id}`)}
+              className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              role="link"
+              tabIndex={0}
+              aria-label={`Open job ${job.name || job.id}`}
+              onClick={open}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  open();
+                }
+              }}
             >
               <TableCell className="font-medium">
                 <div>{job.name || "(unnamed)"}</div>
@@ -81,7 +104,8 @@ export function JobsTable({
                 )}
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     </div>

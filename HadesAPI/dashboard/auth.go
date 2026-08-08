@@ -20,19 +20,23 @@ import (
 
 const (
 	sessionCookieName = "hades_dashboard_session"
-	minSecretLen      = 16
+	minSecretLen      = 32
 	// login lockout parameters
 	maxFailedAttempts = 5
 	lockoutWindow     = 15 * time.Minute
+	// maxFailureEntries bounds the lockout map so a client rotating its source
+	// key cannot grow it without limit (memory DoS).
+	maxFailureEntries = 4096
 )
 
 // authenticator verifies credentials and mints/validates signed session cookies.
 // The cookie is a stdlib HMAC-SHA256 signed token: base64url(payload).base64url(mac).
 type authenticator struct {
-	username     string
-	passwordHash []byte
-	secret       []byte
-	ttl          time.Duration
+	username       string
+	passwordHash   []byte
+	secret         []byte
+	ttl            time.Duration
+	insecureCookie bool
 
 	mu       sync.Mutex
 	failures map[string]*failureState
@@ -59,11 +63,12 @@ func newAuthenticator(cfg Config) (*authenticator, error) {
 		ttl = 12 * time.Hour
 	}
 	return &authenticator{
-		username:     cfg.Username,
-		passwordHash: []byte(cfg.PasswordHash),
-		secret:       []byte(cfg.SessionSecret),
-		ttl:          ttl,
-		failures:     make(map[string]*failureState),
+		username:       cfg.Username,
+		passwordHash:   []byte(cfg.PasswordHash),
+		secret:         []byte(cfg.SessionSecret),
+		ttl:            ttl,
+		insecureCookie: cfg.InsecureCookie,
+		failures:       make(map[string]*failureState),
 	}, nil
 }
 
@@ -85,15 +90,31 @@ func (a *authenticator) locked(key string) bool {
 }
 
 func (a *authenticator) recordFailure(key string) {
+	now := time.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// Opportunistically drop expired entries so the map cannot grow without
+	// bound when a client rotates its source key.
+	for k, v := range a.failures {
+		if now.After(v.until) {
+			delete(a.failures, k)
+		}
+	}
+
 	fs := a.failures[key]
-	if fs == nil || time.Now().After(fs.until) {
+	if fs == nil || now.After(fs.until) {
+		if len(a.failures) >= maxFailureEntries {
+			// Hard cap reached (all entries still within the window): refuse to
+			// track new keys rather than grow unbounded. Existing locked-out
+			// keys keep their state.
+			return
+		}
 		fs = &failureState{}
 		a.failures[key] = fs
 	}
 	fs.count++
-	fs.until = time.Now().Add(lockoutWindow)
+	fs.until = now.Add(lockoutWindow)
 }
 
 func (a *authenticator) recordSuccess(key string) {
@@ -219,7 +240,7 @@ func (s *Server) setSessionCookie(c *gin.Context, token string, exp time.Time) {
 		Expires:  exp,
 		MaxAge:   int(time.Until(exp).Seconds()),
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   !s.auth.insecureCookie,
 		SameSite: http.SameSiteStrictMode,
 	})
 }
@@ -231,7 +252,7 @@ func (s *Server) clearSessionCookie(c *gin.Context) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   !s.auth.insecureCookie,
 		SameSite: http.SameSiteStrictMode,
 	})
 }

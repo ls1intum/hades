@@ -52,6 +52,9 @@ type Config struct {
 	SessionTTL    time.Duration `env:"DASHBOARD_SESSION_TTL" envDefault:"12h"`
 	JobRetention  time.Duration `env:"DASHBOARD_JOB_RETENTION" envDefault:"1h"`
 	LogManagerURL string        `env:"LOG_MANAGER_URL" envDefault:"http://hades-log-manager-service:8081"`
+	// InsecureCookie drops the Secure flag on the session cookie. Only for local
+	// HTTP development; never enable behind anything other than localhost.
+	InsecureCookie bool `env:"DASHBOARD_COOKIE_INSECURE" envDefault:"false"`
 
 	Redact redact.Config
 }

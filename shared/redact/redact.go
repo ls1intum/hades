@@ -124,16 +124,57 @@ func (r *Redactor) Metadata(m map[string]string) map[string]string {
 }
 
 // Payload returns a deep copy of job with all job-level and step-level metadata
-// redacted. The input payload and its slices/maps are never modified.
+// redacted, and secrets scrubbed from each step's Script. The input payload and
+// its slices/maps are never modified.
 func (r *Redactor) Payload(job payload.QueuePayload) payload.QueuePayload {
 	job.Metadata = r.Metadata(job.Metadata)
 	steps := make([]payload.Step, len(job.Steps))
 	copy(steps, job.Steps)
 	for i := range steps {
 		steps[i].Metadata = r.Metadata(steps[i].Metadata)
+		steps[i].Script = r.Text(steps[i].Script)
 	}
 	job.Steps = steps
 	return job
+}
+
+var (
+	// urlCredentials captures the password segment of a scheme://user:pass@host URL.
+	urlCredentials = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.\-]*://[^/\s:@]+:)([^/\s@]+)(@)`)
+	// sensitiveAssignment matches KEY=VALUE / KEY: VALUE / export KEY=VALUE where
+	// the key looks sensitive; group 3 is the (optionally quoted) value to mask.
+	sensitiveAssignment = regexp.MustCompile(`(?i)((?:^|[\s;&|(])(?:export\s+|set\s+|-e\s+)?[\w.\-]*(?:token|secret|passwd|password|pwd|api[_-]?key|access[_-]?key|credential|auth|private|signing|session)[\w.\-]*\s*[:=]\s*)(["']?)([^\s"';]+)`)
+	// jwtInline matches a JWT anywhere in a larger string (jwtLike is anchored).
+	jwtInline = regexp.MustCompile(`[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}`)
+	// pemBlock matches a whole PEM key/cert block.
+	pemBlock = regexp.MustCompile(`(?s)-----BEGIN[^-]*-----.*?-----END[^-]*-----`)
+	// longToken matches long unbroken base64/hex/token strings (checked for entropy).
+	longToken = regexp.MustCompile(`[A-Za-z0-9+/=_\-]{24,}`)
+)
+
+// Text returns s with embedded secrets masked: credentials in URLs, sensitive
+// KEY=VALUE assignments, PEM blocks, JWTs, and long high-entropy tokens. It is
+// used to scrub step scripts, which routinely embed clone URLs and API keys.
+// Structure is preserved so the script stays readable; only secret spans are
+// replaced with the mask.
+func (r *Redactor) Text(s string) string {
+	if s == "" {
+		return s
+	}
+	s = urlCredentials.ReplaceAllString(s, "${1}"+Mask+"${3}")
+	s = sensitiveAssignment.ReplaceAllString(s, "${1}${2}"+Mask)
+	s = pemBlock.ReplaceAllString(s, Mask)
+	s = jwtInline.ReplaceAllString(s, Mask)
+	s = longToken.ReplaceAllStringFunc(s, func(tok string) string {
+		if tok == Mask {
+			return tok
+		}
+		if shannonEntropy(tok) >= 3.5 {
+			return Mask
+		}
+		return tok
+	})
+	return s
 }
 
 // Drop returns a deep copy of job with every metadata map emptied (keys and
