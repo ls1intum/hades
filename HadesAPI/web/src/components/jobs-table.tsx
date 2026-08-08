@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -59,25 +59,24 @@ export function JobsTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {jobs.map((job) => {
-            const open = () => navigate(`/jobs/${job.id}`);
-            return (
+          {jobs.map((job) => (
             <TableRow
               key={job.id}
-              className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              role="link"
-              tabIndex={0}
-              aria-label={`Open job ${job.name || job.id}`}
-              onClick={open}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  open();
-                }
-              }}
+              className="cursor-pointer"
+              onClick={() => navigate(`/jobs/${job.id}`)}
             >
               <TableCell className="font-medium">
-                <div>{job.name || "(unnamed)"}</div>
+                {/* Real link so the row is keyboard/AT navigable while the <tr>
+                    keeps its table-row semantics; the row onClick is a
+                    mouse-only convenience. */}
+                <Link
+                  to={`/jobs/${job.id}`}
+                  aria-label={`Open job ${job.name || job.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="rounded hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {job.name || "(unnamed)"}
+                </Link>
                 <div className="font-mono text-xs text-muted-foreground">
                   {job.id.slice(0, 8)}
                 </div>
@@ -104,8 +103,7 @@ export function JobsTable({
                 )}
               </TableCell>
             </TableRow>
-            );
-          })}
+          ))}
         </TableBody>
       </Table>
     </div>

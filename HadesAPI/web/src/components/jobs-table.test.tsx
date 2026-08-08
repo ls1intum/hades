@@ -41,9 +41,12 @@ describe("JobsTable", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/failed to load/i);
   });
 
-  it("job rows are keyboard-accessible", () => {
+  it("job rows are keyboard-accessible via a real link", () => {
     renderWithProviders(<JobsTable jobs={jobs} />);
-    const row = screen.getByRole("link", { name: /open job build-app/i });
-    expect(row).toHaveAttribute("tabindex", "0");
+    // A real <a> is inherently focusable/AT-navigable, and the <tr> keeps its
+    // table-row role so screen-reader table navigation still works.
+    const link = screen.getByRole("link", { name: /open job build-app/i });
+    expect(link).toHaveAttribute("href", expect.stringContaining(jobs[0].id));
+    expect(screen.getByRole("row", { name: /build-app/i })).toBeInTheDocument();
   });
 });

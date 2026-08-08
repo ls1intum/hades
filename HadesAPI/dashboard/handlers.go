@@ -157,14 +157,15 @@ func (s *Server) handleJobDetail(c *gin.Context) {
 // Auth is already enforced by the route group, so the unauthenticated internal
 // service is never exposed directly.
 func (s *Server) handleJobLogs(c *gin.Context) {
-	id := c.Param("id")
-	// The id is forwarded into an upstream URL path; require a well-formed UUID
-	// so nothing but a job id can ever reach the log manager.
-	if _, err := uuid.Parse(id); err != nil {
+	// The id is forwarded into an upstream URL path. Parse it as a UUID and use
+	// the canonical re-serialized form so only a well-formed job id can ever
+	// reach the log manager - no user-controlled data flows into the request URL.
+	parsedID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid job id"})
 		return
 	}
-	target, err := url.JoinPath(s.cfg.LogManagerURL, "jobs", id, "logs")
+	target, err := url.JoinPath(s.cfg.LogManagerURL, "jobs", parsedID.String(), "logs")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid log manager URL"})
 		return
@@ -177,7 +178,7 @@ func (s *Server) handleJobLogs(c *gin.Context) {
 	}
 	resp, err := s.http.Do(req)
 	if err != nil {
-		slog.Warn("Log manager unreachable", "job_id", id, "error", err)
+		slog.Warn("Log manager unreachable", "job_id", parsedID, "error", err)
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "log service unavailable"})
 		return
 	}
