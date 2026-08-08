@@ -85,7 +85,7 @@ helm show crds oci://ghcr.io/ls1intum/charts/hades --version <version> | kubectl
 Apply the sample `BuildJob` manifest directly:
 
 ```bash
-kubectl apply -f ./HadesScheduler/HadesOperator/config/samples/build_v1_buildjob.yaml
+kubectl apply -n hades -f ./HadesScheduler/HadesOperator/config/samples/build_v1_buildjob.yaml
 ```
 
 Monitor its progress:

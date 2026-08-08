@@ -181,7 +181,7 @@ docker logs traefik -f
 
 Look for lines like:
 
-```
+```text
 msg="Configuration loaded from file: /etc/traefik/traefik.yml"
 msg="Starting server" entryPointName=web
 msg="Starting server" entryPointName=websecure

@@ -57,7 +57,7 @@ kubectl -n hades logs deploy/hades-scheduler -f
 
 Expected healthy output:
 
-```
+```text
 INFO Connected to NATS server url=nats://hades-nats.hades.svc:4222
 INFO Started HadesScheduler in Kubernetes mode
 INFO Using operator mode (dynamic client)
