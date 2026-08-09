@@ -201,7 +201,7 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublishe
 	// Record the job (with its priority, which the KV payload does not carry) so
 	// the dashboard shows it immediately.
 	if dash != nil {
-		dash.TrackEnqueue(p.QueuePayload.ID.String(), p.QueuePayload.Name, queuePrio)
+		dash.TrackEnqueue(p.QueuePayload.ID.String(), p.QueuePayload.Name, len(p.QueuePayload.Steps), queuePrio)
 	}
 
 	slog.Info("Successfully enqueued job", "job_id", p.QueuePayload.ID.String())

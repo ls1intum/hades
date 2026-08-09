@@ -9,11 +9,13 @@ export function cn(...inputs: ClassValue[]) {
 /** formatDuration renders a millisecond duration as a compact human string. */
 export function formatDuration(ms?: number | null): string {
   if (ms == null) return "-";
-  if (ms < 1000) return `${ms}ms`;
+  if (ms < 1000) return `${Math.round(ms)}ms`;
   const s = ms / 1000;
   if (s < 60) return `${s.toFixed(1)}s`;
-  const m = Math.floor(s / 60);
-  const rem = Math.round(s % 60);
+  // Round to whole seconds first so the remainder can never render as "60s".
+  const total = Math.round(s);
+  const m = Math.floor(total / 60);
+  const rem = total % 60;
   return `${m}m ${rem}s`;
 }
 
@@ -31,6 +33,9 @@ export function relativeTime(iso?: string | null): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "-";
   const diff = Date.now() - then;
+  // A timestamp slightly in the future (clock skew) should read as "just now",
+  // not a negative "-3s ago".
+  if (diff < 0) return "just now";
   const s = Math.round(diff / 1000);
   if (s < 60) return `${s}s ago`;
   const m = Math.floor(s / 60);

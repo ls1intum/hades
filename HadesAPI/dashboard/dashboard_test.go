@@ -169,7 +169,7 @@ func TestLoginLockout(t *testing.T) {
 func TestListJobsReflectsTracker(t *testing.T) {
 	s := testServer(t, true)
 	r := newRouter(s)
-	s.tracker.enqueue("job-1", "build", hades.HighPriority)
+	s.tracker.enqueue("job-1", "build", 3, hades.HighPriority)
 	s.tracker.observe("job-1", buildstatus.StatusRunning)
 
 	cookie := login(t, r)
@@ -302,6 +302,22 @@ func TestSummarizeDurations(t *testing.T) {
 	}
 	if summarizeDurations(nil).Count != 0 {
 		t.Fatal("expected empty durations for nil input")
+	}
+}
+
+func TestSummarizeDurations_P95NearestRank(t *testing.T) {
+	// 10 samples 1..10: nearest-rank p95 = ceil(0.95*10)=10th value = 1000.
+	ds := []int64{100, 200, 300, 400, 500, 600, 700, 800, 900, 1000}
+	if got := summarizeDurations(ds).P95Ms; got != 1000 {
+		t.Fatalf("p95 = %d, want 1000", got)
+	}
+	// 20 samples: ceil(0.95*20)=19th value.
+	twenty := make([]int64, 20)
+	for i := range twenty {
+		twenty[i] = int64((i + 1) * 10)
+	}
+	if got := summarizeDurations(twenty).P95Ms; got != 190 {
+		t.Fatalf("p95(20) = %d, want 190", got)
 	}
 }
 

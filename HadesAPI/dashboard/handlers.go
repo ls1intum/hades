@@ -94,16 +94,19 @@ func (s *Server) handleListJobs(c *gin.Context) {
 		jobs = jobs[:maxJobs]
 	}
 
-	// Enrich missing names/step counts from the KV payload (best effort).
+	// The tracker already carries name and step count for jobs this replica
+	// enqueued, so a KV read is only needed for the rare job we learned about
+	// purely from a status event (no name). This keeps the list from doing a
+	// KV round-trip per row.
 	for i := range jobs {
-		if jobs[i].Name != "" && jobs[i].StepCount != 0 {
+		if jobs[i].Name != "" {
 			continue
 		}
 		if job, ok := s.fetchPayload(c.Request.Context(), jobs[i].ID); ok {
-			if jobs[i].Name == "" {
-				jobs[i].Name = job.Name
+			jobs[i].Name = job.Name
+			if jobs[i].StepCount == 0 {
+				jobs[i].StepCount = len(job.Steps)
 			}
-			jobs[i].StepCount = len(job.Steps)
 		}
 	}
 
@@ -182,7 +185,7 @@ func (s *Server) handleJobLogs(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "log service unavailable"})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if err != nil {

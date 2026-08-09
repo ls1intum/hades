@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"log/slog"
+	"math"
 	"sort"
 	"time"
 
@@ -91,8 +92,8 @@ func summarizeDurations(ds []int64) Durations {
 	}
 	avg := sum / int64(len(sorted))
 
-	// Nearest-rank p95.
-	idx := (95*len(sorted))/100 - 1
+	// Nearest-rank p95: rank = ceil(0.95 * n), 1-based -> index rank-1.
+	idx := int(math.Ceil(0.95*float64(len(sorted)))) - 1
 	if idx < 0 {
 		idx = 0
 	}

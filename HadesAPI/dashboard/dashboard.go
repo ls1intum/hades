@@ -97,18 +97,24 @@ func NewServer(ctx context.Context, cfg Config, nc *nats.Conn) (*Server, error) 
 		return nil, fmt.Errorf("building redactor: %w", err)
 	}
 
-	js, err := jetstream.New(nc)
-	if err != nil {
-		return nil, fmt.Errorf("creating JetStream context: %w", err)
-	}
-	kv, err := js.KeyValue(ctx, jobsBucket)
-	if err != nil {
-		return nil, fmt.Errorf("opening KV bucket %q: %w", jobsBucket, err)
-	}
-
 	auth, err := newAuthenticator(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("building authenticator: %w", err)
+	}
+
+	// When the dashboard is disabled it only needs to answer 503, so skip the
+	// JetStream/KV setup entirely.
+	var js jetstream.JetStream
+	var kv jetstream.KeyValue
+	if cfg.Enabled() {
+		js, err = jetstream.New(nc)
+		if err != nil {
+			return nil, fmt.Errorf("creating JetStream context: %w", err)
+		}
+		kv, err = js.KeyValue(ctx, jobsBucket)
+		if err != nil {
+			return nil, fmt.Errorf("opening KV bucket %q: %w", jobsBucket, err)
+		}
 	}
 
 	return &Server{
@@ -164,8 +170,8 @@ func (s *Server) Enabled() bool { return s.cfg.Enabled() }
 // priority, which the stored KV payload does not carry (priority) or which
 // saves a KV read (name). Called by the API on a successful enqueue so queued
 // jobs appear immediately.
-func (s *Server) TrackEnqueue(jobID, name string, priority hades.Priority) {
-	summary := s.tracker.enqueue(jobID, name, priority)
+func (s *Server) TrackEnqueue(jobID, name string, stepCount int, priority hades.Priority) {
+	summary := s.tracker.enqueue(jobID, name, stepCount, priority)
 	s.hub.broadcast(event{Type: eventJob, Job: summary})
 }
 

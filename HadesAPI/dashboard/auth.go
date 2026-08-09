@@ -189,7 +189,9 @@ func (s *Server) handleLogin(c *gin.Context) {
 
 	if !s.auth.verifyCredentials(req.Username, req.Password) {
 		s.auth.recordFailure(key)
-		slog.Warn("Dashboard login failed", "client_ip", key, "username", req.Username)
+		// Deliberately do not log the submitted username (avoid recording
+		// credential-guessing input / PII in logs).
+		slog.Warn("Dashboard login failed", "client_ip", key)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}

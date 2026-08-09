@@ -31,8 +31,8 @@ hadesApi:
   dashboard:
     # -- Name of an existing Secret with keys `DASHBOARD_USERNAME`,
     # `DASHBOARD_PASSWORD_HASH` (a bcrypt hash), and `DASHBOARD_SESSION_SECRET`
-    # (>=16 chars). Empty = dashboard disabled (its `/api` routes return 503 and
-    # the SPA is not served).
+    # (>=32 chars). Empty = dashboard disabled (its `/api` routes return 503 and
+    # the SPA is not served). Requires TLS (the session cookie is Secure).
     secretName: ""
     # -- Internal URL of HadesLogManager used by the dashboard's logs proxy.
     logManagerURL: "http://hades-log-manager-service:8081"

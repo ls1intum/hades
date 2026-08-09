@@ -1,3 +1,6 @@
+{{- if and .Values.hadesApi.dashboard.secretName (gt (int .Values.hadesApi.replicaCount) 1) }}
+{{- fail "hadesApi.dashboard is enabled but hadesApi.replicaCount > 1: the dashboard keeps its session and job state in memory, so it must run as a single replica. Set hadesApi.replicaCount: 1 or disable the dashboard." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

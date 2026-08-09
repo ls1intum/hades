@@ -42,6 +42,7 @@ type jobRecord struct {
 	id         string
 	name       string
 	priority   hades.Priority
+	stepCount  int
 	status     buildstatus.JobStatus
 	queuedAt   time.Time
 	startedAt  time.Time
@@ -51,10 +52,11 @@ type jobRecord struct {
 
 func (r *jobRecord) dto() JobSummary {
 	s := JobSummary{
-		ID:       r.id,
-		Name:     r.name,
-		Priority: string(r.priority),
-		Status:   r.status.String(),
+		ID:        r.id,
+		Name:      r.name,
+		Priority:  string(r.priority),
+		StepCount: r.stepCount,
+		Status:    r.status.String(),
 	}
 	if !r.queuedAt.IsZero() {
 		t := r.queuedAt
@@ -104,8 +106,8 @@ func newTracker(retention time.Duration) *tracker {
 	return &tracker{jobs: make(map[string]*jobRecord), retention: retention}
 }
 
-// enqueue records a newly submitted job with its name and priority.
-func (t *tracker) enqueue(jobID, name string, priority hades.Priority) JobSummary {
+// enqueue records a newly submitted job with its name, step count and priority.
+func (t *tracker) enqueue(jobID, name string, stepCount int, priority hades.Priority) JobSummary {
 	now := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -116,6 +118,7 @@ func (t *tracker) enqueue(jobID, name string, priority hades.Priority) JobSummar
 	}
 	rec.name = name
 	rec.priority = priority
+	rec.stepCount = stepCount
 	if rec.status == "" {
 		rec.status = buildstatus.StatusQueued
 	}
@@ -123,6 +126,7 @@ func (t *tracker) enqueue(jobID, name string, priority hades.Priority) JobSummar
 		rec.queuedAt = now
 	}
 	rec.updatedAt = now
+	t.enforceInsertCapLocked()
 	return rec.dto()
 }
 
@@ -135,6 +139,7 @@ func (t *tracker) observe(jobID string, status buildstatus.JobStatus) JobSummary
 	if rec == nil {
 		rec = &jobRecord{id: jobID}
 		t.jobs[jobID] = rec
+		t.enforceInsertCapLocked()
 	}
 	rec.status = status
 	rec.updatedAt = now
@@ -251,6 +256,16 @@ func (t *tracker) sweep() {
 	}
 
 	t.enforceCapLocked()
+}
+
+// enforceInsertCapLocked bounds the map between sweeps: if a burst pushes it
+// past twice the cap, evict back down to the cap. The 2x hysteresis amortizes
+// the O(n) eviction across many inserts instead of running it on every insert
+// at steady state. Caller must hold the write lock.
+func (t *tracker) enforceInsertCapLocked() {
+	if len(t.jobs) > 2*maxTrackedJobs {
+		t.enforceCapLocked()
+	}
 }
 
 // enforceCapLocked evicts the oldest records while the map exceeds the cap.

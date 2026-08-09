@@ -25,13 +25,20 @@ for attempt in $(seq 1 20); do
 done
 
 # Wait for NATS to accept TCP connections (bash /dev/tcp is portable, no nc needed).
+nats_ready=0
 for _ in $(seq 1 60); do
   if (exec 3<>"/dev/tcp/localhost/${NATS_PORT}") 2>/dev/null; then
     exec 3>&- 3<&- 2>/dev/null || true
+    nats_ready=1
     break
   fi
   sleep 0.5
 done
+if [ "$nats_ready" -ne 1 ]; then
+  echo "[e2e] ERROR: NATS did not become ready on :$NATS_PORT" >&2
+  docker logs "$NATS_NAME" 2>&1 | tail -20 >&2 || true
+  exit 1
+fi
 
 echo "[e2e] building dashboard SPA"
 (cd "$WEB_DIR" && npm run build)

@@ -292,7 +292,12 @@ func (suite *APISuite) TestDashboardEndToEnd() {
 				"GIT_PASSWORD": "supersecret",
 				"DATABASE_URL": "postgres://user:pass@db:5432/app",
 			},
-			Steps: []payload.Step{{ID: 1, Name: "s1", Image: "alpine", Script: "echo hi"}},
+			Steps: []payload.Step{{
+				ID:     1,
+				Name:   "s1",
+				Image:  "alpine",
+				Script: "git clone https://u:scriptsecret123456@github.com/x/y.git && export API_KEY=sk-live-leakme",
+			}},
 		},
 	}
 	jsonValue, _ := json.Marshal(job)
@@ -324,6 +329,8 @@ func (suite *APISuite) TestDashboardEndToEnd() {
 	assert.Contains(t, body, "https://github.com/org/repo.git") // REPO_URL visible
 	assert.NotContains(t, body, "supersecret")                  // GIT_PASSWORD masked
 	assert.NotContains(t, body, "user:pass@db")                 // DATABASE_URL masked
+	assert.NotContains(t, body, "scriptsecret123456")           // secret in step script masked
+	assert.NotContains(t, body, "sk-live-leakme")               // API key in step script masked
 
 	// Unauthenticated access is rejected.
 	w = httptest.NewRecorder()
