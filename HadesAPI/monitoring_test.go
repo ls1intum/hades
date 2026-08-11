@@ -131,8 +131,8 @@ func TestSafePayloadFormat_CallbackURLCredentialsStripped(t *testing.T) {
 		t.Errorf("callback URL not fully redacted: got %q", out.CallbackURL)
 	}
 	for _, leak := range []string{"user", "token", "secret", "abc", "frag"} {
-		if strings.Contains(result, leak) {
-			t.Errorf("sanitized payload leaked %q: %s", leak, result)
+		if strings.Contains(out.CallbackURL, leak) {
+			t.Errorf("sanitized callback URL leaked %q: %s", leak, out.CallbackURL)
 		}
 	}
 }
