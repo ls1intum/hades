@@ -27,6 +27,32 @@ hadesApi:
   # -- Name of an existing Secret holding key `AUTH_KEY` to protect the `/build`
   # endpoint. Empty = no auth (endpoint is open).
   authKeySecret: ""
+  # -- Operator dashboard (web UI) served by the API.
+  dashboard:
+    # -- Name of an existing Secret with keys `DASHBOARD_USERNAME`,
+    # `DASHBOARD_PASSWORD_HASH` (a bcrypt hash), and `DASHBOARD_SESSION_SECRET`
+    # (>=32 chars). Empty = dashboard disabled (its `/api` routes return 503 and
+    # the SPA is not served). Requires TLS (the session cookie is Secure).
+    secretName: ""
+    # -- Internal URL of HadesLogManager used by the dashboard's logs proxy.
+    logManagerURL: "http://hades-log-manager-service:8081"
+    # -- Secret redaction mode for job metadata: "smart" (default, key + value
+    # heuristics) or "all" (mask every value). Empty uses the smart default.
+    redactMode: ""
+    # -- Optional regex overriding which metadata keys are treated as secret.
+    # Empty uses the built-in pattern (token/password/secret/key/credential/...).
+    secretKeyPatterns: ""
+    # -- Session cookie lifetime (Go duration).
+    sessionTTL: "12h"
+    # -- How long finished jobs stay in the dashboard's in-memory list (Go duration).
+    jobRetention: "1h"
+    # -- CIDRs/IPs of front proxies (e.g. the ingress) allowed to set
+    # X-Forwarded-For. Empty trusts none, so the login lockout keys on the
+    # un-spoofable direct address. Set to your ingress range behind a proxy.
+    trustedProxies: []
+    # -- Drop the Secure flag on the session cookie. Only for local HTTP dev;
+    # never enable in a real deployment (requires TLS otherwise login breaks).
+    cookieInsecure: false
 
 hadesScheduler:
   image:

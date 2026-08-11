@@ -99,8 +99,29 @@ jobs:
           name: Go-results-${{ matrix.name }}
           path: TestResults-${{ matrix.name }}.json
 
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: HadesAPI/web/package-lock.json
+      - name: Install dependencies
+        run: cd HadesAPI/web && npm ci
+      - name: Typecheck
+        run: cd HadesAPI/web && npm run lint
+      - name: Test
+        run: cd HadesAPI/web && npm test
+      - name: Build
+        run: cd HadesAPI/web && npm run build
+
   build-api:
-    needs: [lint, build, test]
+    needs: [lint, build, test, ui]
     if: github.actor != 'dependabot[bot]'
     uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@v1.2.0
     with:

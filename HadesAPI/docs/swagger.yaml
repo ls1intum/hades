@@ -1,0 +1,122 @@
+basePath: /
+definitions:
+  payload.RESTPayload:
+    properties:
+      id:
+        description: Unique job identifier
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        description: Additional job-level metadata
+        type: object
+      name:
+        description: Human-readable job name
+        type: string
+      priority:
+        description: Priority level (1=low, 2=medium, 3+=high)
+        type: integer
+      steps:
+        description: Ordered list of steps to execute
+        items:
+          $ref: '#/definitions/payload.Step'
+        type: array
+      timestamp:
+        description: Job creation timestamp
+        type: string
+    required:
+    - name
+    type: object
+  payload.Step:
+    properties:
+      continue_on_error:
+        description: Whether to continue with the next step if this step fails
+        type: boolean
+      cpu_limit:
+        description: CPU limit in millicores (e.g., 1000 = 1 CPU core)
+        type: integer
+      id:
+        description: Step execution order (starts at 1)
+        type: integer
+      image:
+        description: Container image to use (e.g., "alpine:latest")
+        type: string
+      memory_limit:
+        description: Memory limit (e.g., "512M", "2G")
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        description: Step-specific environment variables and metadata
+        type: object
+      name:
+        description: Human-readable step name
+        type: string
+      script:
+        description: Shell script to execute in the container
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Job-submission API for Hades, a scalable scheduler for containerized
+    jobs. Submit a multi-step job and it is validated, assigned a UUID, and queued
+    on NATS by priority for the scheduler to execute.
+  title: HadesAPI
+  version: "1.0"
+paths:
+  /build:
+    post:
+      consumes:
+      - application/json
+      description: Validates a multi-step job, assigns a UUID, and publishes it to
+        NATS on the queue matching its priority. Requires HTTP Basic Auth when the
+        server is started with an AUTH_KEY.
+      parameters:
+      - description: Job definition
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/payload.RESTPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: job_id of the enqueued job
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            type: string
+        "500":
+          description: Failed to enqueue job
+          schema:
+            type: string
+      security:
+      - BasicAuth: []
+      summary: Enqueue a build job
+      tags:
+      - jobs
+  /ping:
+    get:
+      description: Liveness probe returning a status string and the current server
+        time.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+securityDefinitions:
+  BasicAuth:
+    type: basic
+swagger: "2.0"

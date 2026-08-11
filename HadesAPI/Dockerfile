@@ -1,7 +1,15 @@
-# Use an official Go runtime as a parent image
-FROM golang:1.26-alpine AS builder
+# syntax=docker/dockerfile:1
 
-# Set the working directory inside the container
+# Stage 1: build the dashboard SPA. Its output is embedded into the Go binary.
+FROM node:22-alpine AS ui
+WORKDIR /ui
+COPY ./HadesAPI/web/package.json ./HadesAPI/web/package-lock.json ./
+RUN npm ci
+COPY ./HadesAPI/web ./
+RUN npm run build
+
+# Stage 2: build the Go binary, embedding the built SPA.
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 
 # Copy go.mod and go.sum files
@@ -13,14 +21,17 @@ RUN cd HadesAPI && go mod download
 COPY ./HadesAPI ./HadesAPI
 COPY ./shared ./shared
 
+# Overlay the freshly built SPA so //go:embed picks up the real assets instead
+# of the committed placeholder.
+COPY --from=ui /ui/dist ./HadesAPI/web/dist
+
 # Build the Go application
 WORKDIR /app/HadesAPI
 RUN CGO_ENABLED=0 go build -o hadesCI-api .
 
-# Start a new stage for the minimal runtime container
+# Stage 3: minimal runtime container
 FROM gcr.io/distroless/static-debian12
 
-# Set the working directory inside the minimal runtime container
 WORKDIR /app
 
 # Copy the built binary from the builder container into the minimal runtime container

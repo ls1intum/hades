@@ -10,8 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ls1intum/hades/hadesAPI/dashboard"
 	hades "github.com/ls1intum/hades/shared"
+	"github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/ls1intum/hades/shared/payload"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/nats.go"
@@ -27,10 +30,11 @@ const NATS_IMAGE = "nats:2.11.4"
 
 type APISuite struct {
 	suite.Suite
-	router         *gin.Engine
-	natsC          testcontainers.Container
-	natsConnection *nats.Conn
-	hadesProducer  hades.JobPublisher
+	router          *gin.Engine
+	natsC           testcontainers.Container
+	natsConnection  *nats.Conn
+	hadesProducer   hades.JobPublisher
+	statusPublisher buildstatus.StatusPublisher
 }
 
 func (suite *APISuite) SetupSuite() {
@@ -70,13 +74,16 @@ func (suite *APISuite) SetupSuite() {
 		slog.Error("Failed to connect to NATS", "error", err)
 	}
 
-	// Create producer for tests
-	suite.hadesProducer, err = hadesnats.NewHadesPublisher(suite.natsConnection)
+	// Create producer for tests. HadesNATSPublisher implements both the job
+	// publisher and the status publisher, so it serves as both dependencies.
+	producer, err := hadesnats.NewHadesPublisher(suite.natsConnection)
 	if err != nil {
 		slog.Error("Failed to create HadesProducer", "error", err)
 	}
+	suite.hadesProducer = producer
+	suite.statusPublisher = producer
 
-	suite.router = setupRouter("", suite.hadesProducer)
+	suite.router = setupRouter("", suite.hadesProducer, suite.statusPublisher, nil)
 }
 
 func (suite *APISuite) TearDownSuite() {
@@ -107,7 +114,7 @@ func (suite *APISuite) TestPingRoute() {
 }
 
 func (suite *APISuite) TestAuthBoundary() {
-	router := setupRouter("secret", suite.hadesProducer)
+	router := setupRouter("secret", suite.hadesProducer, suite.statusPublisher, nil)
 
 	// /ping is outside the auth group and must stay open
 	w := httptest.NewRecorder()
@@ -128,7 +135,7 @@ func (suite *APISuite) TestAuthBoundary() {
 }
 
 func (suite *APISuite) TestNoAuthBoundary() {
-	router := setupRouter("", suite.hadesProducer)
+	router := setupRouter("", suite.hadesProducer, suite.statusPublisher, nil)
 
 	// /ping must still return 200
 	w := httptest.NewRecorder()
@@ -234,6 +241,112 @@ func (suite *APISuite) TestInvalidJSON() {
 
 	assert.Equal(suite.T(), 400, w.Code)
 	assert.Equal(suite.T(), `Invalid request payload: "name" is required`, w.Body.String())
+}
+
+// TestDashboardEndToEnd exercises the enabled dashboard against the real NATS
+// container: it logs in, submits a job carrying sensitive metadata, then reads
+// it back through /api/jobs and /api/jobs/:id and asserts secrets are redacted.
+func (suite *APISuite) TestDashboardEndToEnd() {
+	t := suite.T()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("pw12345"), bcrypt.MinCost)
+	assert.NoError(t, err)
+	dashCfg := dashboard.Config{
+		Username:      "admin",
+		PasswordHash:  string(hash),
+		SessionSecret: "0123456789abcdef-0123456789abcdef-secret",
+		JobRetention:  time.Hour,
+		LogManagerURL: "http://127.0.0.1:0",
+	}
+	dash, err := dashboard.NewServer(ctx, dashCfg, suite.natsConnection)
+	assert.NoError(t, err)
+	assert.NoError(t, dash.Start(ctx))
+
+	router := setupRouter("", suite.hadesProducer, suite.statusPublisher, dash)
+
+	// Log in and capture the session cookie.
+	loginBody := `{"username":"admin","password":"pw12345"}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/login", bytes.NewBufferString(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	var cookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "hades_dashboard_session" {
+			cookie = c
+		}
+	}
+	assert.NotNil(t, cookie)
+
+	// Submit a job with a visible key and two secret-bearing values.
+	job := payload.RESTPayload{
+		Priority: 3,
+		QueuePayload: payload.QueuePayload{
+			Name:      "secret-job",
+			Timestamp: time.Now(),
+			Metadata: map[string]string{
+				"REPO_URL":     "https://github.com/org/repo.git",
+				"GIT_PASSWORD": "supersecret",
+				"DATABASE_URL": "postgres://user:pass@db:5432/app",
+			},
+			Steps: []payload.Step{{
+				ID:     1,
+				Name:   "s1",
+				Image:  "alpine",
+				Script: "git clone https://u:scriptsecret123456@github.com/x/y.git && export API_KEY=sk-live-leakme",
+			}},
+		},
+	}
+	jsonValue, _ := json.Marshal(job)
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/build", bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	var buildResp map[string]string
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &buildResp))
+	jobID := buildResp["job_id"]
+	assert.NotEmpty(t, jobID)
+
+	// The job shows up in the list (tracked synchronously at enqueue).
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/api/jobs", nil)
+	req.AddCookie(cookie)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	assert.Contains(t, w.Body.String(), jobID)
+
+	// Detail view redacts secret values but keeps the innocuous one.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/api/jobs/"+jobID, nil)
+	req.AddCookie(cookie)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 200, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, "https://github.com/org/repo.git") // REPO_URL visible
+	assert.NotContains(t, body, "supersecret")                  // GIT_PASSWORD masked
+	assert.NotContains(t, body, "user:pass@db")                 // DATABASE_URL masked
+	assert.NotContains(t, body, "scriptsecret123456")           // secret in step script masked
+	assert.NotContains(t, body, "sk-live-leakme")               // API key in step script masked
+
+	// Unauthenticated access is rejected.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/api/jobs", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, 401, w.Code)
+}
+
+func (suite *APISuite) TestSecurityHeaders() {
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/ping", nil)
+	suite.router.ServeHTTP(w, req)
+	assert.Equal(suite.T(), "nosniff", w.Header().Get("X-Content-Type-Options"))
+	assert.Equal(suite.T(), "DENY", w.Header().Get("X-Frame-Options"))
+	assert.Contains(suite.T(), w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'")
+	assert.Contains(suite.T(), w.Header().Get("Content-Security-Policy"), "default-src 'self'")
 }
 
 func TestAPISuite(t *testing.T) {

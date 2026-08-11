@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -13,15 +14,54 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/ls1intum/hades/hadesAPI/dashboard"
+	_ "github.com/ls1intum/hades/hadesAPI/docs" // generated OpenAPI spec (make docs-api)
+	"github.com/ls1intum/hades/hadesAPI/web"
 	hades "github.com/ls1intum/hades/shared"
+	"github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-func setupRouter(authKey string, producer hades.JobPublisher) *gin.Engine {
+// contentSecurityPolicy is scoped to what the embedded SPA needs: same-origin
+// scripts (hashed asset bundles, no inline JS), same-origin plus inline styles
+// (Tailwind + Recharts inject style attributes), data: images (the favicon),
+// and same-origin fetch/EventSource. Framing is denied.
+const contentSecurityPolicy = "default-src 'self'; " +
+	"script-src 'self'; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data:; " +
+	"font-src 'self'; " +
+	"connect-src 'self'; " +
+	"object-src 'none'; " +
+	"base-uri 'self'; " +
+	"form-action 'self'; " +
+	"frame-ancestors 'none'"
+
+// securityHeaders sets defensive response headers on every route. The strict CSP
+// is skipped for the DEBUG-only Swagger UI, which relies on inline scripts/styles.
+func securityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		// Ignored over plain HTTP; activates once served via TLS.
+		h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		if !strings.HasPrefix(c.Request.URL.Path, "/swagger") {
+			h.Set("Content-Security-Policy", contentSecurityPolicy)
+		}
+		c.Next()
+	}
+}
+
+func setupRouter(authKey string, producer hades.JobPublisher, statusPublisher buildstatus.StatusPublisher, dash *dashboard.Server) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.ErrorLogger())
 	r.Use(gin.Recovery())
+	r.Use(securityHeaders())
 
 	// Report validation errors using the JSON field names (e.g. "name")
 	// rather than the Go struct field names (e.g. "Name").
@@ -37,6 +77,12 @@ func setupRouter(authKey string, producer hades.JobPublisher) *gin.Engine {
 
 	r.GET("/ping", ping)
 
+	// Swagger UI (and its doc.json) are only exposed when DEBUG is enabled, so
+	// the API contract is never served in production.
+	if os.Getenv("DEBUG") == "true" {
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
+
 	api := r.Group("/")
 	if authKey == "" {
 		slog.Warn("No auth key set")
@@ -46,11 +92,30 @@ func setupRouter(authKey string, producer hades.JobPublisher) *gin.Engine {
 	}
 
 	api.POST("/build", func(c *gin.Context) {
-		addBuildToQueue(c, producer)
+		addBuildToQueue(c, producer, statusPublisher, dash)
 	})
+
+	// Mount the operator dashboard (API + embedded SPA). When configured it
+	// registers /api routes and the SPA fallback; when unconfigured its /api
+	// routes return 503 and the SPA is not served.
+	if dash != nil {
+		dash.RegisterRoutes(r)
+		if dash.Enabled() {
+			web.Register(r)
+		}
+	}
+
 	return r
 }
 
+// ping is the liveness handler.
+//
+//	@Summary		Health check
+//	@Description	Liveness probe returning a status string and the current server time.
+//	@Tags			health
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/ping [get]
 func ping(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "ok",
@@ -79,7 +144,20 @@ func bindErrorMessage(err error) string {
 	return "Invalid JSON body"
 }
 
-func addBuildToQueue(c *gin.Context, producer hades.JobPublisher) {
+// addBuildToQueue validates a job payload and enqueues it on NATS by priority.
+//
+//	@Summary		Enqueue a build job
+//	@Description	Validates a multi-step job, assigns a UUID, and publishes it to NATS on the queue matching its priority. Requires HTTP Basic Auth when the server is started with an AUTH_KEY.
+//	@Tags			jobs
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body		payload.RESTPayload	true	"Job definition"
+//	@Success		200		{object}	map[string]string	"job_id of the enqueued job"
+//	@Failure		400		{string}	string				"Invalid request payload"
+//	@Failure		500		{string}	string				"Failed to enqueue job"
+//	@Security		BasicAuth
+//	@Router			/build [post]
+func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublisher buildstatus.StatusPublisher, dash *dashboard.Server) {
 	var p payload.RESTPayload
 	p.Priority = 3
 	if err := c.ShouldBind(&p); err != nil {
@@ -109,6 +187,21 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher) {
 		slog.Error("Failed to enqueue job", "error", err)
 		c.String(http.StatusInternalServerError, "Failed to enqueue job")
 		return
+	}
+
+	// Announce the job as Queued so lifecycle subscribers (HadesLogManager, the
+	// dashboard live feed) see it immediately. This is best-effort: a publish
+	// failure must not fail the enqueue that already succeeded.
+	if statusPublisher != nil {
+		if err := statusPublisher.PublishJobStatus(c.Request.Context(), buildstatus.StatusQueued, p.QueuePayload.ID.String()); err != nil {
+			slog.Warn("Failed to publish Queued status", "job_id", p.QueuePayload.ID.String(), "error", err)
+		}
+	}
+
+	// Record the job (with its priority, which the KV payload does not carry) so
+	// the dashboard shows it immediately.
+	if dash != nil {
+		dash.TrackEnqueue(p.QueuePayload.ID.String(), p.QueuePayload.Name, len(p.QueuePayload.Steps), queuePrio)
 	}
 
 	slog.Info("Successfully enqueued job", "job_id", p.QueuePayload.ID.String())
