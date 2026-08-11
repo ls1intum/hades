@@ -6,12 +6,12 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/client"
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/client"
 )
 
 // Step is a single job step bound to the Docker client and options used to run
@@ -85,7 +85,10 @@ func (s Step) execute(ctx context.Context) error {
 		containerConfig.Entrypoint = append(containerConfig.Entrypoint, s.Script)
 	}
 
-	resp, err := s.cli.ContainerCreate(ctx, &containerConfig, &hostConfig, nil, nil, "")
+	resp, err := s.cli.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config:     &containerConfig,
+		HostConfig: &hostConfig,
+	})
 	if err != nil {
 		s.logger.Error("Failed to create container", slog.Any("error", err))
 		return err
@@ -101,21 +104,23 @@ func (s Step) execute(ctx context.Context) error {
 	}()
 
 	// Start the container
-	err = s.cli.ContainerStart(ctx, resp.ID, container.StartOptions{})
+	_, err = s.cli.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{})
 	if err != nil {
 		s.logger.Error("Failed to start container", slog.Any("error", err))
 		return err
 	}
 
 	// Wait for the container to finish
-	statusCh, errCh := s.cli.ContainerWait(ctx, resp.ID, container.WaitCondition(container.WaitConditionNotRunning))
+	waitResult := s.cli.ContainerWait(ctx, resp.ID, client.ContainerWaitOptions{
+		Condition: container.WaitConditionNotRunning,
+	})
 	select {
-	case err := <-errCh:
+	case err := <-waitResult.Error:
 		if err != nil {
 			s.logger.Error("Error waiting for container", slog.Any("error", err), slog.Any("container_id", resp.ID))
 			return err
 		}
-	case status := <-statusCh:
+	case status := <-waitResult.Result:
 		// Write the container logs to NATS before checking status
 		// Logs should be written even if the container fails to start or crashes during execution
 		if err := processContainerLogs(ctx, s.cli, s.publisher, resp.ID, jobId); err != nil {

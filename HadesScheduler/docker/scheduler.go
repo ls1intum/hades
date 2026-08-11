@@ -12,12 +12,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/ls1intum/hades/shared/payload"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 )
 
 // Options holds the per-scheduler Docker execution settings applied to every
@@ -64,7 +64,7 @@ func NewScheduler(options ...DockerOption) (*Scheduler, error) {
 // With* options).
 func NewDefaultScheduler() (*Scheduler, error) {
 	// Create a new Docker client
-	cli, err := client.NewClientWithOpts(client.WithHost("unix:///var/run/docker.sock"), client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.WithHost("unix:///var/run/docker.sock"))
 	if err != nil {
 		slog.Error("Failed to create Docker client", slog.Any("error", err))
 		return nil, err

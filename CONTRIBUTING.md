@@ -43,6 +43,28 @@ Docker must be running: some tests (e.g. `HadesAPI/router_test.go`) spin up NATS
 - **Dependencies:** don't introduce package-level mutable globals for dependencies; pass them in (see `setupRouter`).
 - Follow the standard Go style; document exported types and functions.
 
+## Dependency security
+
+Dependabot watches the Go modules, `HadesAPI/web/package-lock.json`, and
+`website/yarn.lock`. To reproduce its findings locally:
+
+- Go: `make vuln` (govulncheck, per module).
+- Dashboard: `cd HadesAPI/web && npm audit`.
+- Website: `cd website && yarn audit`.
+
+Two constraints are worth knowing before bumping a version:
+
+- **Docker API client:** use `github.com/moby/moby/client` and
+  `github.com/moby/moby/api`. The old `github.com/docker/docker` module path is
+  frozen at v28.5.2 - Docker Engine 29+ ships under the `moby/moby` module - so
+  advisories against it can only be resolved by staying on the new path.
+  `testcontainers-go` uses the same modules.
+- **`website` resolutions:** the `resolutions` block in `website/package.json`
+  forces patched transitive dependencies that Docusaurus 3.9 still requests at
+  vulnerable ranges. `webpack` and `webpackbar` must move together: Docusaurus
+  3.9 bundles webpackbar 6, which passes options that webpack >= 5.98 rejects,
+  so the webpackbar 7 resolution is what makes the webpack bump possible.
+
 ## Documenting changes
 
 Keep documentation in step with code: when you add or change behavior, update the

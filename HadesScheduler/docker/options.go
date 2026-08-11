@@ -3,9 +3,9 @@ package docker
 import (
 	"fmt"
 
-	"github.com/docker/docker/client"
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/buildstatus"
+	"github.com/moby/moby/client"
 )
 
 // DockerOption configures a Scheduler during construction (functional options
@@ -16,7 +16,7 @@ type DockerOption func(*Scheduler) error
 // WithDockerHost points the scheduler at a specific Docker daemon endpoint.
 func WithDockerHost(dockerHost string) DockerOption {
 	return func(s *Scheduler) error {
-		cli, err := client.NewClientWithOpts(client.WithHost(dockerHost), client.WithAPIVersionNegotiation())
+		cli, err := client.New(client.WithHost(dockerHost))
 		if err != nil {
 			return fmt.Errorf("creating Docker client with host %s: %w", dockerHost, err)
 		}
