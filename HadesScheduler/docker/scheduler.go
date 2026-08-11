@@ -1,3 +1,9 @@
+// Package docker implements the Docker executor: it runs each step of a job as
+// a container on the local Docker daemon. All steps of a job share a per-job
+// named volume ("shared-<jobID>") that is created before the first step and
+// removed after the last, so files written by one step are visible to later
+// ones. This executor targets local development; production uses the Kubernetes
+// executor and operator.
 package docker
 
 import (
@@ -14,6 +20,9 @@ import (
 	"github.com/ls1intum/hades/shared/payload"
 )
 
+// Options holds the per-scheduler Docker execution settings applied to every
+// step container (script shell, resource limits, autoremove, and the per-job
+// shared volume). Fields are set through the With* DockerOption builders.
 type Options struct {
 	scriptExecutor       string
 	containerAutoremove  bool
@@ -23,6 +32,8 @@ type Options struct {
 	containerLogsOptions container.LogConfig
 }
 
+// Scheduler runs jobs on the local Docker daemon and publishes their logs and
+// status transitions via the configured publishers.
 type Scheduler struct {
 	Options
 	cli             *client.Client
@@ -30,6 +41,9 @@ type Scheduler struct {
 	statusPublisher buildstatus.StatusPublisher
 }
 
+// NewScheduler builds a Scheduler from the default configuration and applies the
+// given options in order. It returns an error if the Docker client cannot be
+// created or any option fails.
 func NewScheduler(options ...DockerOption) (*Scheduler, error) {
 	scheduler, err := NewDefaultScheduler()
 	if err != nil {
@@ -45,6 +59,9 @@ func NewScheduler(options ...DockerOption) (*Scheduler, error) {
 	return scheduler, nil
 }
 
+// NewDefaultScheduler creates a Scheduler connected to the local Docker daemon
+// with default options and no-op log/status publishers (override them with the
+// With* options).
 func NewDefaultScheduler() (*Scheduler, error) {
 	// Create a new Docker client
 	cli, err := client.NewClientWithOpts(client.WithHost("unix:///var/run/docker.sock"), client.WithAPIVersionNegotiation())
@@ -70,6 +87,10 @@ func NewDefaultScheduler() (*Scheduler, error) {
 	return scheduler, nil
 }
 
+// ScheduleJob runs every step of job sequentially in its own container. It
+// creates the per-job shared volume, publishes Running/Succeeded/Failed status
+// transitions around execution, and removes the volume when done (even on
+// cancellation). It returns the first step error that aborts the job.
 func (d *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	var jobLogger *slog.Logger
 	var containerLogsOptions container.LogConfig

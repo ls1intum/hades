@@ -29,4 +29,23 @@ spec:
                 name: "hades-api-service"
                 port:
                   number: {{ .Values.hadesApi.service.port }}
+          {{- if .Values.hadesApi.dashboard.secretName }}
+          # Dashboard API (login, jobs, logs, metrics, live stream)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: "hades-api-service"
+                port:
+                  number: {{ .Values.hadesApi.service.port }}
+          # Dashboard SPA (served for all remaining paths). Keep this last so the
+          # more specific /build and /api rules match first.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: "hades-api-service"
+                port:
+                  number: {{ .Values.hadesApi.service.port }}
+          {{- end }}
 {{- end }}

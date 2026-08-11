@@ -8,12 +8,16 @@ import (
 	"time"
 
 	hades "github.com/ls1intum/hades/shared"
+	"github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-var _ hades.JobPublisher = (*HadesNATSPublisher)(nil)
+var (
+	_ hades.JobPublisher          = (*HadesNATSPublisher)(nil)
+	_ buildstatus.StatusPublisher = (*HadesNATSPublisher)(nil)
+)
 
 // HadesNATSPublisher manages job publishing to the NATS queue system.
 type HadesNATSPublisher struct {
@@ -95,5 +99,24 @@ func (hp *HadesNATSPublisher) EnqueueJobWithPriority(ctx context.Context, queueP
 	if err != nil {
 		return fmt.Errorf("failed to publish job to stream: %w", err)
 	}
+	return nil
+}
+
+// PublishJobStatus publishes a job status change on the core-NATS status
+// subject "hades.jobstatus.{status}". Subscribers such as HadesLogManager use
+// these events to track a job's lifecycle. Nothing publishes the Queued status
+// today except the API on enqueue, so this completes the lifecycle feed.
+func (hp *HadesNATSPublisher) PublishJobStatus(ctx context.Context, jobStatus buildstatus.JobStatus, jobID string) error {
+	if jobID == "" {
+		return fmt.Errorf("empty job ID")
+	}
+	if !jobStatus.IsValid() {
+		return fmt.Errorf("invalid job status: %s", jobStatus)
+	}
+	subject := buildstatus.StatusSubject(jobStatus)
+	if err := hp.natsConnection.Publish(subject, []byte(jobID)); err != nil {
+		return fmt.Errorf("publishing job status %s for job %s: %w", jobStatus, jobID, err)
+	}
+	slog.Debug("Published job status", "job_id", jobID, "status", jobStatus, "subject", subject)
 	return nil
 }

@@ -1,3 +1,8 @@
+// Package k8s implements the Kubernetes executor. Depending on K8S_CONFIG_MODE
+// it either creates a BuildJob custom resource for the HadesOperator to
+// reconcile (mode "operator") or builds a batch Job directly (legacy modes
+// "serviceaccount" and "kubeconfig"). The in-code default is "kubeconfig" (see
+// K8sConfig), but every Hades deployment (Helm, .env.example) sets "operator".
 package k8s
 
 import (
@@ -6,6 +11,7 @@ import (
 	"log/slog"
 
 	"github.com/ls1intum/hades/hadesScheduler/log"
+	hades "github.com/ls1intum/hades/shared"
 	"github.com/ls1intum/hades/shared/payload"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
@@ -19,6 +25,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// Scheduler executes jobs on a Kubernetes cluster. It holds either a typed
+// clientset (legacy direct modes) or a dynamic client (operator mode), selected
+// at construction from K8S_CONFIG_MODE.
 type Scheduler struct {
 	k8sClient *kubernetes.Clientset
 	dynClient dynamic.Interface
@@ -27,6 +36,7 @@ type Scheduler struct {
 	publisher log.NATSPublisher
 }
 
+// K8sConfig holds the base Kubernetes executor configuration.
 type K8sConfig struct {
 	// K8sNamespace is the namespace in which the jobs should be scheduled (default: hades-executor)
 	K8sNamespace string `env:"K8S_NAMESPACE,notEmpty" envDefault:"hades-executor"`
@@ -46,12 +56,18 @@ type K8sConfigServiceaccount struct {
 	K8sConfig
 }
 
+// BuildJobGVRConfig identifies the BuildJob custom resource (group/version/
+// resource) the operator-mode scheduler creates. Overridable via env for
+// non-default CRD installations.
 type BuildJobGVRConfig struct {
 	Group    string `env:"BUILDJOB_GROUP,notEmpty"    envDefault:"build.hades.tum.de"`
 	Version  string `env:"BUILDJOB_VERSION,notEmpty"  envDefault:"v1"`
 	Resource string `env:"BUILDJOB_RESOURCE,notEmpty" envDefault:"buildjobs"`
 }
 
+// NewK8sScheduler builds a Scheduler by loading K8sConfig and initializing
+// cluster access for the configured K8S_CONFIG_MODE. In non-operator modes it
+// also ensures the target namespace exists and wires a NATS log publisher.
 func NewK8sScheduler(nc *nats.Conn) (*Scheduler, error) {
 	slog.Debug("Initializing Kubernetes scheduler")
 
@@ -170,6 +186,9 @@ func initializeOperatorAccess(k8sCfg K8sConfig) (Scheduler, error) {
 	}, nil
 }
 
+// ScheduleJob runs a job on the cluster. In operator mode it creates a BuildJob
+// custom resource (the operator reconciles it into a batch Job); in the legacy
+// modes it builds and submits a batch Job directly.
 func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
 	if k.config.ConfigMode == "operator" {
 		slog.Debug("Scheduling job via Operator (creating BuildJob CR)")
@@ -187,6 +206,7 @@ func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) er
 	return k8sJob.execute(ctx)
 }
 
+// ToGVR converts the config into a schema.GroupVersionResource for the dynamic client.
 func (c BuildJobGVRConfig) ToGVR() schema.GroupVersionResource {
 	return schema.GroupVersionResource{
 		Group:    c.Group,
@@ -212,8 +232,8 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 	}
 
 	if job.Metadata != nil {
-		if v, ok := job.Metadata["hades.tum.de/priority"]; ok && v != "" {
-			labels["hades.tum.de/priority"] = v
+		if v, ok := job.Metadata[hades.MetadataKeyPriority]; ok && v != "" {
+			labels[hades.MetadataKeyPriority] = v
 		}
 	}
 

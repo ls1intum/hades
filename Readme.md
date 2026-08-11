@@ -1,8 +1,14 @@
-# Hades: A Scalable Job Scheduler for Container Workloads
+<p align="center">
+  <img src="docs/assets/hades-icon.svg" alt="Hades logo" width="128" height="128" />
+</p>
+
+<h1 align="center">Hades: A Scalable Job Scheduler for Container Workloads</h1>
 
 Welcome to Hades, a robust job scheduler designed with scalability in mind. Hades' primary mission is to provide a straightforward, scalable, and adaptable solution for executing containerized workloads in various environments, from educational programming courses to research computing clusters.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **📖 Documentation:** the full docs live at **[ls1intum.github.io/hades](https://ls1intum.github.io/hades/)** (a Docusaurus site, source in [`website/`](./website)). The in-repo [`docs/`](./docs/README.md) index and per-component READMEs cover the same material for offline/agent use.
 
 ## Design Goals
 
@@ -34,7 +40,9 @@ Hades is built upon the following key components:
 
   - **Kubernetes Executor (Deprecated)**: The legacy Kubernetes execution mode.
 
-- **Log Manager** *(local development only)*: Subscribes to job status and log events on NATS, aggregates per-job logs in memory, and exposes them through an HTTP API (`GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status`, default port `8081`). Run via `make run` for local workflows; not currently part of the Docker compose stack or the production Helm deployment.
+- **Log Manager**: Subscribes to job status and log events on NATS, aggregates per-job logs in memory, and exposes them through an HTTP API (`GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status`, default port `8081`). It has its own Dockerfile and is deployed by the Helm chart (`hades-log-manager`). It is not part of the `compose.yml` stack, so run it locally with `make run`.
+
+- **Dashboard**: An optional, secured web UI served by the API itself (embedded SPA + `/api/*` JSON/SSE endpoints). It shows queued/running/recently-completed jobs, a redacted job detail view, live logs, and system metrics, and updates live over Server-Sent Events. See [Dashboard](#dashboard) below.
 
 ## How It Works
 
@@ -201,15 +209,106 @@ For more complex workflows, you can define multi-step jobs where each step runs 
 }
 ```
 
+## Dashboard
+
+Hades ships an optional, secured **web dashboard** served by `HadesAPI` itself.
+The API embeds a React/TypeScript single-page app (Vite, Tailwind, shadcn/ui) and
+exposes a small JSON + Server-Sent-Events API under `/api`; no separate service is
+introduced. The dashboard shows queued/running/recently-completed jobs, a job
+detail view (steps, scripts, resource limits, and metadata with secrets redacted),
+live logs, and system metrics, all updating live.
+
+### How it gets its data
+
+- **Job list, status, metrics, live updates** come from the API's subscription to
+  the NATS `hades.jobstatus.*` lifecycle events. The API now also publishes
+  `Queued` on enqueue so newly submitted jobs appear immediately.
+- **Job detail** is read on demand from the `HADES_JOBS` JetStream KV bucket (the
+  full submitted payload) and **redacted** before it leaves the process.
+- **Logs** are proxied to the internal `HadesLogManager` service, which remains the
+  log aggregator (the proxy is authenticated, so that internal service is never
+  exposed directly).
+
+Read-side state is in-memory and recent-only (bounded by `DASHBOARD_JOB_RETENTION`),
+so both `HadesAPI` and `HadesLogManager` must stay at a single replica.
+
+### Enabling it
+
+The dashboard is **disabled unless configured** (its `/api` routes return `503` and
+the SPA is not served). Set three variables to enable it:
+
+| Variable | Description |
+|----------|-------------|
+| `DASHBOARD_USERNAME` | Login username |
+| `DASHBOARD_PASSWORD_HASH` | bcrypt hash of the password (e.g. `htpasswd -bnBC 12 "" 'yourpass' \| tr -d ':\n'`) |
+| `DASHBOARD_SESSION_SECRET` | Random string (>=32 chars) used to sign session cookies |
+
+Optional: `DASHBOARD_SESSION_TTL` (default `12h`), `DASHBOARD_JOB_RETENTION`
+(default `1h`), `LOG_MANAGER_URL` (default the in-cluster log manager),
+`SECRET_REDACT_MODE` (`smart` default, or `all`), `SECRET_KEY_PATTERNS`,
+`DASHBOARD_TRUSTED_PROXIES`, and `DASHBOARD_COOKIE_INSECURE`.
+
+Login uses a signed, `HttpOnly; Secure; SameSite=Strict` session cookie; all
+`/api/*` routes require a valid session, with rate-limited login lockout.
+
+### Security notes
+
+- **Deploy behind TLS.** The session cookie is `Secure`, so login only works over
+  HTTPS (or `http://localhost`). For a rare plain-HTTP dev setup, set
+  `DASHBOARD_COOKIE_INSECURE=true` - never in production.
+- **Set `DASHBOARD_TRUSTED_PROXIES`** to your ingress' address range when behind a
+  reverse proxy. Otherwise `X-Forwarded-For` is ignored (the login lockout keys on
+  the direct, un-spoofable address).
+- Responses carry `Content-Security-Policy`, `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, and HSTS.
+
+### Secret handling
+
+Job metadata (job- and step-level) is injected into containers as environment
+variables and routinely carries credentials. The dashboard redacts it
+**server-side** before any JSON is sent: values are masked when the key looks
+sensitive (`token`, `password`, `secret`, ...) **or** the value itself looks like a
+secret (credentials embedded in a URL, a PEM block, a JWT, a high-entropy token).
+Step **scripts** are scanned with the same heuristics and have inline secrets
+masked. Keys stay visible so operators can see which variables exist;
+`SECRET_REDACT_MODE=all` masks every metadata value.
+
+**Residual exposure (by design):** job **logs** are proxied and shown *verbatim* -
+a secret a job echoes to stdout will be visible (the log panel warns about this).
+Script redaction is best-effort heuristic scrubbing, not a guarantee. Sessions are
+stateless HMAC tokens, so `logout` and expiry are enforced by the cookie/TTL but a
+leaked token cannot be revoked before it expires - keep `DASHBOARD_SESSION_TTL`
+modest and rotate `DASHBOARD_SESSION_SECRET` to invalidate all sessions at once.
+
+### Local development
+
+```fish
+make ui-build   # build the SPA into HadesAPI/web/dist (embedded by the API)
+make run        # run API + scheduler + log manager (+ NATS) with your dashboard env set
+# then open http://localhost:8080/
+```
+
+For SPA development with hot reload, run `make ui-dev` (Vite dev server on `:5173`,
+proxying `/api` to the API). See [`HadesAPI/web/README.md`](./HadesAPI/web/README.md).
+
+In Kubernetes, set `hadesApi.dashboard.secretName` (a Secret with the three
+`DASHBOARD_*` keys) in the Helm chart; the chart then wires the env and adds the
+`/` and `/api` ingress paths.
+
 ## Configuration Options
 
-Hades can be configured through environment variables or a `.env` file:
+Hades is configured through environment variables (or a `.env` file for local runs). The most common settings:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `HADES_EXECUTOR` | Execution platform: `docker` or `k8s` | `docker` |
 | `CONCURRENCY` | Number of jobs to process concurrently | `1` |
 | `API_PORT` | Port for the Hades API | `8080` |
+| `AUTH_KEY` | HTTP Basic Auth key for the API (empty = no auth) | `` |
+| `NATS_URL` | NATS server URL | `nats://localhost:4222` |
+| `DEBUG` | Verbose (debug-level) logging | `false` |
+
+See **[docs/configuration.md](./docs/configuration.md)** for the complete, per-component reference (Docker/Kubernetes executor, operator, and Log Manager options). A ready-to-copy `.env.example` lives at the repository root.
 
 ## Development Workflow
 
@@ -222,12 +321,15 @@ A top-level [`Makefile`](./Makefile) wraps the most common development tasks. Ru
 | `make docker-run` / `make docker-stop` / `make docker-logs` | Start, stop, or tail the full docker compose stack. |
 | `make docker-run-api` / `make docker-run-scheduler` / `make docker-run-nats` | Start an individual service via docker compose. |
 | `make build` | Compile every Go module in the workspace. |
+| `make ui-build` / `make ui-dev` / `make ui-test` | Build, dev-serve, or test the dashboard SPA (`HadesAPI/web`). |
 | `make docker-build` | Build all Hades container images. |
 | `make test` | Run unit tests across every Go module. |
 | `make test-race` | Same as `make test` with the race detector. |
 | `make cover` | Generate and open the HadesAPI coverage report. |
 | `make test-operator` / `make test-operator-e2e` | Run HadesOperator envtest unit tests, or Kind-based e2e tests. |
 | `make fmt` / `make lint` | Format code with `gofmt` or run `go vet`. |
+| `make docs-api` | Regenerate the OpenAPI specs for HadesAPI and HadesLogManager (run after changing a handler annotation or DTO). |
+| `make docs-helm` | Regenerate the Helm chart values table from `values.yaml` comments (run after changing chart values). |
 | `make vuln` | Run `govulncheck` (auto-installs it on first use). |
 | `make deps-check` / `make deps-update` / `make deps-tidy` | List outdated direct dependencies, bump them, or run `go mod tidy` across all modules. |
 | `make helm-deps` | Refresh the Helm chart subchart lock file. |

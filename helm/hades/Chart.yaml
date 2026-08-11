@@ -1,6 +1,7 @@
 apiVersion: v2
 name: hades
 description: Hades is a scalable CI/CD System.
+icon: https://raw.githubusercontent.com/ls1intum/hades/main/docs/assets/hades-icon.svg
 
 # A chart can be either an 'application' or a 'library' chart.
 #

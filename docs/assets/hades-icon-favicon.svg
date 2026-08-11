@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img">
+<title>Hades</title>
+<rect width="128" height="128" rx="27.6" fill="#191C24"/>
+<g transform="translate(9.6,9.6) scale(0.85)">
+<rect x="16" y="14" width="16" height="100" rx="8" fill="#F2EFE9"/>
+<rect x="96" y="14" width="16" height="100" rx="8" fill="#F2EFE9"/>
+<rect x="32" y="56" width="64" height="16" fill="#FF6A3D"/>
+</g>
+</svg>

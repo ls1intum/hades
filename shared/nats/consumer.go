@@ -144,8 +144,8 @@ func (hc *HadesNATSConsumer) workerLoop(ctx context.Context, workerID uint, proc
 		if job.Metadata == nil {
 			job.Metadata = map[string]string{}
 		}
-		job.Metadata["hades.tum.de/priority"] = strconv.Itoa(hades.PriorityToInt(priority))
-		job.Metadata["hades.tum.de/priorityName"] = string(priority)
+		job.Metadata[hades.MetadataKeyPriority] = strconv.Itoa(hades.PriorityToInt(priority))
+		job.Metadata[hades.MetadataKeyPriorityName] = string(priority)
 
 		// Process the job immediately (we have capacity)
 		hc.processJob(workerID, job, msg, priority, processing)

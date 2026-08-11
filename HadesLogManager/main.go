@@ -13,11 +13,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/ls1intum/hades/hadesLogManager/docs" // generated OpenAPI spec (make docs-api)
 	"github.com/ls1intum/hades/shared/buildlogs"
 	hadesnats "github.com/ls1intum/hades/shared/nats"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 const (
@@ -30,6 +33,10 @@ type HadesLogManagerConfig struct {
 	APIPort    string `env:"HADESLOGMANAGER_API_PORT" envDefault:"8081"`
 }
 
+// @title                 HadesLogManager API
+// @version               1.0
+// @description           Read-only API for inspecting build-job logs and status aggregated by the Hades Log Manager. This service is a local-development aid and is not part of the production Helm deployment.
+// @BasePath              /
 func main() {
 	// Setup logging
 	utils.SetupLogging()
@@ -206,37 +213,84 @@ func setupAPIRoute(aggregator buildlogs.LogAggregator) *gin.Engine {
 	r.Use(gin.Logger(), gin.Recovery())
 	jobs := r.Group("/jobs")
 	{
-		// Get logs for specific job
-		jobs.GET("/:jobId/logs", func(c *gin.Context) {
-			jobID := c.Param("jobId")
-			logs := aggregator.GetJobLogs(jobID)
-			c.JSON(200, gin.H{"logs": logs})
-		})
-
-		// Get job status for specific job
-		jobs.GET("/:jobId/status", func(c *gin.Context) {
-			jobID := c.Param("jobId")
-			status, err := aggregator.GetJobStatus(jobID)
-
-			if err != nil {
-				c.JSON(404, gin.H{"error": err.Error()})
-				return
-			}
-
-			c.JSON(200, gin.H{"status": status.String()})
-		})
-
-		// Get active jobs (for testing)
-		jobs.GET("", func(c *gin.Context) {
-			jobs := aggregator.GetAllJobs()
-			c.JSON(200, gin.H{"jobs": jobs})
-		})
+		jobs.GET("/:jobId/logs", getJobLogs(aggregator))
+		jobs.GET("/:jobId/status", getJobStatus(aggregator))
+		jobs.GET("", listJobs(aggregator))
 	}
 
-	// Health check endpoint
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
+	r.GET("/health", healthCheck())
+
+	// Swagger UI (and its doc.json) are only exposed when DEBUG is enabled.
+	if os.Getenv("DEBUG") == "true" {
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
 
 	return r
+}
+
+// getJobLogs returns the aggregated log entries for a job.
+//
+//	@Summary		Get job logs
+//	@Description	Returns all aggregated log entries for the given job ID.
+//	@Tags			jobs
+//	@Produce		json
+//	@Param			jobId	path		string	true	"Job ID"
+//	@Success		200		{object}	map[string]interface{}
+//	@Router			/jobs/{jobId}/logs [get]
+func getJobLogs(aggregator buildlogs.LogAggregator) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		jobID := c.Param("jobId")
+		logs := aggregator.GetJobLogs(jobID)
+		c.JSON(200, gin.H{"logs": logs})
+	}
+}
+
+// getJobStatus returns the current build status for a job.
+//
+//	@Summary		Get job status
+//	@Description	Returns the current build status for the given job ID, or 404 if the job is unknown.
+//	@Tags			jobs
+//	@Produce		json
+//	@Param			jobId	path		string				true	"Job ID"
+//	@Success		200		{object}	map[string]string	"status"
+//	@Failure		404		{object}	map[string]string	"error"
+//	@Router			/jobs/{jobId}/status [get]
+func getJobStatus(aggregator buildlogs.LogAggregator) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		jobID := c.Param("jobId")
+		status, err := aggregator.GetJobStatus(jobID)
+		if err != nil {
+			c.JSON(404, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"status": status.String()})
+	}
+}
+
+// listJobs returns all known job IDs (active and completed).
+//
+//	@Summary		List jobs
+//	@Description	Returns a list of all known job IDs (active and completed).
+//	@Tags			jobs
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}
+//	@Router			/jobs [get]
+func listJobs(aggregator buildlogs.LogAggregator) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(200, gin.H{"jobs": aggregator.GetAllJobs()})
+	}
+}
+
+// healthCheck is the liveness handler.
+//
+//	@Summary		Health check
+//	@Description	Liveness probe returning a static OK response.
+//	@Tags			health
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/health [get]
+func healthCheck() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	}
 }

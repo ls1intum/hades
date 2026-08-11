@@ -17,7 +17,7 @@ The Hades Operator is designed to:
 ## Getting Started
 
 ### Prerequisites
-- go version v1.24.0+
+- go version v1.26.0+
 - docker version 17.05+.
 - kubectl version v1.14.0+.
 - Access to a Kubernetes v1.16.0+ cluster.

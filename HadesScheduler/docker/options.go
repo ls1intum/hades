@@ -8,8 +8,12 @@ import (
 	"github.com/ls1intum/hades/shared/buildstatus"
 )
 
+// DockerOption configures a Scheduler during construction (functional options
+// pattern). Pass any number to NewScheduler; each is applied in order and may
+// return an error to abort construction.
 type DockerOption func(*Scheduler) error
 
+// WithDockerHost points the scheduler at a specific Docker daemon endpoint.
 func WithDockerHost(dockerHost string) DockerOption {
 	return func(s *Scheduler) error {
 		cli, err := client.NewClientWithOpts(client.WithHost(dockerHost), client.WithAPIVersionNegotiation())
@@ -21,6 +25,7 @@ func WithDockerHost(dockerHost string) DockerOption {
 	}
 }
 
+// WithLogPublisher sets the publisher used to emit container logs (rejects nil).
 func WithLogPublisher(publisher buildlogs.LogPublisher) DockerOption {
 	return func(s *Scheduler) error {
 		if publisher == nil {
@@ -31,6 +36,7 @@ func WithLogPublisher(publisher buildlogs.LogPublisher) DockerOption {
 	}
 }
 
+// WithStatusPublisher sets the publisher used to emit job status transitions (rejects nil).
 func WithStatusPublisher(publisher buildstatus.StatusPublisher) DockerOption {
 	return func(s *Scheduler) error {
 		if publisher == nil {
@@ -41,6 +47,7 @@ func WithStatusPublisher(publisher buildstatus.StatusPublisher) DockerOption {
 	}
 }
 
+// WithScriptExecutor sets the shell used to run each step's script (e.g. "/bin/bash -c").
 func WithScriptExecutor(scriptExecutor string) DockerOption {
 	return func(s *Scheduler) error {
 		s.scriptExecutor = scriptExecutor
@@ -48,6 +55,8 @@ func WithScriptExecutor(scriptExecutor string) DockerOption {
 	}
 }
 
+// WithContainerAutoremove controls whether step containers are removed on exit.
+// Keep it false to retain container logs after a run.
 func WithContainerAutoremove(autoremove bool) DockerOption {
 	return func(s *Scheduler) error {
 		s.containerAutoremove = autoremove
@@ -55,6 +64,8 @@ func WithContainerAutoremove(autoremove bool) DockerOption {
 	}
 }
 
+// WithCPULimit sets the default CPU limit (whole CPUs) for step containers that
+// do not specify their own.
 func WithCPULimit(cpuLimit uint) DockerOption {
 	return func(s *Scheduler) error {
 		s.cpuLimit = cpuLimit
@@ -62,6 +73,8 @@ func WithCPULimit(cpuLimit uint) DockerOption {
 	}
 }
 
+// WithMemoryLimit sets the default memory limit (e.g. "4g") for step containers
+// that do not specify their own.
 func WithMemoryLimit(memoryLimit string) DockerOption {
 	return func(s *Scheduler) error {
 		s.memoryLimit = memoryLimit
