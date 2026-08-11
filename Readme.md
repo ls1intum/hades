@@ -153,7 +153,8 @@ curl -X POST -H "Content-Type: application/json" -d @job.json http://localhost:8
 
 To have the Log Manager forward a job's aggregated logs somewhere (for example the
 Artemis adapter), add an optional top-level `callback_url` to the request. It must
-be an absolute `http`/`https` URL. If omitted, the job's logs are not forwarded.
+be an absolute `http`/`https` URL that includes a host. If omitted, the job's logs
+are not forwarded.
 
 ```json
 {

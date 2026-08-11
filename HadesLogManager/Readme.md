@@ -17,7 +17,7 @@ Artemis adapter). The LogManager is the hop that turns the per-job NATS log
 stream into a single HTTP payload for that endpoint. Test results travel a
 **separate** path and are re-joined inside the adapter.
 
-```
+```text
  build job (pod)                         NATS JetStream                     HTTP
  ┌───────────────┐   operator reads    ┌────────────────────┐          ┌──────────────┐         ┌──────────────┐
  │ step-1 clone  │   pod logs via      │ stream:            │  watch   │ HadesLog     │  POST   │ job          │

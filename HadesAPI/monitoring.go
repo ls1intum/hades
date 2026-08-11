@@ -42,10 +42,11 @@ func sanitizeAndMarshal(job payload.QueuePayload) string {
 		stepsCopy[i].Metadata = make(map[string]string)
 	}
 	job.Steps = stepsCopy
-	// Strip any query/fragment from the callback URL so tokens carried there
-	// don't leak into logs.
+	// Strip any credentials/query/fragment from the callback URL so tokens
+	// carried there don't leak into logs.
 	if job.CallbackURL != "" {
 		if u, err := url.Parse(job.CallbackURL); err == nil {
+			u.User = nil
 			u.RawQuery = ""
 			u.Fragment = ""
 			job.CallbackURL = u.String()

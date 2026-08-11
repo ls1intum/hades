@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -114,6 +115,26 @@ func TestSafePayloadFormat_InvalidJSONReturnsEmpty(t *testing.T) {
 func TestSafePayloadFormat_EmptyPayload(t *testing.T) {
 	result := SafePayloadFormat(payload.QueuePayload{})
 	assertSanitized(t, result)
+}
+
+func TestSafePayloadFormat_CallbackURLCredentialsStripped(t *testing.T) {
+	job := baseJob()
+	job.CallbackURL = "https://user:token@example.com/logs?secret=abc#frag"
+
+	result := SafePayloadFormat(job)
+
+	var out payload.QueuePayload
+	if err := json.Unmarshal([]byte(result), &out); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+	if out.CallbackURL != "https://example.com/logs" {
+		t.Errorf("callback URL not fully redacted: got %q", out.CallbackURL)
+	}
+	for _, leak := range []string{"user", "token", "secret", "abc", "frag"} {
+		if strings.Contains(result, leak) {
+			t.Errorf("sanitized payload leaked %q: %s", leak, result)
+		}
+	}
 }
 
 func TestSafePayloadFormat_OriginalNotMutated(t *testing.T) {
