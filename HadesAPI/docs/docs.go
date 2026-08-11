@@ -100,6 +100,10 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
+                "callback_url": {
+                    "description": "Optional per-job destination for forwarding aggregated logs/results",
+                    "type": "string"
+                },
                 "id": {
                     "description": "Unique job identifier",
                     "type": "string"
