@@ -9,18 +9,15 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/docker/docker/api/types/container"
-	image_types "github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/volume"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/jsonmessage"
-	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/client"
+	"github.com/moby/moby/client/pkg/jsonmessage"
 )
 
-func processContainerLogs(ctx context.Context, client *client.Client, publisher buildlogs.LogPublisher, containerID, jobID string) error {
-	stdout, stderr, err := getContainerLogs(ctx, client, containerID)
+func processContainerLogs(ctx context.Context, cli *client.Client, publisher buildlogs.LogPublisher, containerID, jobID string) error {
+	stdout, stderr, err := getContainerLogs(ctx, cli, containerID)
 	if err != nil {
 		return fmt.Errorf("getting container logs: %w", err)
 	}
@@ -36,8 +33,8 @@ func processContainerLogs(ctx context.Context, client *client.Client, publisher 
 }
 
 // retrieves and demultiplexes container logs
-func getContainerLogs(ctx context.Context, client *client.Client, containerID string) (*bytes.Buffer, *bytes.Buffer, error) {
-	logReader, err := client.ContainerLogs(ctx, containerID, container.LogsOptions{
+func getContainerLogs(ctx context.Context, cli *client.Client, containerID string) (*bytes.Buffer, *bytes.Buffer, error) {
+	logReader, err := cli.ContainerLogs(ctx, containerID, client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Timestamps: true,
@@ -55,8 +52,8 @@ func getContainerLogs(ctx context.Context, client *client.Client, containerID st
 	return stdout, stderr, nil
 }
 
-func removeContainer(ctx context.Context, client *client.Client, containerID string) error {
-	if err := client.ContainerRemove(ctx, containerID, container.RemoveOptions{
+func removeContainer(ctx context.Context, cli *client.Client, containerID string) error {
+	if _, err := cli.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
 		Force:         true, // Kill if running, then remove
 		RemoveVolumes: true, // Clean up any volumes
 	}); err != nil {
@@ -67,7 +64,7 @@ func removeContainer(ctx context.Context, client *client.Client, containerID str
 	return nil
 }
 
-func pullImages(ctx context.Context, client *client.Client, images ...string) error {
+func pullImages(ctx context.Context, cli *client.Client, images ...string) error {
 	var wg sync.WaitGroup
 	errorsCh := make(chan error, len(images))
 
@@ -77,7 +74,7 @@ func pullImages(ctx context.Context, client *client.Client, images ...string) er
 		go func(img string) {
 			defer wg.Done()
 
-			response, err := client.ImagePull(ctx, img, image_types.PullOptions{})
+			response, err := cli.ImagePull(ctx, img, client.ImagePullOptions{})
 			if err != nil {
 				errorsCh <- fmt.Errorf("failed to pull image %s: %w", img, err)
 				return
@@ -110,9 +107,9 @@ func pullImages(ctx context.Context, client *client.Client, images ...string) er
 	return nil
 }
 
-func createSharedVolume(ctx context.Context, client *client.Client, name string) error {
+func createSharedVolume(ctx context.Context, cli *client.Client, name string) error {
 	// Create the volume
-	_, err := client.VolumeCreate(ctx, volume.CreateOptions{
+	_, err := cli.VolumeCreate(ctx, client.VolumeCreateOptions{
 		Name: name,
 	})
 	if err != nil {
@@ -124,9 +121,9 @@ func createSharedVolume(ctx context.Context, client *client.Client, name string)
 	return nil
 }
 
-func deleteSharedVolume(ctx context.Context, client *client.Client, name string) error {
+func deleteSharedVolume(ctx context.Context, cli *client.Client, name string) error {
 	// Delete the volume
-	err := client.VolumeRemove(ctx, name, true)
+	_, err := cli.VolumeRemove(ctx, name, client.VolumeRemoveOptions{Force: true})
 	if err != nil {
 		slog.Error("Failed to delete shared volume", slog.Any("error", err))
 		return err

@@ -141,11 +141,16 @@ lint: ## Run go vet and golangci-lint across all Go modules.
 
 .PHONY: vuln
 vuln: ## Run govulncheck across all Go modules.
-	@command -v govulncheck >/dev/null 2>&1 || { \
+	@GOVULNCHECK=$$(command -v govulncheck || echo "$$(go env GOPATH)/bin/govulncheck"); \
+	if ! [ -x "$$GOVULNCHECK" ]; then \
 		echo "Installing govulncheck..."; \
 		go install golang.org/x/vuln/cmd/govulncheck@latest; \
-	}
-	govulncheck $(GO_PATHS)
+		GOVULNCHECK="$$(go env GOPATH)/bin/govulncheck"; \
+	fi; \
+	for m in $(GO_MODULES); do \
+		echo "==> govulncheck $$m"; \
+		(cd $$m && "$$GOVULNCHECK" ./...); \
+	done
 
 ##@ Dependencies
 

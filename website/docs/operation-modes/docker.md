@@ -40,6 +40,18 @@ This is the default value, so no changes are needed when using the provided `com
 | Network | The Scheduler and all job containers share the `hades` Docker network. |
 | Volume | A named or anonymous volume is created per job for the `/shared` directory. |
 
+## Implementation Notes
+
+The Scheduler talks to the daemon through the official Moby Go client
+(`github.com/moby/moby/client`, with API types from `github.com/moby/moby/api`).
+This is the successor to `github.com/docker/docker/client`, which stopped
+receiving releases after Docker Engine 28. API version negotiation happens
+automatically on the first request.
+
+Note that the executor is a *client* of the Docker daemon: it does not bundle
+the engine. Keeping the daemon patched on the host is a separate, operational
+concern from updating this dependency.
+
 ## Limitations
 
 - **Single host only** — all containers run on the machine where the Scheduler is running.
