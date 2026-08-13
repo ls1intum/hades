@@ -8,6 +8,7 @@ import (
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 	"github.com/ls1intum/hades/hadesScheduler/k8s"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,6 +59,66 @@ func (r *BuildJobReconciler) initializeContainerStatuses(ctx context.Context, bj
 		fresh.Status.CurrentStep = &currentStep
 		return r.Status().Update(ctx, &fresh)
 	})
+}
+
+// allTerminatedLogsPublished reports whether every container that has reached a
+// terminal state in the pod has had its logs published in the BuildJob status.
+// It is the drain gate used before deleting a completed BuildJob: only containers
+// that actually terminated (Succeeded/Failed) must be published. Containers that
+// never ran (e.g. init steps after a failing step, or the finalizer on a failed
+// job) have no terminated state and therefore do not block deletion. A terminated
+// container without a matching, published status entry counts as not-yet-drained.
+func allTerminatedLogsPublished(pod *corev1.Pod, statuses []buildv1.ContainerStatus) bool {
+	published := make(map[string]bool, len(statuses))
+	for _, cs := range statuses {
+		published[cs.Name] = cs.LogsPublished
+	}
+
+	drained := func(containerStatuses []corev1.ContainerStatus) bool {
+		for _, cs := range containerStatuses {
+			if cs.State.Terminated == nil {
+				continue
+			}
+			if !published[cs.Name] {
+				return false
+			}
+		}
+		return true
+	}
+
+	return drained(pod.Status.InitContainerStatuses) && drained(pod.Status.ContainerStatuses)
+}
+
+// logsDrained reports whether all terminated containers of the BuildJob's pod have
+// had their logs published. podGone is true when the pod can no longer be found
+// (its logs are unrecoverable), so the caller should proceed to delete rather than
+// requeue forever.
+func (r *BuildJobReconciler) logsDrained(ctx context.Context, bj *buildv1.BuildJob) (drained bool, podGone bool, err error) {
+	pl := r.podLogReader(bj.Namespace, bj.Name)
+
+	podName, err := pl.ResolvePodName(ctx)
+	if err != nil {
+		// The pod cannot be resolved anymore; treat it as gone so we do not
+		// requeue forever waiting for logs that can no longer be read.
+		return false, true, nil
+	}
+
+	p, err := r.K8sClient.CoreV1().Pods(bj.Namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, true, nil
+		}
+		return false, false, err
+	}
+
+	// updateContainerStatuses writes status onto a separately fetched object, so
+	// re-read the latest ContainerStatuses to see the freshest LogsPublished flags.
+	var fresh buildv1.BuildJob
+	if err := r.Get(ctx, client.ObjectKeyFromObject(bj), &fresh); err != nil {
+		return false, false, err
+	}
+
+	return allTerminatedLogsPublished(p, fresh.Status.ContainerStatuses), false, nil
 }
 
 // updateContainerStatuses resolves PodName using the BuildJob and updates each BuildJob's container statuses accordingly
