@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"maps"
 
-	"github.com/docker/docker/client"
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/payload"
+	"github.com/moby/moby/client"
 )
 
 // Job is a single queued job bound to the Docker client and options used to run
