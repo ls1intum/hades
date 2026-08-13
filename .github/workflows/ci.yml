@@ -343,6 +343,9 @@ jobs:
             HADES_API_HOST=${{ vars.HADES_API_HOST }}
             LETSENCRYPT_EMAIL=${{ vars.LETSENCRYPT_EMAIL }}
             AUTH_KEY=${{ secrets.AUTH_KEY }}
+            DASHBOARD_USERNAME=${{ secrets.DASHBOARD_USERNAME }}
+            DASHBOARD_PASSWORD_HASH=${{ secrets.DASHBOARD_PASSWORD_HASH }}
+            DASHBOARD_SESSION_SECRET=${{ secrets.DASHBOARD_SESSION_SECRET }}
             EOF
 
       - name: Deploy with docker compose
