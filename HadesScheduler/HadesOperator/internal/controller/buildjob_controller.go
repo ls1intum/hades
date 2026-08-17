@@ -193,12 +193,12 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 		}
 
-		// A container has terminated but its logs are still streaming; requeue so
-		// LogsPublished is observed once the stream drains.
-		if draining {
-			return ctrl.Result{RequeueAfter: requeueDelay}, nil
-		}
-		return ctrl.Result{}, nil
+		// Requeue while the job runs. The operator watches only BuildJobs and owned
+		// Jobs, not Pods, so a Job whose init containers are progressing produces no
+		// events between creation and completion. Periodic requeues are how the
+		// operator observes each container entering Running (to start its live log
+		// stream) and terminating (to finalize once its stream drains).
+		return ctrl.Result{RequeueAfter: requeueDelay}, nil
 	}
 
 	if !apierrors.IsNotFound(err) {
@@ -260,8 +260,9 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// Do not requeue; later Job status changes will re-trigger reconciliation
-	return ctrl.Result{}, nil
+	// Requeue so the operator observes container transitions and drives live log
+	// streaming while the Job runs (Pods are not watched directly).
+	return ctrl.Result{RequeueAfter: requeueDelay}, nil
 }
 
 // setStatusRunning sets BuildJob.Status to "Running", records StartTime and PodName.
