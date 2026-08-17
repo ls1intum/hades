@@ -22,12 +22,12 @@ type RESTPayload struct {
 // QueuePayload represents a job to be processed by the Hades system.
 // It contains all information needed to execute a multi-step job.
 type QueuePayload struct {
-	ID          uuid.UUID         `json:"id"`                      // Unique job identifier
-	Name        string            `json:"name" binding:"required"` // Human-readable job name
-	Timestamp   time.Time         `json:"timestamp"`               // Job creation timestamp
-	Metadata    map[string]string `json:"metadata"`                // Additional job-level metadata
-	Steps       []Step            `json:"steps"`                   // Ordered list of steps to execute
-	CallbackURL string            `json:"callback_url,omitempty"`  // Optional per-job destination for forwarding aggregated logs/results
+	ID          uuid.UUID         `json:"id"`                                  // Unique job identifier
+	Name        string            `json:"name" binding:"required"`             // Human-readable job name
+	Timestamp   time.Time         `json:"timestamp"`                           // Job creation timestamp
+	Metadata    map[string]string `json:"metadata"`                            // Additional job-level metadata
+	Steps       []Step            `json:"steps"`                               // Ordered list of steps to execute
+	CallbackURL string            `json:"callback_url,omitempty" format:"uri"` // Optional per-job destination for forwarding aggregated logs/results. Must be an absolute http/https URL with a host.
 }
 
 // Step represents a single execution step in a job.
