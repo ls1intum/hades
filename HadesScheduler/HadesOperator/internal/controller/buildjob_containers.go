@@ -90,31 +90,35 @@ func allTerminatedLogsPublished(pod *corev1.Pod, statuses []buildv1.ContainerSta
 }
 
 // logsDrained reports whether all terminated containers of the BuildJob's pod have
-// had their logs published. podGone is true when the pod can no longer be found
-// (its logs are unrecoverable), so the caller should proceed to delete rather than
-// requeue forever.
+// had their logs published. podGone is true only when the pod is confirmed gone
+// (a NotFound result), so the caller proceeds to delete rather than requeue; any
+// other error is returned so the caller retries instead of deleting and losing
+// logs.
 func (r *BuildJobReconciler) logsDrained(ctx context.Context, bj *buildv1.BuildJob) (drained bool, podGone bool, err error) {
-	pl := r.podLogReader(bj.Namespace, bj.Name)
+	// Re-read the latest status: updateContainerStatuses (run earlier in this
+	// reconcile) records the pod name and the freshest LogsPublished flags on a
+	// separately fetched object.
+	var fresh buildv1.BuildJob
+	if err := r.Get(ctx, client.ObjectKeyFromObject(bj), &fresh); err != nil {
+		return false, false, err
+	}
 
-	podName, err := pl.ResolvePodName(ctx)
-	if err != nil {
-		// The pod cannot be resolved anymore; treat it as gone so we do not
-		// requeue forever waiting for logs that can no longer be read.
-		return false, true, nil
+	podName := fresh.Status.PodName
+	if podName == "" {
+		// The pod name has not been recorded yet, so we cannot confirm the pod is
+		// gone. Do not delete; let the caller requeue (the drain timeout is the
+		// backstop against waiting forever).
+		return false, false, nil
 	}
 
 	p, err := r.K8sClient.CoreV1().Pods(bj.Namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
+			// The pod is confirmed gone; its logs are unrecoverable.
 			return false, true, nil
 		}
-		return false, false, err
-	}
-
-	// updateContainerStatuses writes status onto a separately fetched object, so
-	// re-read the latest ContainerStatuses to see the freshest LogsPublished flags.
-	var fresh buildv1.BuildJob
-	if err := r.Get(ctx, client.ObjectKeyFromObject(bj), &fresh); err != nil {
+		// Transient/API/authorization error: propagate so the caller retries
+		// instead of deleting the BuildJob and losing logs.
 		return false, false, err
 	}
 
