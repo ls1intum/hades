@@ -28,15 +28,21 @@ adapter.
    HadesOperator reconciles it into a Kubernetes `Job` with one container per step
    (`step-1` clone, `step-2` execute, `step-3` result) and publishes a `running`
    status to NATS.
-1. **Operator captures container logs.** As the pod runs, the operator reads each
-   container's stdout/stderr from the Kubernetes API, parses them into a
-   `buildlogs.Log{JobID, ContainerID, Logs[]}` (one per container).
+1. **Operator streams container logs live.** As each container runs, the operator
+   **follows** its stdout/stderr from the Kubernetes API (`Follow: true`) and parses
+   lines into `buildlogs.Log{JobID, ContainerID, Logs[]}` incrementally, rather than
+   reading the whole log once after the container stops. (The Docker executor does the
+   same via `ContainerLogs` with `Follow: true`.)
 2. **Operator publishes logs to NATS JetStream** on subject `hades.logs.<jobID>`
-   (stream `HADES_JOB_LOGS`). Status changes go to `hades.jobstatus.<status>`.
+   (stream `HADES_JOB_LOGS`), emitting many small per-container batches over the
+   container's lifetime (flushed on ~50 lines or ~1s). A zero-entry `Log` is published
+   when a container starts so a step that produces no output keeps its slot. Status
+   changes go to `hades.jobstatus.<status>`.
 3. **LogManager watches, keyed off status.** On `running` it starts a durable
-   JetStream consumer on `hades.logs.<jobID>` and streams batches into the
-   in-memory aggregator, **grouped per container**. On `succeeded`/`failed` it
-   stops watching, marks the job complete, and forwards the logs.
+   JetStream consumer on `hades.logs.<jobID>` and streams batches into the in-memory
+   aggregator, **coalesced per container** (all batches for one `ContainerID` merge
+   into a single `Log`, preserving first-seen container order). On `succeeded`/`failed`
+   it stops watching, marks the job complete, and forwards the logs.
 4. **LogManager forwards to the adapter.** It POSTs the aggregated `[]buildlogs.Log`
    to `ARTEMIS_ADAPTER_URL` (`POST /adapter/logs`).
 5. **Adapter stores execution logs.** It takes the execute step (`logs[1]`) as the
@@ -52,6 +58,10 @@ adapter.
 
 - Logs are **pulled** by the operator (scraped from the K8s log API), not pushed by
   the build container.
+- Logs stream **live**: they are published incrementally as a container produces them,
+  not buffered until the step completes. The HadesAPI dashboard tails them over SSE
+  (`GET /api/jobs/:id/logs/stream`), backed by its own ephemeral JetStream consumer on
+  `hades.logs.<jobID>` (independent of this service).
 - The LogManager is triggered by **job status events**, not a direct call.
 - Artemis only receives a result when **both** the build logs and the test results
   land, so a job missing the `result` step will run and log fine but never post to

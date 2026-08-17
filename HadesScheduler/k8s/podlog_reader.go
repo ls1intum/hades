@@ -207,6 +207,43 @@ func (pl PodLogReader) getContainerLogs(ctx context.Context, podName string, con
 	return allLogs, new(bytes.Buffer), nil
 }
 
+// StreamContainerLogs follows a container's logs and publishes them
+// incrementally as they are produced, rather than reading the whole log once
+// after the container terminates. It blocks until the follow stream closes (the
+// container stopped) or ctx is cancelled.
+//
+// sinceTime, when non-nil, is passed as PodLogOptions.SinceTime so a re-established
+// stream (e.g. after an operator restart) skips lines already published. progress,
+// when non-nil, is called with the timestamp of the last published line so the
+// caller can persist a restart offset.
+//
+// Kubernetes merges a container's stdout and stderr into a single stream, so all
+// lines are tagged as stdout, matching the buffered reader's behavior.
+func (pl PodLogReader) StreamContainerLogs(ctx context.Context, podName, containerName string, sinceTime *metav1.Time, progress func(time.Time)) error {
+	podLogOpts := corev1.PodLogOptions{
+		Container:  containerName,
+		Follow:     true,
+		Timestamps: true,
+		SinceTime:  sinceTime,
+	}
+
+	req := pl.K8sClient.CoreV1().Pods(pl.Namespace).GetLogs(podName, &podLogOpts)
+	stream, err := req.Stream(ctx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
+			slog.Debug("Log stream canceled (expected on job completion)", "pod", podName, "container", containerName)
+			return context.Canceled
+		}
+		return fmt.Errorf("streaming container logs: %w", err)
+	}
+	defer stream.Close()
+
+	return log.StreamContainerLogs(ctx, &pl.Publisher, pl.JobID, containerName,
+		log.StreamOptions{Progress: progress},
+		log.StreamSource{Reader: stream, StreamType: log.StreamStdout},
+	)
+}
+
 // Resolves the pod name for the given JobID
 // Used in both Scheduler and Operator modes
 func (pl PodLogReader) ResolvePodName(ctx context.Context) (string, error) {

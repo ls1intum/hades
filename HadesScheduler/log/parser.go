@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -109,6 +110,36 @@ func processStream(buf *bytes.Buffer, streamType string, entries *[]logs.LogEntr
 	}
 
 	*entries = append(*entries, newEntries...)
+	return nil
+}
+
+// ScanStream reads r line by line and calls emit for each non-empty line,
+// parsed into a LogEntry via the same logic as the buffered parser. It is the
+// streaming counterpart of processStream: producers that follow a container's
+// output live feed the reader here and publish the emitted entries in small
+// batches, rather than buffering the whole stream to EOF first.
+//
+// It blocks until r reaches EOF (the follow stream closes when the container
+// stops) or a read error occurs, returning any scanner error.
+func ScanStream(r io.Reader, streamType string, emit func(logs.LogEntry)) error {
+	if r == nil {
+		return nil
+	}
+
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024) // 64KB buffer, 1MB max
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		emit(parseLogLine(line, streamType))
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scanning %s stream: %w", streamType, err)
+	}
 	return nil
 }
 

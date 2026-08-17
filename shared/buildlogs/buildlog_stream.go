@@ -18,13 +18,25 @@ const (
 	// StreamName is the JetStream stream name for job logs
 	StreamName = "HADES_JOB_LOGS"
 	// Default batch sizes and timeouts
-	defaultBatchSize     = 100
-	defaultBatchTimeout  = 5 * time.Second
+	defaultBatchSize = 100
+	// defaultBatchTimeout bounds how long the consumer buffers streamed entries
+	// before flushing them to the aggregator. Kept short so the snapshot API
+	// reflects live logs promptly; the dashboard SSE path bypasses this timer.
+	defaultBatchTimeout  = 1 * time.Second
 	defaultFetchSize     = 10
 	defaultFetchWaitTime = 100 * time.Millisecond
 	defaultShutdownTime  = 5 * time.Second
 	// JobNamePrefix is the prefix for job names, used in K8s mode
 	JobNamePrefix = "buildjob-%s"
+
+	// streamMaxMsgs bounds the total number of log messages retained across all
+	// jobs in the HADES_JOB_LOGS stream. Live streaming turns one message per
+	// container into many small messages, so this is far above the original
+	// per-completed-container cap to avoid evicting other jobs' logs.
+	streamMaxMsgs = 200000
+	// streamMaxMsgsPerSubject bounds retained messages per job (subject
+	// hades.logs.<jobID>), so a single chatty job cannot starve others.
+	streamMaxMsgsPerSubject = 5000
 )
 
 var (
@@ -74,13 +86,14 @@ func NewHadesLogProducer(nc *nats.Conn) (*HadesLogProducer, error) {
 	}
 
 	streamConfig := jetstream.StreamConfig{
-		Name:       StreamName,
-		Subjects:   []string{fmt.Sprintf(NatsLogSubject, "*")},
-		Storage:    jetstream.FileStorage,
-		Retention:  jetstream.LimitsPolicy,
-		Duplicates: 1 * time.Minute,
-		MaxMsgs:    10000,
-		MaxAge:     24 * time.Hour,
+		Name:              StreamName,
+		Subjects:          []string{fmt.Sprintf(NatsLogSubject, "*")},
+		Storage:           jetstream.FileStorage,
+		Retention:         jetstream.LimitsPolicy,
+		Duplicates:        1 * time.Minute,
+		MaxMsgs:           streamMaxMsgs,
+		MaxMsgsPerSubject: streamMaxMsgsPerSubject,
+		MaxAge:            24 * time.Hour,
 	}
 
 	stream, err := js.CreateOrUpdateStream(ctx, streamConfig)
@@ -225,13 +238,17 @@ func newContainerLogBatcher(jobID string) *containerLogBatcher {
 }
 
 // add buffers the entries of an incoming Log under its ContainerID, preserving
-// first-seen container order.
+// first-seen container order. A Log with no entries still registers the
+// container's slot: streaming producers emit a zero-entry Log when a container
+// starts so that a step producing no output keeps its position, which the
+// Artemis adapter relies on to locate a step's logs by index.
 func (b *containerLogBatcher) add(l Log) {
-	if len(l.Logs) == 0 {
+	if l.ContainerID == "" {
 		return
 	}
 	if _, ok := b.batches[l.ContainerID]; !ok {
 		b.order = append(b.order, l.ContainerID)
+		b.batches[l.ContainerID] = nil
 	}
 	b.batches[l.ContainerID] = append(b.batches[l.ContainerID], l.Logs...)
 	b.total += len(l.Logs)
@@ -240,10 +257,11 @@ func (b *containerLogBatcher) add(l Log) {
 // size returns the total number of buffered entries across all containers.
 func (b *containerLogBatcher) size() int { return b.total }
 
-// drain returns one Log per container, in first-seen order, each carrying its
-// ContainerID, and resets the buffer.
+// drain returns one Log per registered container, in first-seen order, each
+// carrying its ContainerID (possibly with no entries for a slot-only
+// registration), and resets the buffer.
 func (b *containerLogBatcher) drain() []Log {
-	if b.total == 0 {
+	if len(b.order) == 0 {
 		return nil
 	}
 	out := make([]Log, 0, len(b.order))

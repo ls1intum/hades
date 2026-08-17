@@ -1,7 +1,6 @@
 package docker
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -16,40 +15,42 @@ import (
 	"github.com/moby/moby/client/pkg/jsonmessage"
 )
 
-func processContainerLogs(ctx context.Context, cli *client.Client, publisher buildlogs.LogPublisher, containerID, jobID string) error {
-	stdout, stderr, err := getContainerLogs(ctx, cli, containerID)
-	if err != nil {
-		return fmt.Errorf("getting container logs: %w", err)
-	}
-
-	parser := log.NewStdLogParser(stdout, stderr)
-	buildJobLog, err := parser.ParseContainerLogs(containerID, jobID)
-	if err != nil {
-		return fmt.Errorf("parsing container logs: %w", err)
-	}
-
-	slog.Debug("Parsed container logs", "job_id", jobID, "container_id", containerID)
-	return publisher.PublishJobLog(ctx, buildJobLog)
-}
-
-// retrieves and demultiplexes container logs
-func getContainerLogs(ctx context.Context, cli *client.Client, containerID string) (*bytes.Buffer, *bytes.Buffer, error) {
+// streamContainerLogs follows a container's logs and publishes them
+// incrementally as they are produced, rather than buffering to EOF and
+// publishing once after the container stops. It blocks until the follow stream
+// closes (the container stopped) or ctx is cancelled.
+//
+// StdCopy demultiplexes the interleaved Docker stream into separate stdout and
+// stderr pipes so each can be scanned live. The pipe writers are always closed
+// (via CloseWithError) when StdCopy returns, so the scanners never block waiting
+// for EOF, even on error.
+func streamContainerLogs(ctx context.Context, cli *client.Client, publisher buildlogs.LogPublisher, containerID, jobID string) error {
 	logReader, err := cli.ContainerLogs(ctx, containerID, client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Timestamps: true,
+		Follow:     true,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("getting container logs: %w", err)
+		return fmt.Errorf("getting container logs: %w", err)
 	}
 	defer logReader.Close()
 
-	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
-	if _, err := stdcopy.StdCopy(stdout, stderr, logReader); err != nil {
-		return nil, nil, fmt.Errorf("demultiplexing logs: %w", err)
-	}
+	stdoutR, stdoutW := io.Pipe()
+	stderrR, stderrW := io.Pipe()
 
-	return stdout, stderr, nil
+	go func() {
+		_, copyErr := stdcopy.StdCopy(stdoutW, stderrW, logReader)
+		// Closing with the (possibly nil) error unblocks the scanners with EOF on
+		// success or the error otherwise.
+		_ = stdoutW.CloseWithError(copyErr)
+		_ = stderrW.CloseWithError(copyErr)
+	}()
+
+	return log.StreamContainerLogs(ctx, publisher, jobID, containerID, log.StreamOptions{RegisterSlot: true},
+		log.StreamSource{Reader: stdoutR, StreamType: log.StreamStdout},
+		log.StreamSource{Reader: stderrR, StreamType: log.StreamStderr},
+	)
 }
 
 func removeContainer(ctx context.Context, cli *client.Client, containerID string) error {

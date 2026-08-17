@@ -99,11 +99,19 @@ func (la *NATSLogAggregator) cleanupLoop(ctx context.Context) {
 	}
 }
 
-// AddLog adds a new log entry to the aggregator for the specified job.
-// It automatically creates a new log slice for new job IDs and trims old logs
-// if the maximum log count per job is exceeded.
+// AddLog merges an incoming log into the aggregator for the specified job.
+//
+// Logs are coalesced by ContainerID so that the stored slice holds exactly one
+// buildlogs.Log per container, in first-seen order. Under live streaming a
+// container emits many small Logs over its lifetime; appending each as a
+// separate element would break the positional logs[index] == step contract that
+// the Artemis adapter relies on. A zero-entry Log still registers the
+// container's slot, so a step producing no output keeps its position.
 //
 // This method is thread-safe using sync.Map with compare-and-swap operations.
+// It preserves copy-on-write semantics: the entries of the merged container are
+// deep-copied so a concurrent GetJobLogs/SendJobLogs reader holding the previous
+// slice never observes a mutated backing array.
 //
 // Parameters:
 //   - log: The buildlogs.Log entry to add, must contain a valid JobID
@@ -112,8 +120,12 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 		slog.Warn("Attempted to add log with empty job ID")
 		return
 	}
+	if log.ContainerID == "" {
+		slog.Warn("Attempted to add log with empty container ID", "job_id", log.JobID)
+		return
+	}
 
-	slog.Debug("Adding log to aggregator", "job_id", log.JobID, "entries", len(log.Logs))
+	slog.Debug("Adding log to aggregator", "job_id", log.JobID, "container_id", log.ContainerID, "entries", len(log.Logs))
 
 	// Use LoadOrStore and CompareAndSwap for thread-safe updates
 	for {
@@ -121,28 +133,58 @@ func (la *NATSLogAggregator) AddLog(log buildlogs.Log) {
 		old := value.(logsVersion)
 		existing := *old.ptr
 
-		// Create new slice with appended log
+		// Shallow-copy the outer slice. Elements we do not touch stay shared with
+		// readers (their entries are never mutated in place); only the merged
+		// container element is replaced with a freshly allocated entries slice.
 		newLogs := make([]buildlogs.Log, len(existing), len(existing)+1)
 		copy(newLogs, existing)
-		newLogs = append(newLogs, log)
 
-		// Trim if needed
-		if len(newLogs) > la.cfg.MaxJobLogs {
-			trimStart := len(newLogs) - la.cfg.MaxJobLogs
-			newLogs = newLogs[trimStart:]
-			slog.Debug("Trimmed old logs", "job_id", log.JobID, "trimmed_count", trimStart)
+		idx := -1
+		for i := range newLogs {
+			if newLogs[i].ContainerID == log.ContainerID {
+				idx = i
+				break
+			}
 		}
 
-		newPtr := &newLogs
-		newVal := logsVersion{ver: old.ver + 1, ptr: newPtr}
+		if idx == -1 {
+			// First time we see this container: register its slot with a copy of
+			// the incoming entries so we never alias the caller's slice.
+			merged := append([]buildlogs.LogEntry(nil), log.Logs...)
+			merged = la.trimContainerEntries(log.JobID, log.ContainerID, merged)
+			newLogs = append(newLogs, buildlogs.Log{JobID: log.JobID, ContainerID: log.ContainerID, Logs: merged})
+		} else {
+			// Merge into the existing container. Deep-copy the entries into a new
+			// backing array so readers of the old slice are unaffected.
+			prev := newLogs[idx].Logs
+			merged := make([]buildlogs.LogEntry, 0, len(prev)+len(log.Logs))
+			merged = append(merged, prev...)
+			merged = append(merged, log.Logs...)
+			merged = la.trimContainerEntries(log.JobID, log.ContainerID, merged)
+			newLogs[idx] = buildlogs.Log{JobID: log.JobID, ContainerID: log.ContainerID, Logs: merged}
+		}
+
+		newVal := logsVersion{ver: old.ver + 1, ptr: &newLogs}
 
 		// Atomically swap if the value hasn't changed
 		if la.logs.CompareAndSwap(log.JobID, old, newVal) {
-			slog.Debug("Added log to aggregator", "job_id", log.JobID, "total_batches", len(newLogs))
+			slog.Debug("Merged log into aggregator", "job_id", log.JobID, "container_id", log.ContainerID, "containers", len(newLogs))
 			break
 		}
 		// If swap failed, another goroutine modified the value - retry
 	}
+}
+
+// trimContainerEntries caps a single container's entries at MaxJobLogs, dropping
+// the oldest entries of that container. It never drops a whole container element,
+// which would shift step indices and break the Artemis logs[index] contract.
+func (la *NATSLogAggregator) trimContainerEntries(jobID, containerID string, entries []buildlogs.LogEntry) []buildlogs.LogEntry {
+	if la.cfg.MaxJobLogs > 0 && len(entries) > la.cfg.MaxJobLogs {
+		trimStart := len(entries) - la.cfg.MaxJobLogs
+		slog.Debug("Trimmed old container entries", "job_id", jobID, "container_id", containerID, "trimmed_count", trimStart)
+		entries = entries[trimStart:]
+	}
+	return entries
 }
 
 // FlushJob removes logs and status for a completed job from memory.

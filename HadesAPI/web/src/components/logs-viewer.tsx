@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api";
+import { useJobLogStream } from "@/hooks/useJobLogStream";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { JobStatus } from "@/lib/types";
 
@@ -17,10 +18,11 @@ interface FlatLine {
 }
 
 /**
- * LogsViewer streams a job's aggregated logs. While the job is active it polls;
- * logs are shown verbatim - a banner reminds operators they are not scrubbed.
- * Lines are flattened/formatted once per fetch (memoized) and capped to the
- * most recent MAX_LINES.
+ * LogsViewer shows a job's aggregated logs. While the job is active it subscribes
+ * to the live SSE log stream (which replays the backlog then tails); once the job
+ * is terminal it falls back to a one-shot snapshot fetch. Logs are shown verbatim
+ * - a banner reminds operators they are not scrubbed. Lines are flattened/
+ * formatted (memoized) and capped to the most recent MAX_LINES.
  */
 export function LogsViewer({
   jobId,
@@ -30,10 +32,14 @@ export function LogsViewer({
   status: JobStatus;
 }) {
   const active = status === "Running" || status === "Queued";
+  // Active jobs are driven by the live SSE stream (populates the ["logs", jobId]
+  // cache); terminal jobs fetch a single snapshot from the log manager.
+  useJobLogStream(jobId, active);
   const logs = useQuery({
     queryKey: ["logs", jobId],
     queryFn: () => api.logs(jobId),
-    refetchInterval: active ? 3000 : false,
+    enabled: !active,
+    refetchInterval: false,
   });
 
   const { lines, total } = useMemo(() => {
