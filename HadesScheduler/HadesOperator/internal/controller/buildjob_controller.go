@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -383,14 +385,19 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 
 	var initCtrs []corev1.Container
 	for _, s := range bj.Spec.Steps {
+		// Merge job-level metadata (available to all steps) with step metadata,
+		// letting step metadata override job metadata on key collision. Reserved
+		// keys are set last so they always win. Matches Docker semantics.
+		env := map[string]string{}
+		maps.Copy(env, bj.Spec.Metadata)
+		maps.Copy(env, s.Metadata)
+		env["UUID"] = bj.Name
+		env["JOB_NAME"] = bj.Spec.Name
+
 		c := corev1.Container{
-			Name:  fmt.Sprintf(BuildStepPrefix, s.ID),
-			Image: s.Image,
-			Env: append(
-				envFromMeta(s.Metadata),
-				corev1.EnvVar{Name: "UUID", Value: bj.Name},
-				corev1.EnvVar{Name: "JOB_NAME", Value: bj.Spec.Name},
-			), // Convert metadata to environment variables
+			Name:         fmt.Sprintf(BuildStepPrefix, s.ID),
+			Image:        s.Image,
+			Env:          envFromMeta(env),
 			VolumeMounts: []corev1.VolumeMount{sharedMount},
 		}
 
@@ -500,10 +507,17 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 }
 
 // envFromMeta converts a string map to []corev1.EnvVar for container env injection.
+// Keys are sorted so the generated env order is deterministic.
 func envFromMeta(m map[string]string) []corev1.EnvVar {
-	var envs []corev1.EnvVar
-	for k, v := range m {
-		envs = append(envs, corev1.EnvVar{Name: k, Value: v})
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	envs := make([]corev1.EnvVar, 0, len(keys))
+	for _, k := range keys {
+		envs = append(envs, corev1.EnvVar{Name: k, Value: m[k]})
 	}
 	return envs
 }

@@ -67,3 +67,48 @@ func TestBuildK8sJob_ContinueOnError(t *testing.T) {
 		t.Errorf("continueOnError step HADES_STEP_SCRIPT = %q (present=%v), want %q", got, ok, failingScript)
 	}
 }
+
+// Job-level metadata must be injected into every step's environment (matching
+// Docker/legacy modes), with step metadata overriding job metadata on key
+// collision and the reserved UUID/JOB_NAME keys always winning.
+func TestBuildK8sJob_JobMetadataInjected(t *testing.T) {
+	bj := &buildv1.BuildJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "job-1"},
+		Spec: buildv1.BuildJobSpec{
+			Name: "pipeline-name",
+			Metadata: map[string]string{
+				"MOMOS_RUN_ID": "abc",
+				"SHARED":       "job",
+				"UUID":         "bogus", // must not override the reserved value
+			},
+			Steps: []buildv1.BuildStep{
+				{
+					ID:    1,
+					Name:  "run",
+					Image: "alpine",
+					Metadata: map[string]string{
+						"SHARED":    "step", // overrides job-level SHARED
+						"STEP_ONLY": "x",
+						"JOB_NAME":  "bogus", // must not override the reserved value
+					},
+				},
+			},
+		},
+	}
+
+	job := buildK8sJob(bj, "job-1", true, false)
+	c := initContainer(t, job, fmt.Sprintf(BuildStepPrefix, 1))
+
+	wants := map[string]string{
+		"MOMOS_RUN_ID": "abc",           // job metadata reaches the step
+		"STEP_ONLY":    "x",             // step metadata present
+		"SHARED":       "step",          // step overrides job
+		"UUID":         "job-1",         // reserved key wins over metadata
+		"JOB_NAME":     "pipeline-name", // reserved key wins over metadata
+	}
+	for name, want := range wants {
+		if got, ok := envValue(c, name); !ok || got != want {
+			t.Errorf("env %s = %q (present=%v), want %q", name, got, ok, want)
+		}
+	}
+}
