@@ -67,7 +67,7 @@ require (
 
 require (
 	github.com/klauspost/compress v1.19.1 // indirect
-	github.com/ls1intum/hades/shared v0.0.0-20260731094431-f95c1b4a6d91
+	github.com/ls1intum/hades/shared v0.0.0-20260817100009-cdd0bccf4ec7
 	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
