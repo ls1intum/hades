@@ -16,7 +16,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-const natsImage = "nats:2.11.4"
+// natsImage is declared in resolver_test.go (same package).
 
 // startNATS spins up a JetStream-enabled NATS container and returns a connection to it.
 func startNATS(t *testing.T) *nats.Conn {
@@ -72,11 +72,11 @@ func TestStopWatchingDrainsAllContainerLogsBeforeCompletion(t *testing.T) {
 	consumer, err := buildlogs.NewHadesLogConsumer(nc)
 	require.NoError(t, err, "create log consumer")
 
-	aggregator := NewLogAggregator(ctx, consumer, AggregatorConfig{
+	// nil resolver: SendJobLogs is a no-op, we assert on the in-memory store.
+	aggregator := NewLogAggregator(ctx, consumer, nil, AggregatorConfig{
 		BatchSize:  100,
 		Retention:  time.Hour,
 		MaxJobLogs: 1000,
-		// No APIendpoint: SendJobLogs is a no-op, we assert on the in-memory store.
 	})
 
 	dlm := &DynamicLogManager{
