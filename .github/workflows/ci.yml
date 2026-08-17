@@ -344,9 +344,17 @@ jobs:
             LETSENCRYPT_EMAIL=${{ vars.LETSENCRYPT_EMAIL }}
             AUTH_KEY=${{ secrets.AUTH_KEY }}
             EOF
+            # The dashboard secrets are NOT written to .env: Docker Compose
+            # interpolates $VAR inside .env values, which corrupts bcrypt hashes and
+            # session secrets that contain '$'. They are passed through the process
+            # environment in the deploy step instead (see below).
 
       - name: Deploy with docker compose
         uses: appleboy/ssh-action@v1.2.5
+        env:
+          DASHBOARD_USERNAME: ${{ secrets.DASHBOARD_USERNAME }}
+          DASHBOARD_PASSWORD_HASH: ${{ secrets.DASHBOARD_PASSWORD_HASH }}
+          DASHBOARD_SESSION_SECRET: ${{ secrets.DASHBOARD_SESSION_SECRET }}
         with:
           host: ${{ vars.VM_HOST }}
           username: ${{ vars.VM_USERNAME }}
@@ -355,6 +363,11 @@ jobs:
           proxy_username: ${{ vars.DEPLOYMENT_GATEWAY_USER }}
           proxy_key: ${{ secrets.DEPLOYMENT_GATEWAY_SSH_KEY }}
           proxy_port: ${{ vars.DEPLOYMENT_GATEWAY_PORT }}
+          # Forward the dashboard secrets into the remote shell so Compose reads
+          # them from the process environment (bare-key entries in
+          # docker-compose.test.yml). This avoids .env interpolation mangling
+          # values that contain '$' (e.g. bcrypt hashes).
+          envs: DASHBOARD_USERNAME,DASHBOARD_PASSWORD_HASH,DASHBOARD_SESSION_SECRET
           script: |
             cd /opt/hades
             docker compose -f docker-compose.test.yml up --pull=always -d --remove-orphans

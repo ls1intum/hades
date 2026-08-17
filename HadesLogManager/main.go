@@ -18,6 +18,7 @@ import (
 	hadesnats "github.com/ls1intum/hades/shared/nats"
 	"github.com/ls1intum/hades/shared/utils"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -80,6 +81,19 @@ func run(cfg HadesLogManagerConfig) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Bind the HADES_JOBS KV store so the aggregator can resolve each job's
+	// callback URL from its stored payload. CreateOrUpdate keeps startup
+	// resilient to boot order relative to HadesAPI.
+	js, err := jetstream.New(nc)
+	if err != nil {
+		return fmt.Errorf("creating JetStream context: %w", err)
+	}
+	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: "HADES_JOBS"})
+	if err != nil {
+		return fmt.Errorf("binding HADES_JOBS KV store: %w", err)
+	}
+	resolver := newKVCallbackResolver(kv)
+
 	// Create log aggregator
 	var aggregatorConfig AggregatorConfig
 	if err := utils.LoadConfig(&aggregatorConfig); err != nil {
@@ -89,9 +103,8 @@ func run(cfg HadesLogManagerConfig) error {
 		"batch_size", aggregatorConfig.BatchSize,
 		"retention", aggregatorConfig.Retention,
 		"max_job_logs", aggregatorConfig.MaxJobLogs,
-		"artemis_adapter_url", aggregatorConfig.APIendpoint,
 	)
-	logAggregator := NewLogAggregator(ctx, consumer, aggregatorConfig)
+	logAggregator := NewLogAggregator(ctx, consumer, resolver, aggregatorConfig)
 
 	// Create dynamic log manager
 	dynamicManager := NewDynamicLogManager(nc, consumer, logAggregator)

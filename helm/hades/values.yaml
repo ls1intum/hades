@@ -139,8 +139,8 @@ hadesLogManager:
     requests:
       cpu: "200m"
       memory: "256Mi"
-  # -- External Artemis adapter endpoint the log manager forwards aggregated job logs to.
-  artemisAdapterUrl: "http://hades-artemis-adapter.hades-artemis-connector.svc.cluster.local:8082/adapter/logs"
+  # Where aggregated job logs are forwarded is configured per job via the
+  # "callback_url" field on the build request, not globally on the log manager.
 
 rbac:
   hadesScheduler:
