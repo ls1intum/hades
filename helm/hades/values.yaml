@@ -106,8 +106,13 @@ hadesOperator:
     enabled: true
   # -- Namespace the operator watches for BuildJob CRs (empty = release namespace).
   targetNamespace: ""
-  # -- Delete BuildJob CRs (and their Jobs) once they finish.
-  DeleteOnComplete: true
+  # -- Delete BuildJob CRs (and their Jobs) once they finish. Defaults to false so
+  # completed BuildJobs/pods linger (they self-clean via the Job TTL, ~1h) and the
+  # operator can capture every step's logs before the pod is removed; Kubernetes
+  # only serves container logs while the pod exists, so immediate deletion can lose
+  # logs for fast jobs. Set to true only once the operator captures all logs before
+  # deletion (the companion barrier fix).
+  DeleteOnComplete: false
   # -- Maximum number of Jobs the operator admits concurrently; excess are suspended.
   maxParallelism: "100"
 
@@ -134,8 +139,8 @@ hadesLogManager:
     requests:
       cpu: "200m"
       memory: "256Mi"
-  # -- External Artemis adapter endpoint the log manager forwards aggregated job logs to.
-  artemisAdapterUrl: "http://hades-artemis-adapter.hades-artemis-connector.svc.cluster.local:8082/adapter/logs"
+  # Where aggregated job logs are forwarded is configured per job via the
+  # "callback_url" field on the build request, not globally on the log manager.
 
 rbac:
   hadesScheduler:

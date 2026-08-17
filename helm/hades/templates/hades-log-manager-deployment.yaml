@@ -48,7 +48,3 @@ spec:
               value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
             - name: HADESLOGMANAGER_API_PORT
               value: {{ .Values.hadesLogManager.service.targetPort | quote }}
-            {{- if .Values.hadesLogManager.artemisAdapterUrl }}
-            - name: ARTEMIS_ADAPTER_URL
-              value: {{ .Values.hadesLogManager.artemisAdapterUrl | quote }}
-            {{- end }}

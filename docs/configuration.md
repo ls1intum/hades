@@ -87,6 +87,7 @@ Deployed by the Helm chart (`hades-log-manager`); also run locally via `make run
 | `LOG_BATCH_SIZE` | `100` | Log entries buffered before a flush. | `HadesLogManager/processor.go` (`AggregatorConfig`) |
 | `LOG_RETENTION` | `1h` | How long completed-job logs are kept in memory (Go duration). | `HadesLogManager/processor.go` |
 | `MAX_JOB_LOGS` | `1000` | Max log entries retained per job. | `HadesLogManager/processor.go` |
-| `ARTEMIS_ADAPTER_URL` | | Adapter endpoint for forwarding aggregated logs. If unset, forwarding is skipped. | `HadesLogManager/processor.go` |
+
+Log forwarding is configured per job, not globally: set an optional `callback_url` (an absolute `http`/`https` URL with a host) on the build request and the Log Manager forwards that job's aggregated logs there. If omitted, the job's logs are not forwarded.
 
 Plus the [NATS](#nats-connection-all-components) and [global](#global-all-components) variables.

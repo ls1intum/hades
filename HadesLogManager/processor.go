@@ -12,6 +12,7 @@ import (
 
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/buildstatus"
+	"github.com/ls1intum/hades/shared/utils"
 )
 
 const (
@@ -27,6 +28,7 @@ const (
 // and memory management. Thread-safety is provided by sync.Map for all operations.
 type NATSLogAggregator struct {
 	hlc       *buildlogs.HadesLogConsumer
+	resolver  jobCallbackResolver
 	logs      sync.Map // jobID (string) -> logsVersion
 	completed sync.Map // jobID (string) -> time.Time (completion time)
 	status    sync.Map // jobID (string) -> buildstatus.JobStatus
@@ -41,10 +43,9 @@ type logsVersion struct {
 
 // AggregatorConfig defines the configuration parameters for log aggregation behavior.
 type AggregatorConfig struct {
-	BatchSize   int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
-	Retention   time.Duration `env:"LOG_RETENTION" envDefault:"1h"`
-	MaxJobLogs  int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
-	APIendpoint string        `env:"ARTEMIS_ADAPTER_URL"`
+	BatchSize  int           `env:"LOG_BATCH_SIZE" envDefault:"100"`
+	Retention  time.Duration `env:"LOG_RETENTION" envDefault:"1h"`
+	MaxJobLogs int           `env:"MAX_JOB_LOGS" envDefault:"1000"`
 }
 
 // NewLogAggregator creates a new NATS-based LogAggregator instance with the specified configuration.
@@ -53,11 +54,12 @@ type AggregatorConfig struct {
 // Parameters:
 //   - ctx: Context for controlling the lifecycle of background goroutines
 //   - hlc: HadesLogConsumer instance (currently unused but kept for future extensibility)
+//   - resolver: resolves the per-job callback URL used when forwarding logs; may be nil
 //   - config: AggregatorConfig containing batching and limit settings
 //
 // Returns:
 //   - LogAggregator: A new instance ready to aggregate logs
-func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, config AggregatorConfig) buildlogs.LogAggregator {
+func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, resolver jobCallbackResolver, config AggregatorConfig) buildlogs.LogAggregator {
 	// Normalize retention once so every downstream use (cleanup cadence and the
 	// expiry comparison) works from a single, guaranteed-positive value.
 	if config.Retention <= 0 {
@@ -67,8 +69,9 @@ func NewLogAggregator(ctx context.Context, hlc *buildlogs.HadesLogConsumer, conf
 	}
 
 	la := &NATSLogAggregator{
-		hlc: hlc,
-		cfg: config,
+		hlc:      hlc,
+		resolver: resolver,
+		cfg:      config,
 	}
 
 	// Start background cleanup goroutine
@@ -247,15 +250,35 @@ func (la *NATSLogAggregator) cleanupCompletedJobs() {
 	}
 }
 
-// SendJobLogs retrieves all stored logs for jobID, marshals them to JSON, and
-// sends them via an HTTP POST to the configured APIendpoint. The request is
-// bound to ctx so it is cancelled on shutdown. It returns an error if
-// marshalling, request creation, the HTTP call, or a non-2xx response occurs.
+// SendJobLogs retrieves all stored logs for jobID and POSTs them as JSON to the
+// job's own callback URL, resolved from the job payload. Forwarding is per-job:
+// if the job has no callback URL (or it cannot be resolved/validated), the call
+// is a no-op. It returns an error only when the resolved endpoint is present and
+// valid but the POST itself fails (request creation, transport, or a non-2xx
+// response).
 //
-// If no APIendpoint is configured, the call is a no-op.
+// The KV lookup and the HTTP POST run under a bounded context derived from ctx
+// so a slow store or endpoint cannot stall graceful shutdown.
 func (la *NATSLogAggregator) SendJobLogs(ctx context.Context, jobID string) error {
-	if la.cfg.APIendpoint == "" {
-		slog.Debug("No log adapter endpoint configured, skipping log forwarding", "job_id", jobID)
+	sendCtx, cancel := context.WithTimeout(ctx, httpClientTimeout)
+	defer cancel()
+
+	if la.resolver == nil {
+		slog.Debug("No callback resolver configured, skipping log forwarding", "job_id", jobID)
+		return nil
+	}
+
+	endpoint, err := la.resolver.CallbackURL(sendCtx, jobID)
+	if err != nil {
+		slog.Warn("Failed to resolve callback URL, skipping log forwarding", "job_id", jobID, "error", err)
+		return nil
+	}
+	if endpoint == "" {
+		slog.Debug("No callback URL for job, skipping log forwarding", "job_id", jobID)
+		return nil
+	}
+	if err := utils.ValidateCallbackURL(endpoint); err != nil {
+		slog.Warn("Invalid callback URL for job, skipping log forwarding", "job_id", jobID, "error", err)
 		return nil
 	}
 
@@ -267,7 +290,7 @@ func (la *NATSLogAggregator) SendJobLogs(ctx context.Context, jobID string) erro
 	}
 	slog.Debug("Marshaled logs to JSON", "job_id", jobID)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, la.cfg.APIendpoint, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(sendCtx, http.MethodPost, endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("creating HTTP request: %w", err)
 	}
@@ -281,10 +304,10 @@ func (la *NATSLogAggregator) SendJobLogs(ctx context.Context, jobID string) erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("log adapter returned non-success status %s for job %s", resp.Status, jobID)
+		return fmt.Errorf("callback endpoint returned non-success status %s for job %s", resp.Status, jobID)
 	}
 
-	slog.Info("Sent job logs to adapter", "job_id", jobID, "status", resp.Status)
+	slog.Info("Sent job logs to callback endpoint", "job_id", jobID, "status", resp.Status)
 	return nil
 }
 

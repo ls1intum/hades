@@ -52,6 +52,15 @@ const BuildStepPrefix = "step-%d"
 
 const requeueDelay = 2 * time.Second
 
+// logDrainRequeueDelay is how long to wait before re-reconciling a completed
+// BuildJob whose terminated containers still have unpublished logs.
+const logDrainRequeueDelay = 1 * time.Second
+
+// logDrainTimeout bounds how long the operator keeps requeuing to drain logs
+// before it deletes a completed BuildJob anyway, to avoid an infinite requeue
+// when logs can never be published.
+const logDrainTimeout = 45 * time.Second
+
 const defaultPriority = 1
 
 const (
@@ -149,6 +158,31 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			// log stream has drained, so no tail logs are lost.
 			if draining {
 				return ctrl.Result{RequeueAfter: requeueDelay}, nil
+			}
+
+			// Drain gate: when the CR (and thus the pod) will be deleted on
+			// completion, all logs of terminated containers must be published
+			// first, because Kubernetes only serves container logs while the pod
+			// exists. This runs BEFORE setStatusCompleted on purpose: setting the
+			// terminal phase would trip the early-return guard at the top of
+			// Reconcile, so we keep the phase non-terminal and requeue until the
+			// logs are drained (or a safety valve fires).
+			if r.DeleteOnComplete {
+				drained, podGone, drainErr := r.logsDrained(ctx, &bj)
+				timedOut := time.Since(jobCompletionTime(&existingJob)) > logDrainTimeout
+
+				if drainErr != nil && !timedOut {
+					return ctrl.Result{}, drainErr
+				}
+				if drainErr == nil && !drained && !podGone && !timedOut {
+					slog.Info("Waiting for terminated container logs to be published before deleting", "buildJob", bj.Name)
+					return ctrl.Result{RequeueAfter: logDrainRequeueDelay}, nil
+				}
+				if podGone && !drained {
+					slog.Warn("Pod gone before all logs were drained; deleting anyway", "buildJob", bj.Name)
+				} else if timedOut && !drained {
+					slog.Warn("Timed out waiting for logs to drain; deleting anyway", "buildJob", bj.Name)
+				}
 			}
 
 			if err := r.setStatusCompleted(ctx, req.NamespacedName, bj.Name, succeeded, msg); err != nil {
@@ -534,6 +568,32 @@ func jobFinished(k8sJob *batchv1.Job) (done bool, succeeded bool, reason string)
 		}
 	}
 	return false, false, ""
+}
+
+// jobCompletionTime returns a best-effort timestamp for when the Job finished.
+// It prefers Status.CompletionTime (set for completed Jobs), falls back to the
+// latest true Complete/Failed condition transition time (failed Jobs have no
+// CompletionTime), and finally to now() when nothing is available so callers do
+// not treat an unknown completion time as already timed out.
+func jobCompletionTime(k8sJob *batchv1.Job) time.Time {
+	if k8sJob.Status.CompletionTime != nil {
+		return k8sJob.Status.CompletionTime.Time
+	}
+	var latest time.Time
+	for _, c := range k8sJob.Status.Conditions {
+		if c.Status != corev1.ConditionTrue {
+			continue
+		}
+		if c.Type == batchv1.JobComplete || c.Type == batchv1.JobFailed {
+			if c.LastTransitionTime.Time.After(latest) {
+				latest = c.LastTransitionTime.Time
+			}
+		}
+	}
+	if latest.IsZero() {
+		return time.Now()
+	}
+	return latest
 }
 
 // countActiveJobs counts the number of non-completed, non-suspended Jobs in the given namespace.

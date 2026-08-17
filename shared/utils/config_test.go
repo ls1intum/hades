@@ -66,6 +66,47 @@ func TestParseMemoryLimit_UnknownUnit(t *testing.T) {
 	}
 }
 
+func TestValidateCallbackURL_Valid(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"http", "http://localhost:8082/adapter/logs"},
+		{"https", "https://example.com/adapter/logs"},
+		{"https with port", "https://host.example.com:8443/path"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.NoError(t, ValidateCallbackURL(tt.input))
+		})
+	}
+}
+
+func TestValidateCallbackURL_Invalid(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		expectedErr string
+	}{
+		{"empty", "", "must be absolute"},
+		{"relative", "/adapter/logs", "must be absolute"},
+		{"missing scheme", "example.com/logs", "must be absolute"},
+		{"ftp scheme", "ftp://example.com/logs", "scheme must be http or https"},
+		{"file scheme", "file:///etc/passwd", "scheme must be http or https"},
+		{"no host", "http:///path", "must include a host"},
+		{"javascript", "javascript:alert(1)", "scheme must be http or https"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCallbackURL(tt.input)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErr)
+		})
+	}
+}
+
 func TestParseMemoryLimit_InvalidInput(t *testing.T) {
 	tests := []struct {
 		name        string

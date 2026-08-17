@@ -26,6 +26,9 @@ const (
 	defaultFetchSize     = 10
 	defaultFetchWaitTime = 100 * time.Millisecond
 	defaultShutdownTime  = 5 * time.Second
+	// defaultDrainTimeout bounds the graceful drain so a stuck consumer can
+	// never make WatchJobLogs hang; on timeout we flush what we have and return.
+	defaultDrainTimeout = 30 * time.Second
 	// JobNamePrefix is the prefix for job names, used in K8s mode
 	JobNamePrefix = "buildjob-%s"
 
@@ -55,7 +58,7 @@ type LogPublisher interface {
 
 // LogConsumer defines the interface for consuming logs
 type LogConsumer interface {
-	WatchJobLogs(ctx context.Context, jobID string, handler func(Log)) error
+	WatchJobLogs(ctx context.Context, jobID string, drain <-chan struct{}, handler func(Log)) error
 }
 
 // HadesLogProducer handles publishing logs
@@ -166,9 +169,19 @@ func (hlp *HadesLogProducer) PublishJobLog(ctx context.Context, buildJobLog Log)
 
 // WatchJobLogs subscribes to logs for a specific job and calls the handler for each batch.
 // It creates a job-specific durable consumer and automatically batches log entries for efficiency.
-// The consumer is automatically cleaned up when the context is cancelled.
+//
+// There are two ways to stop watching:
+//   - Closing drain requests a graceful stop: the consumer keeps fetching until it is
+//     caught up to the stream (NumPending == 0) or a bounded timeout elapses, so every
+//     already-published batch is delivered to the handler before returning. Job logs are
+//     published to JetStream before the job's terminal status is announced, so a graceful
+//     drain guarantees the in-memory aggregation is complete.
+//   - Cancelling ctx is a hard stop for service shutdown: remaining fetched logs are
+//     flushed and the method returns immediately without waiting to catch up.
+//
+// The consumer is automatically cleaned up when the method returns.
 // Returns an error if the job ID is invalid or consumer creation fails.
-func (hlc *HadesLogConsumer) WatchJobLogs(ctx context.Context, jobID string, handler func(Log)) error {
+func (hlc *HadesLogConsumer) WatchJobLogs(ctx context.Context, jobID string, drain <-chan struct{}, handler func(Log)) error {
 	if jobID == "" {
 		return ErrInvalidJobID
 	}
@@ -215,7 +228,7 @@ func (hlc *HadesLogConsumer) WatchJobLogs(ctx context.Context, jobID string, han
 		"subject", subject,
 		"consumer", consumerName)
 
-	return hlc.processBatchedLogs(ctx, consumer, jobID, handler)
+	return hlc.processBatchedLogs(ctx, consumer, jobID, drain, handler)
 }
 
 // containerLogBatcher accumulates log entries per container so that the
@@ -277,71 +290,125 @@ func (b *containerLogBatcher) drain() []Log {
 // processBatchedLogs handles the batching and processing of log messages from the consumer.
 // It batches log entries per container for efficiency (preserving the ContainerID and
 // per-step grouping) and calls the handler once per container on each flush.
-func (hlc *HadesLogConsumer) processBatchedLogs(ctx context.Context, consumer jetstream.Consumer, jobID string, handler func(Log)) error {
-	const (
-		batchSize    = defaultBatchSize
-		batchTimeout = defaultBatchTimeout
-		fetchSize    = defaultFetchSize
-		fetchWait    = defaultFetchWaitTime
-	)
-
+//
+// It returns when ctx is cancelled (hard stop: flush and return ctx.Err()) or when drain
+// is closed (graceful stop: drain the consumer to caught-up, then flush and return nil).
+func (hlc *HadesLogConsumer) processBatchedLogs(ctx context.Context, consumer jetstream.Consumer, jobID string, drain <-chan struct{}, handler func(Log)) error {
 	batcher := newContainerLogBatcher(jobID)
-	batchTimer := time.NewTimer(batchTimeout)
+	batchTimer := time.NewTimer(defaultBatchTimeout)
 	defer batchTimer.Stop()
 
 	flushBatch := func() {
 		for _, l := range batcher.drain() {
 			handler(l)
 		}
-		batchTimer.Reset(batchTimeout)
+		batchTimer.Reset(defaultBatchTimeout)
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			flushBatch() // Flush remaining logs before stopping
-			return ctx.Err()
+	// fetchOnce pulls up to defaultFetchSize messages, batching and acking each,
+	// flushing when the batch grows large. It returns true if any message was
+	// received. It is shared by the steady-state loop and the drain loop so both
+	// consume from the same durable position, guaranteeing no message is read or
+	// aggregated twice.
+	fetchOnce := func() bool {
+		batch, err := consumer.FetchNoWait(defaultFetchSize)
+		if err != nil {
+			time.Sleep(defaultFetchWaitTime)
+			return false
+		}
 
-		case <-batchTimer.C:
-			flushBatch()
+		hasMessages := false
+		for msg := range batch.Messages() {
+			hasMessages = true
 
-		default:
-			batch, err := consumer.FetchNoWait(fetchSize)
-			if err != nil {
-				time.Sleep(fetchWait)
+			var log Log
+			if err := json.Unmarshal(msg.Data(), &log); err != nil {
+				slog.Warn("Failed to unmarshal log message",
+					"job_id", jobID,
+					"error", err)
+				if ackErr := msg.Nak(); ackErr != nil {
+					slog.Warn("Failed to NAK message", "error", ackErr)
+				}
 				continue
 			}
 
-			hasMessages := false
-			for msg := range batch.Messages() {
-				hasMessages = true
+			batcher.add(log)
 
-				var log Log
-				if err := json.Unmarshal(msg.Data(), &log); err != nil {
-					slog.Warn("Failed to unmarshal log message",
-						"job_id", jobID,
-						"error", err)
-					if ackErr := msg.Nak(); ackErr != nil {
-						slog.Warn("Failed to NAK message", "error", ackErr)
-					}
-					continue
-				}
-
-				batcher.add(log)
-
-				if ackErr := msg.Ack(); ackErr != nil {
-					slog.Warn("Failed to ACK message", "error", ackErr)
-				}
-
-				// Flush batch if it gets too large
-				if batcher.size() >= batchSize {
-					flushBatch()
-				}
+			if ackErr := msg.Ack(); ackErr != nil {
+				slog.Warn("Failed to ACK message", "error", ackErr)
 			}
 
-			if !hasMessages {
-				time.Sleep(fetchWait)
+			// Flush batch if it gets too large
+			if batcher.size() >= defaultBatchSize {
+				flushBatch()
 			}
 		}
+
+		if !hasMessages {
+			time.Sleep(defaultFetchWaitTime)
+		}
+		return hasMessages
+	}
+
+	for {
+		// Hard stop takes priority: on shutdown flush what we have and return.
+		select {
+		case <-ctx.Done():
+			flushBatch()
+			return ctx.Err()
+		default:
+		}
+
+		// Graceful stop: drain the consumer to caught-up before returning so the
+		// in-memory aggregation is complete. Checked before the fetch below so a
+		// closed drain channel is taken promptly instead of racing the default case.
+		select {
+		case <-drain:
+			return hlc.drainToCaughtUp(ctx, consumer, jobID, fetchOnce, flushBatch)
+		default:
+		}
+
+		select {
+		case <-batchTimer.C:
+			flushBatch()
+		default:
+			fetchOnce()
+		}
+	}
+}
+
+// drainToCaughtUp keeps fetching from the durable consumer until it is caught up to
+// the stream (ConsumerInfo.NumPending == 0), then flushes and returns. Because job
+// logs are published to JetStream before the terminal status is announced, everything
+// for the job is already in the stream by the time a drain is requested, so reaching
+// NumPending == 0 means every batch has been delivered and aggregated. The drain is
+// bounded by defaultDrainTimeout so it can never hang; on timeout it flushes whatever
+// it has and returns. It reuses the same consumer position as the steady-state loop,
+// so no message is re-read or duplicated.
+func (hlc *HadesLogConsumer) drainToCaughtUp(ctx context.Context, consumer jetstream.Consumer, jobID string, fetchOnce func() bool, flushBatch func()) error {
+	slog.Info("Draining remaining job logs before stopping", "job_id", jobID)
+
+	drainCtx, cancel := context.WithTimeout(ctx, defaultDrainTimeout)
+	defer cancel()
+
+	for {
+		info, err := consumer.Info(drainCtx)
+		if err != nil {
+			slog.Warn("Failed to read consumer info during drain",
+				"job_id", jobID, "error", err)
+		} else if info.NumPending == 0 {
+			flushBatch()
+			slog.Info("Drained job logs to caught-up", "job_id", jobID)
+			return nil
+		}
+
+		if drainCtx.Err() != nil {
+			flushBatch()
+			slog.Warn("Drain timed out; flushing partial logs",
+				"job_id", jobID, "error", drainCtx.Err())
+			return nil
+		}
+
+		fetchOnce()
 	}
 }

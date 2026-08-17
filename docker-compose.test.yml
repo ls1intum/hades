@@ -15,6 +15,17 @@ services:
       - RETENTION_IN_MIN=${RETENTION_IN_MIN:-30}
       - MAX_RETRIES=${MAX_RETRIES:-3}
       - TIMEOUT_IN_MIN=${TIMEOUT_IN_MIN:-0}
+      # Operator dashboard. It stays disabled (SPA not served, /api returns 503)
+      # unless all three DASHBOARD_* values are set. These use the bare-key form so
+      # Compose passes them through from the process environment WITHOUT $VAR
+      # interpolation, which would otherwise corrupt bcrypt hashes / secrets that
+      # contain '$'. LOG_MANAGER_URL points at the compose service; the default
+      # targets a Kubernetes service name.
+      - DASHBOARD_USERNAME
+      - DASHBOARD_PASSWORD_HASH
+      - DASHBOARD_SESSION_SECRET
+      - DASHBOARD_SESSION_TTL=${DASHBOARD_SESSION_TTL:-12h}
+      - LOG_MANAGER_URL=${LOG_MANAGER_URL:-http://hadesLogManager:8081}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hadesapi.rule=Host(`${HADES_API_HOST}`)"
@@ -56,7 +67,6 @@ services:
         condition: service_healthy
     environment:
       - NATS_URL=nats://nats:4222
-      - ARTEMIS_ADAPTER_URL=https://hades-artemis-connector.student.k8s.aet.cit.tum.de/adapter/logs
     restart: unless-stopped
 
   nats:

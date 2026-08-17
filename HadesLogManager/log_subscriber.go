@@ -33,7 +33,11 @@ type DynamicLogManager struct {
 type watcherState struct {
 	ctx    context.Context
 	cancel context.CancelFunc
-	wg     *sync.WaitGroup
+	// drain is closed to request a graceful stop: the watcher keeps consuming
+	// until it is caught up to the stream before returning, so the in-memory
+	// aggregation is complete. cancel remains the hard stop (shutdown/replacement).
+	drain chan struct{}
+	wg    *sync.WaitGroup
 }
 
 // NewDynamicLogManager creates a new DynamicLogManager instance with the provided dependencies.
@@ -204,6 +208,7 @@ func (dlm *DynamicLogManager) cleanupSubscriptions(subs []*nats.Subscription) {
 func (dlm *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID string) {
 	// Create new context for this job outside the lock
 	jobCtx, cancel := context.WithCancel(ctx)
+	drain := make(chan struct{})
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -213,6 +218,7 @@ func (dlm *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 	dlm.watchers[jobID] = watcherState{
 		ctx:    jobCtx,
 		cancel: cancel,
+		drain:  drain,
 		wg:     wg,
 	}
 	dlm.mu.Unlock()
@@ -236,7 +242,7 @@ func (dlm *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 		}()
 
 		slog.Info("Starting to watch job logs", "job_id", jobID)
-		err := dlm.logConsumer.WatchJobLogs(jobCtx, jobID, func(batchedLog logs.Log) {
+		err := dlm.logConsumer.WatchJobLogs(jobCtx, jobID, drain, func(batchedLog logs.Log) {
 			dlm.logAggregator.AddLog(batchedLog)
 
 			slog.Debug("Received batched job logs",
@@ -253,9 +259,17 @@ func (dlm *DynamicLogManager) startWatchingJobLogs(ctx context.Context, jobID st
 	}()
 }
 
-// stopWatchingJobLogs stops log watching for a specific job by canceling its context
-// and removing it from the watchers map. If no watcher exists for the given
-// job ID, the method returns without error.
+// stopWatchingJobLogs stops log watching for a specific job and removes it from the
+// watchers map. If no watcher exists for the given job ID, the method returns without
+// error.
+//
+// It performs a graceful drain: it closes the watcher's drain channel and waits for the
+// watcher goroutine to finish, which only happens once the consumer has caught up to the
+// stream (or the drain timeout elapses). Because job logs are published to JetStream
+// before the terminal status is announced over core NATS, this guarantees every batch
+// has been aggregated into the in-memory store before the job is marked completed and the
+// logs are forwarded. Both the dashboard (GetJobLogs) and the forward (SendJobLogs) read
+// that same in-memory store, so draining first keeps both complete.
 //
 // This method is thread-safe and can be called concurrently from multiple goroutines.
 //
@@ -272,8 +286,14 @@ func (dlm *DynamicLogManager) stopWatchingJobLogs(ctx context.Context, jobID str
 
 	if exists {
 		slog.Info("Stopping log watch", "job_id", jobID)
-		watcher.cancel()
+		// Request a graceful drain and wait for all batches to be aggregated before
+		// completing the job. Do NOT hard-cancel first: cancelling would abandon the
+		// still-in-flight JetStream batches that the fast core-NATS status raced ahead of.
+		close(watcher.drain)
 		watcher.wg.Wait() // Wait outside the lock
+		// The goroutine has finished draining; releasing the job context now just frees
+		// its resources (and satisfies the lostcancel vet check).
+		watcher.cancel()
 
 		dlm.logAggregator.MarkJobCompleted(jobID)
 		dlm.sendWG.Add(1)
