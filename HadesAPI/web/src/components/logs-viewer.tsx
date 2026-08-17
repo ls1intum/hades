@@ -47,7 +47,9 @@ export function LogsViewer({
     const all: FlatLine[] = [];
     for (const group of groups) {
       const container = group.container_id.slice(0, 12);
-      group.logs.forEach((entry, i) => {
+      // A step that produced no output registers its slot with a null `logs`
+      // array (JSON null from a nil Go slice); treat it as empty.
+      (group.logs ?? []).forEach((entry, i) => {
         all.push({
           key: `${group.container_id}:${i}`,
           container,

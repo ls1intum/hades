@@ -50,6 +50,19 @@ describe("appendLogGroup (live log SSE cache merge)", () => {
     expect(cached(qc)!.logs[0].logs.map((e) => e.message)).toEqual(["a", "b", "c"]);
   });
 
+  it("tolerates a slot-registration group whose logs are null", () => {
+    const qc = new QueryClient();
+    // A step producing no output registers its slot with logs=null (JSON null
+    // from a nil Go slice). It must not crash and should create an empty group.
+    const nullGroup = { job_id: "job-1", container_id: "step-1", logs: null } as unknown as LogGroup;
+    appendLogGroup(qc, "job-1", nullGroup);
+    expect(cached(qc)!.logs).toEqual([{ job_id: "job-1", container_id: "step-1", logs: [] }]);
+
+    // A later real batch for the same container merges in cleanly.
+    appendLogGroup(qc, "job-1", group("step-1", [entry("t1", "a")]));
+    expect(cached(qc)!.logs[0].logs.map((e) => e.message)).toEqual(["a"]);
+  });
+
   it("treats same text on different streams as distinct", () => {
     const qc = new QueryClient();
     appendLogGroup(qc, "job-1", group("step-1", [entry("t1", "x", "stdout")]));
