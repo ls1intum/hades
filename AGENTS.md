@@ -15,7 +15,7 @@ Go workspace (`go.work`, Go 1.26) with five modules:
 | `HadesAPI/`                         | Gin HTTP server. `POST /build` validates a payload, assigns a UUID, publishes to NATS by priority (and now also publishes `hades.jobstatus.Queued`). `GET /ping` health check. Optional Basic Auth via `AUTH_KEY`. Also hosts the optional **dashboard** (`HadesAPI/dashboard/` + embedded SPA in `HadesAPI/web/`).            |
 | `HadesScheduler/`                   | NATS consumer. Reads `HADES_EXECUTOR` and dispatches to either the `docker/` or `k8s/` package.                                                                                     |
 | `HadesScheduler/docker/`            | Runs each step as a Docker container; shares state between steps via a per-job named volume `shared-<uuid>`.                                                                        |
-| `HadesScheduler/k8s/`               | Three sub-modes selected by `K8S_CONFIG_MODE`: `kubeconfig`, `serviceaccount` (legacy: builds a `batchv1.Job` directly), or `operator` (creates a `BuildJob` CR via dynamic client). |
+| `HadesScheduler/k8s/`               | Creates a `BuildJob` CR via the dynamic client for the operator to reconcile. |
 | `HadesScheduler/HadesOperator/`     | Standalone kubebuilder operator. Watches `BuildJob` CRs (`build.hades.tum.de/v1`) and reconciles them into `batchv1.Job`s with one initContainer per step plus a finalizer pod.     |
 | `HadesLogManager/`                  | Subscribes to `hades.jobstatus.*` and `hades.logs.<jobID>` on NATS, aggregates logs in-memory (`sync.Map`), exposes `GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status` on port 8081.      |
 | `shared/`                           | Cross-module: `payload` (DTOs), `nats` (publisher/consumer/connection), `buildlogs` (log types + `LogPublisher`/`LogAggregator` interfaces), `buildstatus` (job status enum + subjects), `redact` (metadata secret masking used by the API + dashboard), `utils` (env config loader, memory-limit parsing), `prio.go` (priority enum: high/medium/low ←→ ints). |
@@ -62,7 +62,7 @@ The top-level `Makefile` wraps the common workflows (`make help` lists every tar
 
 - **CLI mode:** `make run` runs `HadesAPI`, `HadesScheduler`, and `HadesLogManager` via `go run` and auto-starts NATS in Docker.
 - **Docker mode:** `make docker-run` brings up `hadesAPI` (8081→8080), `hadesScheduler` (docker executor), and `nats` via `compose.yml`. API requests: see `bruno/api/*.bru`.
-- **K8s mode:** `helm upgrade --install hades ./helm/hades -n hades --create-namespace`. The chart deploys API, scheduler (configMode=operator), operator, log manager, and embedded NATS JetStream.
+- **K8s mode:** `helm upgrade --install hades ./helm/hades -n hades --create-namespace`. The chart deploys API, scheduler, operator, log manager, and embedded NATS JetStream.
 
 ## Conventions
 

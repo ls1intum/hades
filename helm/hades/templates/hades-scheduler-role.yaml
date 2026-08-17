@@ -4,12 +4,6 @@ metadata:
   name: {{ .Values.rbac.hadesScheduler.role.name }}
   namespace: {{ .Release.Namespace }}
 rules:
-  - apiGroups: [""]
-    resources: ["configmaps", "pods"]
-    verbs: ["create", "get", "list", "watch", "delete"]
-  - apiGroups: ["batch"]
-    resources: ["jobs"]
-    verbs: ["create", "get", "list", "watch", "delete"]
   - apiGroups: ["build.hades.tum.de"]
     resources: ["buildjobs", "buildjobs/status", "buildjobs/finalizers"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

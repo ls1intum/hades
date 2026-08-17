@@ -36,9 +36,7 @@ Hades is built upon the following key components:
 
   - **Docker Executor**: Designed for local development, the Docker executor is responsible for running jobs within Docker containers on a single host.
 
-  - **Hades Operator (Recommended)**: The modern, production-ready standard for Kubernetes. It implements a Kubernetes-native controller pattern using Custom Resource Definitions (CRDs). This mode offers superior scalability, automatic retries, and fine-grained RBAC integration.
-
-  - **Kubernetes Executor (Deprecated)**: The legacy Kubernetes execution mode.
+  - **Hades Operator**: The production-ready standard for Kubernetes. It implements a Kubernetes-native controller pattern using Custom Resource Definitions (CRDs). This mode offers superior scalability, automatic retries, and fine-grained RBAC integration.
 
 - **Log Manager**: Subscribes to job status and log events on NATS, aggregates per-job logs in memory, and exposes them through an HTTP API (`GET /jobs`, `/jobs/:id/logs`, `/jobs/:id/status`, default port `8081`). It has its own Dockerfile and is deployed by the Helm chart (`hades-log-manager`). It is not part of the `compose.yml` stack, so run it locally with `make run`.
 

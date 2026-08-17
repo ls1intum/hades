@@ -18,11 +18,7 @@ The Hades Helm chart bundles:
 | **hades-log-manager** | Aggregates per-job build logs from NATS |
 | **hades-nats** | Embedded [NATS JetStream](https://nats.io) message broker (sub-chart) |
 
-The scheduler runs in **`operator` mode** by default (`hadesScheduler.configMode: operator`). In this mode it does not create Pods directly; it creates `BuildJob` CRs that the operator reconciles into Kubernetes Jobs.
-
-:::note configMode
-`operator` is the default. `serviceaccount` (legacy direct scheduling) is still supported. `kubeconfig` mode is not intended for in-cluster deployment.
-:::
+The scheduler does not create Pods directly; it creates `BuildJob` CRs that the operator reconciles into Kubernetes Jobs.
 
 ## Prerequisites
 
@@ -46,9 +42,6 @@ ingress:
   tls:
     enabled: true
     secretName: hades-tls
-
-hadesScheduler:
-  configMode: operator   # or "serviceaccount" (legacy)
 
 hadesOperator:
   clusterWide: false     # true for cross-namespace scheduling

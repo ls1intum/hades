@@ -32,9 +32,7 @@ This chart bundles the core services of Hades:
 | **hades-log-manager**| Aggregates per-job build logs from NATS and forwards them to the Artemis adapter                         |
 | **hades-nats**       | Embedded [NATS JetStream](https://nats.io) message broker (sub-chart)                                    |
 
-The Scheduler operates in **`operator` mode** by default (`hadesScheduler.configMode: operator` in `values.yaml`). In this mode the scheduler does not create Pods directly; instead it creates `BuildJob` CRs, which the operator reconciles into Kubernetes Jobs.
-
-> The chart also still supports `serviceaccount` mode (legacy direct scheduling) by setting `hadesScheduler.configMode: serviceaccount`. The `kubeconfig` mode is not intended for in-cluster deployment.
+The Scheduler does not create Pods directly; instead it creates `BuildJob` CRs, which the operator reconciles into Kubernetes Jobs.
 
 ---
 
