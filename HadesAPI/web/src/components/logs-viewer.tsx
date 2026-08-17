@@ -60,18 +60,18 @@ export function LogsViewer({
     return { lines: all.slice(-MAX_LINES), total: all.length };
   }, [logs.data]);
 
-  if (logs.isLoading) return <Skeleton className="h-64 w-full" />;
+  if (logs.isLoading) return <Skeleton className="min-h-0 w-full flex-1" />;
 
   if (logs.isError) {
     return (
-      <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+      <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
         Logs are currently unavailable.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2 rounded-md border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 px-3 py-2 text-xs text-muted-foreground">
         <AlertTriangle className="size-4 shrink-0 text-[var(--color-warning)]" />
         Logs are shown verbatim and may contain secrets Hades does not scrub.
@@ -84,11 +84,11 @@ export function LogsViewer({
       )}
 
       {total === 0 ? (
-        <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
           {active ? "Waiting for log output..." : "No logs recorded for this job."}
         </div>
       ) : (
-        <div className="max-h-[28rem] overflow-auto rounded-md bg-black/90 p-4 font-mono text-xs leading-relaxed text-green-200">
+        <div className="min-h-0 flex-1 overflow-auto rounded-md bg-black/90 p-4 font-mono text-xs leading-relaxed text-green-200">
           {lines.map((line) => (
             <div key={line.key} className="whitespace-pre-wrap break-all">
               <span className="text-green-500/50">
