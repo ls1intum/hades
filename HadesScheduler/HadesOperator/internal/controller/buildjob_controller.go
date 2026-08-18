@@ -434,6 +434,15 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 		env["UUID"] = bj.Name
 		env["JOB_NAME"] = bj.Spec.Name
 
+		// A continueOnError step passes its script via HADES_STEP_SCRIPT (see
+		// below). Set it in the map before conversion so it is a reserved key
+		// (overriding any metadata of the same name) and never produces a
+		// duplicate env var.
+		hasScript := strings.TrimSpace(s.Script) != ""
+		if hasScript && s.ContinueOnError {
+			env["HADES_STEP_SCRIPT"] = s.Script
+		}
+
 		c := corev1.Container{
 			Name:         fmt.Sprintf(BuildStepPrefix, s.ID),
 			Image:        s.Image,
@@ -441,7 +450,7 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 			VolumeMounts: []corev1.VolumeMount{sharedMount},
 		}
 
-		if strings.TrimSpace(s.Script) != "" {
+		if hasScript {
 			c.Command = []string{"/bin/sh", "-c"}
 			if s.ContinueOnError {
 				// Init containers have no native "continue on error": a non-zero
@@ -451,8 +460,8 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 				// result parser) still run. This is robust even when the script
 				// uses `set -e` or ends in an explicit non-zero `exit`, both of
 				// which would bypass a naive "<script>; exit 0". The script is
-				// passed via an env var to avoid shell-quoting issues.
-				c.Env = append(c.Env, corev1.EnvVar{Name: "HADES_STEP_SCRIPT", Value: s.Script})
+				// passed via the HADES_STEP_SCRIPT env var (set above) to avoid
+				// shell-quoting issues.
 				c.Args = []string{`/bin/sh -c "$HADES_STEP_SCRIPT" || true`}
 			} else {
 				c.Args = []string{s.Script}

@@ -30,6 +30,16 @@ func envValue(c corev1.Container, name string) (string, bool) {
 	return "", false
 }
 
+func envCount(c corev1.Container, name string) int {
+	n := 0
+	for _, e := range c.Env {
+		if e.Name == name {
+			n++
+		}
+	}
+	return n
+}
+
 // A continueOnError step must not abort the pod: its init container has to exit 0
 // even when the script uses `set -e` or an explicit non-zero exit, so later steps
 // (e.g. the result parser) still run. A normal step must keep failing on error.
@@ -110,5 +120,39 @@ func TestBuildK8sJob_JobMetadataInjected(t *testing.T) {
 		if got, ok := envValue(c, name); !ok || got != want {
 			t.Errorf("env %s = %q (present=%v), want %q", name, got, ok, want)
 		}
+	}
+}
+
+// A continueOnError step passes its script via HADES_STEP_SCRIPT. If metadata
+// also sets that key, the container must still carry exactly one entry (the
+// reserved script value), never a duplicate env var.
+func TestBuildK8sJob_NoDuplicateStepScriptEnv(t *testing.T) {
+	script := "set -e; ./gradlew test"
+	bj := &buildv1.BuildJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "job-1"},
+		Spec: buildv1.BuildJobSpec{
+			Name:     "job-1",
+			Metadata: map[string]string{"HADES_STEP_SCRIPT": "bogus-job"},
+			Steps: []buildv1.BuildStep{
+				{
+					ID:              1,
+					Name:            "test",
+					Image:           "alpine",
+					Script:          script,
+					ContinueOnError: true,
+					Metadata:        map[string]string{"HADES_STEP_SCRIPT": "bogus-step"},
+				},
+			},
+		},
+	}
+
+	job := buildK8sJob(bj, "job-1", true, false)
+	c := initContainer(t, job, fmt.Sprintf(BuildStepPrefix, 1))
+
+	if n := envCount(c, "HADES_STEP_SCRIPT"); n != 1 {
+		t.Errorf("HADES_STEP_SCRIPT appears %d times, want exactly 1", n)
+	}
+	if got, ok := envValue(c, "HADES_STEP_SCRIPT"); !ok || got != script {
+		t.Errorf("HADES_STEP_SCRIPT = %q (present=%v), want %q (reserved value wins over metadata)", got, ok, script)
 	}
 }
