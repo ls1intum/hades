@@ -185,6 +185,14 @@ type ContainerStatus struct {
 
 	// LogsPublished indicates whether logs have been read and published to NATS
 	LogsPublished bool `json:"logsPublished,omitempty"`
+
+	// LogsStreamedUntil records, throttled, the timestamp of the most recent log
+	// line streamed to NATS for this container. On an operator restart the live
+	// log stream is re-established with this value as the follow start time
+	// (PodLogOptions.SinceTime), bounding how many already-published lines are
+	// re-delivered. It is intentionally persisted infrequently to avoid a
+	// reconcile/etcd write storm.
+	LogsStreamedUntil *metav1.Time `json:"logsStreamedUntil,omitempty"`
 }
 
 // +kubebuilder:object:root=true

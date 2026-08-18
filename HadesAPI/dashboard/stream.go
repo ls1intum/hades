@@ -7,19 +7,22 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ls1intum/hades/shared/buildlogs"
 )
 
 // event types pushed over the SSE stream.
 const (
 	eventJob     = "job"
 	eventMetrics = "metrics"
+	eventLog     = "log"
 )
 
 // event is a single server-sent event payload.
 type event struct {
-	Type    string     `json:"type"`
-	Job     JobSummary `json:"job,omitempty"`
-	Metrics *Metrics   `json:"metrics,omitempty"`
+	Type    string         `json:"type"`
+	Job     JobSummary     `json:"job,omitempty"`
+	Metrics *Metrics       `json:"metrics,omitempty"`
+	Log     *buildlogs.Log `json:"log,omitempty"`
 }
 
 // subscriberBuffer bounds per-client backlog before a slow client is dropped.

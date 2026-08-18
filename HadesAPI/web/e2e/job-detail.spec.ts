@@ -44,10 +44,12 @@ test.describe("job detail", () => {
     await authedPage.goto(`/jobs/${id}`);
     await authedPage.getByRole("tab", { name: /logs/i }).click();
 
-    // No HadesLogManager runs in this stack, so the proxy returns 503 and the
-    // viewer degrades to an "unavailable" message instead of crashing.
+    // A freshly submitted job is active, so the viewer drives the log panel from
+    // the live SSE stream. This stack has no log producer (the HADES_JOB_LOGS
+    // stream is never created), so the stream endpoint is unavailable and the
+    // viewer degrades to a "connecting" state instead of crashing.
     await expect(
-      authedPage.getByText(/logs are currently unavailable/i),
+      authedPage.getByText(/connecting to live logs/i),
     ).toBeVisible();
   });
 });

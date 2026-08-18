@@ -34,15 +34,21 @@ stream into a single HTTP payload for that endpoint. Test results travel a
    HadesOperator reconciles it into a Kubernetes `Job` with one container per step
    (`step-1` clone, `step-2` execute, `step-3` result) and publishes a `running`
    status to NATS.
-1. **Operator captures container logs.** As the pod runs, the operator reads each
-   container's stdout/stderr from the Kubernetes API, parses them into a
-   `buildlogs.Log{JobID, ContainerID, Logs[]}` (one per container).
+1. **Operator streams container logs live.** As each container runs, the operator
+   **follows** its stdout/stderr from the Kubernetes API (`Follow: true`) and parses
+   lines into `buildlogs.Log{JobID, ContainerID, Logs[]}` incrementally, rather than
+   reading the whole log once after the container stops. (The Docker executor does the
+   same via `ContainerLogs` with `Follow: true`.)
 2. **Operator publishes logs to NATS JetStream** on subject `hades.logs.<jobID>`
-   (stream `HADES_JOB_LOGS`). Status changes go to `hades.jobstatus.<status>`.
+   (stream `HADES_JOB_LOGS`), emitting many small per-container batches over the
+   container's lifetime (flushed on ~50 lines or ~1s). A zero-entry `Log` is published
+   when a container starts so a step that produces no output keeps its slot. Status
+   changes go to `hades.jobstatus.<status>`.
 3. **LogManager watches, keyed off status.** On `running` it starts a durable
-   JetStream consumer on `hades.logs.<jobID>` and streams batches into the
-   in-memory aggregator, **grouped per container**. On `succeeded`/`failed` it
-   stops watching, marks the job complete, and forwards the logs.
+   JetStream consumer on `hades.logs.<jobID>` and streams batches into the in-memory
+   aggregator, **coalesced per container** (all batches for one `ContainerID` merge
+   into a single `Log`, preserving first-seen container order). On `succeeded`/`failed`
+   it stops watching, marks the job complete, and forwards the logs.
 4. **LogManager forwards to the job's callback URL.** It resolves the job's
    `callback_url` from the `HADES_JOBS` KV store and POSTs the aggregated
    `[]buildlogs.Log` there (typically the adapter's `POST /adapter/logs`). Jobs
@@ -60,6 +66,10 @@ stream into a single HTTP payload for that endpoint. Test results travel a
 
 - Logs are **pulled** by the operator (scraped from the K8s log API), not pushed by
   the build container.
+- Logs stream **live**: they are published incrementally as a container produces them,
+  not buffered until the step completes. The HadesAPI dashboard tails them over SSE
+  (`GET /api/jobs/:id/logs/stream`), backed by its own ephemeral JetStream consumer on
+  `hades.logs.<jobID>` (independent of this service).
 - The LogManager is triggered by **job status events**, not a direct call.
 - The forwarding destination is **per job** (`callback_url`), resolved from the
   `HADES_JOBS` KV store at forward time. A job without a `callback_url` runs and
@@ -86,7 +96,7 @@ stream into a single HTTP payload for that endpoint. Test results travel a
 | `HADESLOGMANAGER_API_PORT` | `8081` | HTTP API port.                                 |
 | `LOG_BATCH_SIZE`         | `100`    | Log entries buffered before a flush.           |
 | `LOG_RETENTION`          | `1h`     | How long completed job logs are kept in memory.|
-| `MAX_JOB_LOGS`           | `1000`   | Max log entries retained per job.              |
+| `MAX_JOB_LOGS`           | `1000`   | Max log entries retained per container of a job (oldest drop first; container slots are never removed). |
 | `DEBUG`                  | `false`  | Enable verbose (debug-level) logging.          |
 
 The forwarding destination is no longer a global env var. Each job sets its own

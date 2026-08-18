@@ -1,24 +1,29 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ls1intum/hades/hadesAPI/dashboard"
 	hades "github.com/ls1intum/hades/shared"
+	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/buildstatus"
 	"github.com/ls1intum/hades/shared/payload"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -376,6 +381,91 @@ func (suite *APISuite) TestDashboardEndToEnd() {
 	req, _ = http.NewRequest("GET", "/api/jobs", nil)
 	router.ServeHTTP(w, req)
 	assert.Equal(t, 401, w.Code)
+}
+
+// TestDashboardLogStream exercises the live log SSE endpoint against real NATS
+// JetStream: it publishes a log to hades.logs.<jobID>, then connects to
+// /api/jobs/:id/logs/stream and asserts the log is delivered as a "log" SSE
+// frame (DeliverAllPolicy replays the retained backlog to the new subscriber).
+func (suite *APISuite) TestDashboardLogStream() {
+	t := suite.T()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("pw12345"), bcrypt.MinCost)
+	require.NoError(t, err)
+	dashCfg := dashboard.Config{
+		Username:      "admin",
+		PasswordHash:  string(hash),
+		SessionSecret: "0123456789abcdef-0123456789abcdef-secret",
+		JobRetention:  time.Hour,
+		LogManagerURL: "http://127.0.0.1:0",
+	}
+	dash, err := dashboard.NewServer(ctx, dashCfg, suite.natsConnection)
+	require.NoError(t, err)
+	require.NoError(t, dash.Start(ctx))
+
+	router := setupRouter("", suite.hadesProducer, suite.statusPublisher, dash)
+	srv := httptest.NewServer(router)
+	defer srv.Close()
+
+	// Log in and capture the session cookie.
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/login", bytes.NewBufferString(`{"username":"admin","password":"pw12345"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	require.Equal(t, 200, w.Code)
+	var cookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "hades_dashboard_session" {
+			cookie = c
+		}
+	}
+	require.NotNil(t, cookie)
+
+	// Publish a log to the job's subject before connecting; DeliverAllPolicy
+	// replays it to the new subscriber.
+	producer, err := buildlogs.NewHadesLogProducer(suite.natsConnection)
+	require.NoError(t, err)
+	jobID := uuid.NewString()
+	require.NoError(t, producer.PublishJobLog(ctx, buildlogs.Log{
+		JobID:       jobID,
+		ContainerID: "step-1",
+		Logs:        []buildlogs.LogEntry{{Timestamp: time.Now(), Message: "hello-live-log", OutputStream: "stdout"}},
+	}))
+
+	// Connect to the live log stream.
+	streamReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/jobs/"+jobID+"/logs/stream", nil)
+	streamReq.AddCookie(cookie)
+	resp, err := http.DefaultClient.Do(streamReq)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, 200, resp.StatusCode)
+	require.Equal(t, "text/event-stream", resp.Header.Get("Content-Type"))
+
+	reader := bufio.NewReader(resp.Body)
+	got := make(chan string, 1)
+	go func() {
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				got <- ""
+				return
+			}
+			if strings.HasPrefix(line, "data: ") && strings.Contains(line, "hello-live-log") {
+				got <- line
+				return
+			}
+		}
+	}()
+
+	select {
+	case line := <-got:
+		require.Contains(t, line, "hello-live-log")
+		require.Contains(t, line, `"type":"log"`)
+	case <-time.After(15 * time.Second):
+		t.Fatal("timed out waiting for live log SSE frame")
+	}
 }
 
 func (suite *APISuite) TestSecurityHeaders() {
