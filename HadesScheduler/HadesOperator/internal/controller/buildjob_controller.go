@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -423,18 +425,32 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 
 	var initCtrs []corev1.Container
 	for _, s := range bj.Spec.Steps {
+		// Merge job-level metadata (available to all steps) with step metadata,
+		// letting step metadata override job metadata on key collision. Reserved
+		// keys are set last so they always win. Matches Docker semantics.
+		env := map[string]string{}
+		maps.Copy(env, bj.Spec.Metadata)
+		maps.Copy(env, s.Metadata)
+		env["UUID"] = bj.Name
+		env["JOB_NAME"] = bj.Spec.Name
+
+		// A continueOnError step passes its script via HADES_STEP_SCRIPT (see
+		// below). Set it in the map before conversion so it is a reserved key
+		// (overriding any metadata of the same name) and never produces a
+		// duplicate env var.
+		hasScript := strings.TrimSpace(s.Script) != ""
+		if hasScript && s.ContinueOnError {
+			env["HADES_STEP_SCRIPT"] = s.Script
+		}
+
 		c := corev1.Container{
-			Name:  fmt.Sprintf(BuildStepPrefix, s.ID),
-			Image: s.Image,
-			Env: append(
-				envFromMeta(s.Metadata),
-				corev1.EnvVar{Name: "UUID", Value: bj.Name},
-				corev1.EnvVar{Name: "JOB_NAME", Value: bj.Spec.Name},
-			), // Convert metadata to environment variables
+			Name:         fmt.Sprintf(BuildStepPrefix, s.ID),
+			Image:        s.Image,
+			Env:          envFromMeta(env),
 			VolumeMounts: []corev1.VolumeMount{sharedMount},
 		}
 
-		if strings.TrimSpace(s.Script) != "" {
+		if hasScript {
 			c.Command = []string{"/bin/sh", "-c"}
 			if s.ContinueOnError {
 				// Init containers have no native "continue on error": a non-zero
@@ -444,8 +460,8 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 				// result parser) still run. This is robust even when the script
 				// uses `set -e` or ends in an explicit non-zero `exit`, both of
 				// which would bypass a naive "<script>; exit 0". The script is
-				// passed via an env var to avoid shell-quoting issues.
-				c.Env = append(c.Env, corev1.EnvVar{Name: "HADES_STEP_SCRIPT", Value: s.Script})
+				// passed via the HADES_STEP_SCRIPT env var (set above) to avoid
+				// shell-quoting issues.
 				c.Args = []string{`/bin/sh -c "$HADES_STEP_SCRIPT" || true`}
 			} else {
 				c.Args = []string{s.Script}
@@ -540,10 +556,17 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 }
 
 // envFromMeta converts a string map to []corev1.EnvVar for container env injection.
+// Keys are sorted so the generated env order is deterministic.
 func envFromMeta(m map[string]string) []corev1.EnvVar {
-	var envs []corev1.EnvVar
-	for k, v := range m {
-		envs = append(envs, corev1.EnvVar{Name: k, Value: v})
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	envs := make([]corev1.EnvVar, 0, len(keys))
+	for _, k := range keys {
+		envs = append(envs, corev1.EnvVar{Name: k, Value: m[k]})
 	}
 	return envs
 }
