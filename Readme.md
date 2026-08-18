@@ -276,8 +276,9 @@ Step **scripts** are scanned with the same heuristics and have inline secrets
 masked. Keys stay visible so operators can see which variables exist;
 `SECRET_REDACT_MODE=all` masks every metadata value.
 
-**Residual exposure (by design):** job **logs** are proxied and shown *verbatim* -
-a secret a job echoes to stdout will be visible (the log panel warns about this).
+**Residual exposure (by design):** job **logs** are shown *verbatim* - streamed live
+over SSE for running jobs and proxied as a snapshot for completed ones - so a secret a
+job echoes to stdout will be visible (the log panel warns about this).
 Script redaction is best-effort heuristic scrubbing, not a guarantee. Sessions are
 stateless HMAC tokens, so `logout` and expiry are enforced by the cookie/TTL but a
 leaked token cannot be revoked before it expires - keep `DASHBOARD_SESSION_TTL`

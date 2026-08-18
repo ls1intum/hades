@@ -96,7 +96,7 @@ stream into a single HTTP payload for that endpoint. Test results travel a
 | `HADESLOGMANAGER_API_PORT` | `8081` | HTTP API port.                                 |
 | `LOG_BATCH_SIZE`         | `100`    | Log entries buffered before a flush.           |
 | `LOG_RETENTION`          | `1h`     | How long completed job logs are kept in memory.|
-| `MAX_JOB_LOGS`           | `1000`   | Max log entries retained per job.              |
+| `MAX_JOB_LOGS`           | `1000`   | Max log entries retained per container of a job (oldest drop first; container slots are never removed). |
 | `DEBUG`                  | `false`  | Enable verbose (debug-level) logging.          |
 
 The forwarding destination is no longer a global env var. Each job sets its own
