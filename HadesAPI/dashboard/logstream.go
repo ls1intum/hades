@@ -91,6 +91,11 @@ func (s *Server) handleJobLogStream(c *gin.Context) {
 	}
 	defer consumeCtx.Stop()
 
+	// Flush the (already-written) 200 response now so EventSource reaches its OPEN
+	// state immediately, instead of only once the first log batch arrives - a job
+	// may be idle for a while before it emits anything.
+	w.Flush()
+
 	// Heartbeat keeps intermediaries from closing an idle connection.
 	heartbeat := time.NewTicker(25 * time.Second)
 	defer heartbeat.Stop()

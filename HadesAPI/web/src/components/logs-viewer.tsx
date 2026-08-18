@@ -34,7 +34,7 @@ export function LogsViewer({
   const active = status === "Running" || status === "Queued";
   // Active jobs are driven by the live SSE stream (populates the ["logs", jobId]
   // cache); terminal jobs fetch a single snapshot from the log manager.
-  useJobLogStream(jobId, active);
+  const streamConnected = useJobLogStream(jobId, active);
   const logs = useQuery({
     queryKey: ["logs", jobId],
     queryFn: () => api.logs(jobId),
@@ -87,7 +87,11 @@ export function LogsViewer({
 
       {total === 0 ? (
         <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {active ? "Waiting for log output..." : "No logs recorded for this job."}
+          {active
+            ? streamConnected
+              ? "Waiting for log output..."
+              : "Connecting to live logs..."
+            : "No logs recorded for this job."}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto rounded-md bg-black/90 p-4 font-mono text-xs leading-relaxed text-green-200">
