@@ -33,7 +33,5 @@ spec:
               value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
             - name: HADES_EXECUTOR
               value: {{ .Values.hadesScheduler.executor }}
-            - name: K8S_CONFIG_MODE
-              value: {{ .Values.hadesScheduler.configMode }}
             - name: K8S_NAMESPACE
               value: {{ .Release.Namespace }}

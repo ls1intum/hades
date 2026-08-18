@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/ls1intum/hades/shared/buildlogs"
 	"github.com/ls1intum/hades/shared/payload"
@@ -13,6 +14,11 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 )
+
+// logStreamDrainTimeout bounds how long a step waits, after the container has
+// stopped, for the log streamer to publish the container's final output. It
+// guards against a wedged log stream hanging the step.
+const logStreamDrainTimeout = 10 * time.Second
 
 // Step is a single job step bound to the Docker client and options used to run
 // it. Executing a Step pulls the image, creates a container mounting the shared
@@ -110,6 +116,20 @@ func (s Step) execute(ctx context.Context) error {
 		return err
 	}
 
+	// Follow the container's logs live, concurrently with the wait, so they are
+	// published to NATS as they are produced rather than only after the container
+	// stops. The follow stream closes on container exit (EOF), which completes the
+	// streamer and its final flush.
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	defer streamCancel()
+	streamDone := make(chan struct{})
+	go func() {
+		defer close(streamDone)
+		if err := streamContainerLogs(streamCtx, s.cli, s.publisher, resp.ID, jobId); err != nil {
+			s.logger.Error("Failed to stream container logs to NATS", slog.Any("error", err), slog.Any("container_id", resp.ID))
+		}
+	}()
+
 	// Wait for the container to finish
 	waitResult := s.cli.ContainerWait(ctx, resp.ID, client.ContainerWaitOptions{
 		Condition: container.WaitConditionNotRunning,
@@ -121,13 +141,14 @@ func (s Step) execute(ctx context.Context) error {
 			return err
 		}
 	case status := <-waitResult.Result:
-		// Write the container logs to NATS before checking status
-		// Logs should be written even if the container fails to start or crashes during execution
-		if err := processContainerLogs(ctx, s.cli, s.publisher, resp.ID, jobId); err != nil {
-			s.logger.Error("Failed to write container logs to NATS", slog.Any("error", err), slog.Any("container_id", resp.ID))
-			return err
-		} else {
-			s.logger.Debug("Container logs written to NATS", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
+		// Wait (bounded) for the log streamer to drain and flush the container's
+		// final output before checking status, so no tail lines are lost. A wedged
+		// log stream cannot hang the step.
+		select {
+		case <-streamDone:
+			s.logger.Debug("Container logs streamed to NATS", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
+		case <-time.After(logStreamDrainTimeout):
+			s.logger.Warn("Timed out waiting for container log stream to drain", slog.Any("container_id", resp.ID))
 		}
 
 		if status.StatusCode != 0 {

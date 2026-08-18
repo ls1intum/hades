@@ -196,6 +196,16 @@ spec:
                       description: LogsPublished indicates whether logs have been
                         read and published to NATS
                       type: boolean
+                    logsStreamedUntil:
+                      description: |-
+                        LogsStreamedUntil records, throttled, the timestamp of the most recent log
+                        line streamed to NATS for this container. On an operator restart the live
+                        log stream is re-established with this value as the follow start time
+                        (PodLogOptions.SinceTime), bounding how many already-published lines are
+                        re-delivered. It is intentionally persisted infrequently to avoid a
+                        reconcile/etcd write storm.
+                      format: date-time
+                      type: string
                     name:
                       description: Name of the container (e.g., "step-0", "step-1",
                         "buildjob-finalizer")

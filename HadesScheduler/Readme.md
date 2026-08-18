@@ -18,15 +18,7 @@ Runs each step as a Docker container on the local daemon. Steps of a job share a
 
 ### Kubernetes (`HADES_EXECUTOR=k8s`) - production
 
-The Kubernetes path has three modes, selected by `K8S_CONFIG_MODE`:
-
-| Mode | Behavior |
-| ---- | -------- |
-| `operator` (**recommended, deployment default**) | Creates a `BuildJob` custom resource; the [HadesOperator](HadesOperator/Readme.md) reconciles it into a Kubernetes `Job`. |
-| `serviceaccount` (legacy) | Builds a `batchv1.Job` directly from within the cluster. |
-| `kubeconfig` | Like `serviceaccount` but authenticates via a kubeconfig file (`KUBECONFIG`); intended for out-of-cluster use, not in-cluster deployment. |
-
-> The scheduler's own default for `K8S_CONFIG_MODE` is `kubeconfig`, but every deployment (Helm, `.env.example`) sets `operator`. Package: [`k8s/`](k8s).
+The scheduler creates a `BuildJob` custom resource; the [HadesOperator](HadesOperator/Readme.md) reconciles it into a Kubernetes `Job`. Cluster access uses the in-cluster config, falling back to `KUBECONFIG` when run out-of-cluster. Package: [`k8s/`](k8s).
 
 ## Configuration
 

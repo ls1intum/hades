@@ -40,14 +40,9 @@ Operator mode is the **default** when deploying with the Helm chart. The schedul
 # helm/hades/values.yaml
 hadesScheduler:
   executor: k8s
-  configMode: operator   # default; "serviceaccount" is the legacy direct mode
 ```
 
-In `operator` mode the scheduler uses a dynamic Kubernetes client to create `BuildJob` custom resources; the Operator does the rest. Authentication uses the pod's in-cluster `ServiceAccount` - no `kubeconfig` file is needed.
-
-:::note configMode values
-`operator` (default) creates `BuildJob` CRs for the Operator to reconcile. `serviceaccount` is the **legacy** mode that builds a `batchv1.Job` directly. `kubeconfig` is for out-of-cluster use and is not intended for in-cluster deployment.
-:::
+The scheduler uses a dynamic Kubernetes client to create `BuildJob` custom resources; the Operator does the rest. Authentication uses the pod's in-cluster `ServiceAccount` - no `kubeconfig` file is needed.
 
 ## RBAC
 

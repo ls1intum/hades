@@ -181,6 +181,7 @@ func main() {
 		DeleteOnComplete: operatorConfig.DeleteOnComplete,
 		MaxParallelism:   operatorConfig.MaxParallelism,
 		Publisher:        publisher,
+		LogStreams:       controller.NewLogStreamRegistry(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "BuildJob")
 		os.Exit(1)

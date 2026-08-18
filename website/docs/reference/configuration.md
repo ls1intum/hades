@@ -60,9 +60,7 @@ Depending on `HADES_EXECUTOR`, the Docker or Kubernetes variables below also app
 
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
-| `K8S_CONFIG_MODE` | `kubeconfig` | Client mode: `kubeconfig`, `serviceaccount` (legacy), or `operator` (create `BuildJob` CRs). **Deployments default to `operator`.** |
 | `K8S_NAMESPACE` | `hades-executor` | Namespace jobs are scheduled into. |
-| `KUBECONFIG` | | Path to a kubeconfig file (only in `kubeconfig` mode). |
 | `BUILDJOB_GROUP` | `build.hades.tum.de` | API group of the `BuildJob` CRD. |
 | `BUILDJOB_VERSION` | `v1` | API version of the `BuildJob` CRD. |
 | `BUILDJOB_RESOURCE` | `buildjobs` | Plural resource name of the `BuildJob` CRD. |

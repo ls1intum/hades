@@ -71,6 +71,7 @@ func (s *Server) RegisterRoutes(r *gin.Engine) {
 		authed.GET("/jobs", s.handleListJobs)
 		authed.GET("/jobs/:id", s.handleJobDetail)
 		authed.GET("/jobs/:id/logs", s.handleJobLogs)
+		authed.GET("/jobs/:id/logs/stream", s.handleJobLogStream)
 		authed.GET("/metrics", s.handleMetrics)
 		authed.GET("/stream", s.handleStream)
 	}

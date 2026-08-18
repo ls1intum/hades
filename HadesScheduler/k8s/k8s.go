@@ -1,8 +1,7 @@
-// Package k8s implements the Kubernetes executor. Depending on K8S_CONFIG_MODE
-// it either creates a BuildJob custom resource for the HadesOperator to
-// reconcile (mode "operator") or builds a batch Job directly (legacy modes
-// "serviceaccount" and "kubeconfig"). The in-code default is "kubeconfig" (see
-// K8sConfig), but every Hades deployment (Helm, .env.example) sets "operator".
+// Package k8s implements the Kubernetes executor. It creates a BuildJob custom
+// resource for the HadesOperator to reconcile into a batch Job. Access to the
+// cluster uses the in-cluster config, falling back to KUBECONFIG when run
+// out-of-cluster.
 package k8s
 
 import (
@@ -20,16 +19,13 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// Scheduler executes jobs on a Kubernetes cluster. It holds either a typed
-// clientset (legacy direct modes) or a dynamic client (operator mode), selected
-// at construction from K8S_CONFIG_MODE.
+// Scheduler executes jobs on a Kubernetes cluster by creating BuildJob custom
+// resources via a dynamic client.
 type Scheduler struct {
-	k8sClient *kubernetes.Clientset
 	dynClient dynamic.Interface
 	namespace string
 	config    K8sConfig
@@ -40,20 +36,6 @@ type Scheduler struct {
 type K8sConfig struct {
 	// K8sNamespace is the namespace in which the jobs should be scheduled (default: hades-executor)
 	K8sNamespace string `env:"K8S_NAMESPACE,notEmpty" envDefault:"hades-executor"`
-
-	// ConfigMode is used to determine how the Kubernetes client should be configured ("kubeconfig", "serviceaccount" or "operator")
-	ConfigMode string `env:"K8S_CONFIG_MODE,notEmpty" envDefault:"kubeconfig"`
-}
-
-// K8sConfigKubeconfig is used as configuration if used with a kubeconfig file
-type K8sConfigKubeconfig struct {
-	K8sConfig
-	Kubeconfig string `env:"KUBECONFIG"`
-}
-
-// K8sConfigServiceaccount is used as configuration if used with a service account
-type K8sConfigServiceaccount struct {
-	K8sConfig
 }
 
 // BuildJobGVRConfig identifies the BuildJob custom resource (group/version/
@@ -65,9 +47,8 @@ type BuildJobGVRConfig struct {
 	Resource string `env:"BUILDJOB_RESOURCE,notEmpty" envDefault:"buildjobs"`
 }
 
-// NewK8sScheduler builds a Scheduler by loading K8sConfig and initializing
-// cluster access for the configured K8S_CONFIG_MODE. In non-operator modes it
-// also ensures the target namespace exists and wires a NATS log publisher.
+// NewK8sScheduler builds a Scheduler by loading K8sConfig, initializing a
+// dynamic client for the cluster, and wiring a NATS log publisher.
 func NewK8sScheduler(nc *nats.Conn) (*Scheduler, error) {
 	slog.Debug("Initializing Kubernetes scheduler")
 
@@ -75,21 +56,12 @@ func NewK8sScheduler(nc *nats.Conn) (*Scheduler, error) {
 	if err := utils.LoadConfig(&k8sCfg); err != nil {
 		return nil, fmt.Errorf("loading Kubernetes config: %w", err)
 	}
-	slog.Debug("Kubernetes config", "config_mode", k8sCfg.ConfigMode, "namespace", k8sCfg.K8sNamespace)
+	slog.Debug("Kubernetes config", "namespace", k8sCfg.K8sNamespace)
 
 	slog.Info("Initializing Kubernetes client")
-	scheduler, err := initializeClusterAccess(k8sCfg)
+	scheduler, err := initializeOperatorAccess(k8sCfg)
 	if err != nil {
 		return nil, err
-	}
-
-	if k8sCfg.ConfigMode != "operator" && scheduler.k8sClient != nil {
-		slog.Info("Creating namespace in Kubernetes")
-		_, err := createNamespace(context.Background(), scheduler.k8sClient, k8sCfg.K8sNamespace)
-		if err != nil {
-			slog.Error("Failed to create namespace in Kubernetes", "error", err)
-			return nil, err
-		}
 	}
 
 	if nc != nil {
@@ -105,62 +77,8 @@ func NewK8sScheduler(nc *nats.Conn) (*Scheduler, error) {
 	return &scheduler, nil
 }
 
-func initializeClusterAccess(k8sCfg K8sConfig) (Scheduler, error) {
-	switch k8sCfg.ConfigMode {
-	case "kubeconfig":
-		return initializeKubeconfigAccess(k8sCfg)
-	case "serviceaccount":
-		return initializeServiceAccountAccess(k8sCfg)
-	case "operator":
-		return initializeOperatorAccess(k8sCfg)
-	default:
-		slog.Error("Invalid Kubernetes config mode specified", "config_mode", k8sCfg.ConfigMode)
-		return Scheduler{}, fmt.Errorf("invalid Kubernetes config mode: %s", k8sCfg.ConfigMode)
-	}
-}
-
-func initializeKubeconfigAccess(k8sCfg K8sConfig) (Scheduler, error) {
-	slog.Info("Using kubeconfig for Kubernetes access")
-
-	var k8sConfigKub K8sConfigKubeconfig
-	if err := utils.LoadConfig(&k8sConfigKub); err != nil {
-		return Scheduler{}, fmt.Errorf("loading kubeconfig config: %w", err)
-	}
-
-	clientset, err := initializeKubeconfig(k8sConfigKub)
-	if err != nil {
-		return Scheduler{}, err
-	}
-
-	return Scheduler{
-		k8sClient: clientset,
-		namespace: k8sCfg.K8sNamespace,
-		config:    k8sCfg,
-	}, nil
-}
-
-func initializeServiceAccountAccess(k8sCfg K8sConfig) (Scheduler, error) {
-	slog.Info("Using service account for Kubernetes access")
-
-	var k8sConfigSvc K8sConfigServiceaccount
-	if err := utils.LoadConfig(&k8sConfigSvc); err != nil {
-		return Scheduler{}, fmt.Errorf("loading service account config: %w", err)
-	}
-
-	clientset := initializeInCluster()
-	if clientset == nil {
-		return Scheduler{}, fmt.Errorf("failed to initialize in-cluster Kubernetes client")
-	}
-
-	return Scheduler{
-		k8sClient: clientset,
-		namespace: k8sCfg.K8sNamespace,
-		config:    k8sCfg,
-	}, nil
-}
-
 func initializeOperatorAccess(k8sCfg K8sConfig) (Scheduler, error) {
-	slog.Info("Using operator mode (dynamic client)")
+	slog.Info("Initializing dynamic client for BuildJob custom resources")
 	rc, err := rest.InClusterConfig()
 	if err != nil {
 		slog.Warn("InClusterConfig failed, fallback to KUBECONFIG", "error", err)
@@ -186,24 +104,11 @@ func initializeOperatorAccess(k8sCfg K8sConfig) (Scheduler, error) {
 	}, nil
 }
 
-// ScheduleJob runs a job on the cluster. In operator mode it creates a BuildJob
-// custom resource (the operator reconciles it into a batch Job); in the legacy
-// modes it builds and submits a batch Job directly.
+// ScheduleJob runs a job on the cluster by creating a BuildJob custom resource;
+// the operator reconciles it into a batch Job.
 func (k Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) error {
-	if k.config.ConfigMode == "operator" {
-		slog.Debug("Scheduling job via Operator (creating BuildJob CR)")
-		return k.createBuildJobCR(ctx, job)
-	}
-
-	slog.Debug("Scheduling job in Kubernetes (legacy direct mode)")
-	k8sJob := K8sJob{
-		QueuePayload:     job,
-		k8sClient:        k.k8sClient,
-		namespace:        k.namespace,
-		sharedVolumeName: "shared",
-		publisher:        k.publisher,
-	}
-	return k8sJob.execute(ctx)
+	slog.Debug("Scheduling job via Operator (creating BuildJob CR)")
+	return k.createBuildJobCR(ctx, job)
 }
 
 // ToGVR converts the config into a schema.GroupVersionResource for the dynamic client.
@@ -226,6 +131,24 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 	}
 	buildJobGVR := gvrCfg.ToGVR()
 
+	obj := buildBuildJobObject(job, k.namespace)
+
+	_, err := k.dynClient.Resource(buildJobGVR).Namespace(k.namespace).Create(ctx, obj, metav1.CreateOptions{})
+	if err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			slog.Info("BuildJob already exists (idempotent)", "name", job.ID.String())
+			return nil
+		}
+		return err
+	}
+
+	slog.Info("Created BuildJob CR", "name", job.ID.String(), "namespace", k.namespace)
+	return nil
+}
+
+// buildBuildJobObject maps a queue payload to the unstructured BuildJob custom
+// resource the operator reconciles.
+func buildBuildJobObject(job payload.QueuePayload, namespace string) *unstructured.Unstructured {
 	labels := map[string]interface{}{
 		"hades/job-id": job.ID.String(),
 		"hades/source": "scheduler",
@@ -260,13 +183,13 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 		steps = append(steps, sm)
 	}
 
-	obj := &unstructured.Unstructured{
+	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "build.hades.tum.de/v1",
 			"kind":       "BuildJob",
 			"metadata": map[string]interface{}{
 				"name":      job.ID.String(),
-				"namespace": k.namespace,
+				"namespace": namespace,
 				"labels":    labels,
 			},
 			"spec": map[string]interface{}{
@@ -276,16 +199,4 @@ func (k Scheduler) createBuildJobCR(ctx context.Context, job payload.QueuePayloa
 			},
 		},
 	}
-
-	_, err := k.dynClient.Resource(buildJobGVR).Namespace(k.namespace).Create(ctx, obj, metav1.CreateOptions{})
-	if err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			slog.Info("BuildJob already exists (idempotent)", "name", job.ID.String())
-			return nil
-		}
-		return err
-	}
-
-	slog.Info("Created BuildJob CR", "name", job.ID.String(), "namespace", k.namespace)
-	return nil
 }
