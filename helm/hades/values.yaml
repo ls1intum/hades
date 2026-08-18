@@ -76,8 +76,6 @@ hadesScheduler:
       memory: "256Mi"
   # -- Executor backend (`k8s` for in-cluster execution).
   executor: "k8s"
-  # -- Kubernetes client mode: `operator` (default) or `serviceaccount` (legacy).
-  configMode: "operator"
 
 hadesOperator:
   image:

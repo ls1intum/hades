@@ -7,144 +7,21 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"time"
 
 	"github.com/ls1intum/hades/hadesScheduler/log"
 	"github.com/ls1intum/hades/shared/buildlogs"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 )
 
-const (
-	JobNameLabel = "job-name=%s"
-	pollInterval = 3 * time.Second
-	pollTimeout  = 10 * time.Minute
-)
+const JobNameLabel = "job-name=%s"
 
 type PodLogReader struct {
 	K8sClient *kubernetes.Clientset
 	Namespace string
 	JobID     string
 	Publisher log.NATSPublisher
-}
-
-// Waits for all containers in the pod to complete and processes their logs
-// Currently used in Scheduler mode only
-func (pl PodLogReader) waitForAllContainers(ctx context.Context) error {
-	if pl.K8sClient == nil {
-		return fmt.Errorf("nil k8sClient in PodLogReader: operator mode must also initialize typed clientset")
-	}
-
-	cli := pl.K8sClient.CoreV1().Pods(pl.Namespace)
-
-	// Resolve pod name using jobID
-	podName, err := pl.ResolvePodName(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Get pod spec to know what containers to expect
-	p, err := cli.Get(ctx, podName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
-	// Wait for init containers
-	for _, initContainer := range p.Spec.InitContainers {
-		if err := pl.waitForContainer(ctx, podName, initContainer.Name, true); err != nil {
-			if errors.Is(err, context.Canceled) {
-				slog.Debug("Init container processing cancelled", "job_id", pl.JobID)
-				return ctx.Err()
-			}
-			return err
-		}
-	}
-
-	// Wait for dummy container
-	for _, container := range p.Spec.Containers {
-		if err := pl.waitForContainer(ctx, podName, container.Name, false); err != nil {
-			if errors.Is(err, context.Canceled) {
-				slog.Debug("Container processing cancelled", "job_id", pl.JobID)
-				return ctx.Err()
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-// Helper function for waitForAllContainers
-// Waits for a specific container to complete by polling and then processes its logs
-// Currently used in Scheduler mode only
-func (pl PodLogReader) waitForContainer(ctx context.Context, podName string, containerName string, isInitContainer bool) error {
-	var exitCode int32
-
-	cli := pl.K8sClient.CoreV1().Pods(pl.Namespace)
-
-	err := wait.PollUntilContextTimeout(ctx, pollInterval, pollTimeout, true, func(ctx context.Context) (bool, error) {
-		p, err := cli.Get(ctx, podName, metav1.GetOptions{})
-		if err != nil {
-			return false, err
-		}
-
-		var containerStatuses []corev1.ContainerStatus
-		if isInitContainer {
-			containerStatuses = p.Status.InitContainerStatuses
-		} else {
-			containerStatuses = p.Status.ContainerStatuses
-		}
-
-		// Find our specific container
-		for _, status := range containerStatuses {
-			if status.Name == containerName {
-				if status.State.Terminated != nil {
-					exitCode = status.State.Terminated.ExitCode
-					return true, nil
-				}
-				break
-			}
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
-			slog.Debug("wait canceled (expected on job completion)",
-				slog.String("job_id", pl.JobID),
-				slog.String("pod_name", podName),
-				slog.String("container_name", containerName),
-			)
-			return context.Canceled
-		}
-		return fmt.Errorf("timeout waiting for container %s: %w", containerName, err)
-	}
-
-	slog.Debug("Container completed",
-		slog.String("job_id", pl.JobID),
-		slog.String("pod_name", podName),
-		slog.String("container_name", containerName),
-		slog.Int("exit_code", int(exitCode)),
-	)
-
-	// Process logs upon container completion
-	if err := pl.ProcessContainerLogs(ctx, podName, containerName); err != nil {
-		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
-			slog.Debug("processContainerLogs canceled (expected)", "pod_name", podName, "container_name", containerName)
-			return context.Canceled
-		} else {
-			slog.Error("Warning: failed to process logs", "pod_name", podName, "container_name", containerName, "error", err)
-		}
-	}
-
-	if exitCode != 0 {
-		return fmt.Errorf("container %s failed with exit code %d", containerName, exitCode)
-	}
-
-	return nil
 }
 
 // Processes logs for a specific container in the pod

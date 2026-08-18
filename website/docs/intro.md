@@ -44,12 +44,11 @@ A user submits a multi-step job to the **API**, which enqueues it on **NATS JetS
 
 ### Executor Backends
 
-Hades supports three execution modes:
+Hades supports two execution modes:
 
 | Mode | Use Case |
 |---|---|
 | **Docker** | Local development and single-host deployments |
-| **Kubernetes Executor** *(deprecated)* | Legacy direct Kubernetes integration |
 | **Hades Operator** *(recommended)* | Production Kubernetes - uses CRDs and a native controller pattern |
 
 ## How a Job Works

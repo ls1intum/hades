@@ -57,10 +57,8 @@ Plus the [NATS](#nats-connection-all-components) and [global](#global-all-compon
 
 | Variable | Default | Description | Source |
 | -------- | ------- | ----------- | ------ |
-| `K8S_CONFIG_MODE` | `kubeconfig` | Client mode: `kubeconfig`, `serviceaccount` (legacy direct scheduling), or `operator` (create `BuildJob` CRs). **Deployments default to `operator`** (set in Helm and `.env.example`). | `HadesScheduler/k8s/k8s.go` (`K8sConfig`) |
 | `K8S_NAMESPACE` | `hades-executor` | Namespace jobs are scheduled into. | `HadesScheduler/k8s/k8s.go` |
-| `KUBECONFIG` | | Path to a kubeconfig file (used only in `kubeconfig` mode). | `HadesScheduler/k8s/k8s.go` |
-| `BUILDJOB_GROUP` | `build.hades.tum.de` | API group of the `BuildJob` CRD (operator mode). | `HadesScheduler/k8s/k8s.go` (`BuildJobGVRConfig`) |
+| `BUILDJOB_GROUP` | `build.hades.tum.de` | API group of the `BuildJob` CRD. | `HadesScheduler/k8s/k8s.go` (`BuildJobGVRConfig`) |
 | `BUILDJOB_VERSION` | `v1` | API version of the `BuildJob` CRD. | `HadesScheduler/k8s/k8s.go` |
 | `BUILDJOB_RESOURCE` | `buildjobs` | Plural resource name of the `BuildJob` CRD. | `HadesScheduler/k8s/k8s.go` |
 

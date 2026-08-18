@@ -117,7 +117,7 @@ Submitted to `POST /build`. Field semantics come from `shared/payload/payload.go
 
 Steps of a job share a per-job volume, so a file written by one step is visible to later steps.
 
-> **Priority propagation:** once queued, the numeric priority and its name are attached to the job metadata under the keys `hades.tum.de/priority` and `hades.tum.de/priorityName` (constants `MetadataKeyPriority` / `MetadataKeyPriorityName` in `shared/prio.go`). The Kubernetes executor and operator surface `hades.tum.de/priority` as a Job/Pod label.
+> **Priority propagation:** once queued, the numeric priority and its name are attached to the job metadata under the keys `hades.tum.de/priority` and `hades.tum.de/priorityName` (constants `MetadataKeyPriority` / `MetadataKeyPriorityName` in `shared/prio.go`). The operator surfaces `hades.tum.de/priority` as a Job/Pod label.
 
 ---
 
