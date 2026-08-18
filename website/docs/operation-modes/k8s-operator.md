@@ -71,7 +71,7 @@ This updates `zz_generated.deepcopy.go` and `helm/hades/crds/build.hades.tum.de_
 Helm does not upgrade CRDs after the first install. When a release changes the `BuildJob` CRD, apply it manually from the matching chart version:
 
 ```bash
-helm show crds oci://ghcr.io/ls1intum/charts/hades --version <version> | kubectl apply -f -
+helm show crds oci://ghcr.io/hades-scheduler/charts/hades --version <version> | kubectl apply -f -
 ```
 :::
 

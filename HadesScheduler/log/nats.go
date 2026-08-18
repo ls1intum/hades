@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	logs "github.com/ls1intum/hades/shared/buildlogs"
-	status "github.com/ls1intum/hades/shared/buildstatus"
+	logs "github.com/hades-scheduler/hades/shared/buildlogs"
+	status "github.com/hades-scheduler/hades/shared/buildstatus"
 
 	"github.com/nats-io/nats.go"
 )

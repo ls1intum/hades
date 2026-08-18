@@ -33,7 +33,7 @@ body:json {
       {
         "id": 1, // mandatory to declare the order of execution
         "name": "Clone",
-        "image": "ghcr.io/ls1intum/hades/hades-clone-container:latest", // mandatory
+        "image": "ghcr.io/hades-scheduler/hades/hades-clone-container:latest", // mandatory
         "volumeMounts": [
           {
             "name": "shared",
@@ -70,7 +70,7 @@ body:json {
       {
         "id": 3,
         "name": "Parse Results",
-        "image": "ghcr.io/ls1intum/hades/junit-result-parser:latest",
+        "image": "ghcr.io/hades-scheduler/hades/junit-result-parser:latest",
         "volumeMounts": [
           {
             "name": "shared",

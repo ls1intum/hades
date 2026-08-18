@@ -7,13 +7,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ls1intum/hades/hadesScheduler/docker"
-	"github.com/ls1intum/hades/hadesScheduler/k8s"
-	"github.com/ls1intum/hades/hadesScheduler/log"
-	hades "github.com/ls1intum/hades/shared"
-	hadesnats "github.com/ls1intum/hades/shared/nats"
-	"github.com/ls1intum/hades/shared/payload"
-	"github.com/ls1intum/hades/shared/utils"
+	"github.com/hades-scheduler/hades/hadesScheduler/docker"
+	"github.com/hades-scheduler/hades/hadesScheduler/k8s"
+	"github.com/hades-scheduler/hades/hadesScheduler/log"
+	hades "github.com/hades-scheduler/hades/shared"
+	hadesnats "github.com/hades-scheduler/hades/shared/nats"
+	"github.com/hades-scheduler/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/utils"
 )
 
 // HadesSchedulerConfig holds the scheduler's runtime configuration. The

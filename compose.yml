@@ -2,7 +2,7 @@
 
 services:
   hadesAPI:
-    image: ghcr.io/ls1intum/hades/hades-api
+    image: ghcr.io/hades-scheduler/hades/hades-api
     build:
       context: .
       dockerfile: ./HadesAPI/Dockerfile
@@ -18,7 +18,7 @@ services:
       - NATS_URL=nats://nats:4222
 
   hadesScheduler:
-    image: ghcr.io/ls1intum/hades/hades-scheduler
+    image: ghcr.io/hades-scheduler/hades/hades-scheduler
     build:
       context: .
       dockerfile: ./HadesScheduler/Dockerfile
@@ -38,7 +38,7 @@ services:
       - HADES_EXECUTOR=docker
     
   hadesLogManager:
-    image: ghcr.io/ls1intum/hades/hades-log-manager
+    image: ghcr.io/hades-scheduler/hades/hades-log-manager
     build:
       context: .
       dockerfile: ./HadesLogManager/Dockerfile

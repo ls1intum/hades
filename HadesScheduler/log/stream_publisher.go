@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	logs "github.com/ls1intum/hades/shared/buildlogs"
+	logs "github.com/hades-scheduler/hades/shared/buildlogs"
 )
 
 const (

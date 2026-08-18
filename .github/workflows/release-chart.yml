@@ -3,7 +3,7 @@ name: Release Helm Chart
 # Validates the Helm chart on pull requests, and on pushes to main publishes it
 # to GHCR as an OCI artifact (alongside the Docker images). A new version is
 # published only when helm/hades/Chart.yaml's `version` changes. Install with:
-#   helm install hades oci://ghcr.io/ls1intum/charts/hades --version <version> \
+#   helm install hades oci://ghcr.io/hades-scheduler/charts/hades --version <version> \
 #     -n hades --create-namespace
 #
 # The chart lives in GHCR, so this does not touch GitHub Pages (used for docs).
@@ -67,7 +67,7 @@ jobs:
 
           # Skip if this version is already published so unrelated helm/**
           # changes don't overwrite a released chart.
-          if helm show chart "oci://ghcr.io/ls1intum/charts/hades" --version "$version" >/dev/null 2>&1; then
+          if helm show chart "oci://ghcr.io/hades-scheduler/charts/hades" --version "$version" >/dev/null 2>&1; then
             echo "hades $version is already published to GHCR; nothing to do."
             exit 0
           fi
@@ -75,4 +75,4 @@ jobs:
           helm repo add nats https://nats-io.github.io/k8s/helm/charts/
           helm dependency build helm/hades
           helm package helm/hades --destination dist
-          helm push "dist/hades-${version}.tgz" "oci://ghcr.io/ls1intum/charts"
+          helm push "dist/hades-${version}.tgz" "oci://ghcr.io/hades-scheduler/charts"

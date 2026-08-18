@@ -1,4 +1,4 @@
-module github.com/ls1intum/hades/hadesAPI
+module github.com/hades-scheduler/hades/hadesAPI
 
 go 1.26.0
 
@@ -6,7 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/google/uuid v1.6.0
-	github.com/ls1intum/hades/shared v0.0.0
+	github.com/hades-scheduler/hades/shared v0.0.0
 	github.com/nats-io/nats.go v1.52.0
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/files v1.0.1
@@ -16,7 +16,7 @@ require (
 	golang.org/x/crypto v0.54.0
 )
 
-replace github.com/ls1intum/hades/shared => ../shared
+replace github.com/hades-scheduler/hades/shared => ../shared
 
 require (
 	dario.cat/mergo v1.0.2 // indirect

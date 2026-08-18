@@ -13,6 +13,10 @@
 *.so
 *.dylib
 
+# Compiled service binaries
+/HadesAPI/hadesAPI
+/HadesLogManager/hadesLogManager
+
 # Test binary, built with `go test -c`
 *.test
 

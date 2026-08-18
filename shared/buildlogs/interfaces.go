@@ -3,7 +3,7 @@ package buildlogs
 import (
 	"context"
 
-	"github.com/ls1intum/hades/shared/buildstatus"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
 )
 
 // LogAggregator defines the interface for aggregating and managing job logs

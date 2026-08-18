@@ -1,11 +1,11 @@
-module github.com/ls1intum/hades/hadesScheduler
+module github.com/hades-scheduler/hades/hadesScheduler
 
 go 1.26.0
 
-replace github.com/ls1intum/hades/shared => ../shared
+replace github.com/hades-scheduler/hades/shared => ../shared
 
 require (
-	github.com/ls1intum/hades/shared v0.0.0-20260731094431-f95c1b4a6d91
+	github.com/hades-scheduler/hades/shared v0.0.0-20260731094431-f95c1b4a6d91
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.1
 	github.com/nats-io/nats.go v1.52.0

@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ls1intum/hades/shared/buildlogs"
-	"github.com/ls1intum/hades/shared/buildstatus"
-	"github.com/ls1intum/hades/shared/utils"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
+	"github.com/hades-scheduler/hades/shared/utils"
 )
 
 const (

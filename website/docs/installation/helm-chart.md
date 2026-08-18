@@ -19,7 +19,7 @@ The recommended way to deploy Hades in production is with **Helm**. The chart bu
 The chart is published to GHCR as an OCI artifact:
 
 ```bash
-helm upgrade --install hades oci://ghcr.io/ls1intum/charts/hades \
+helm upgrade --install hades oci://ghcr.io/hades-scheduler/charts/hades \
   --version 0.2.0 -n hades --create-namespace
 ```
 
@@ -37,7 +37,7 @@ helm upgrade --install hades ./helm/hades -n hades --create-namespace
 Override values inline as needed - at minimum set your ingress host:
 
 ```bash
-helm upgrade --install hades oci://ghcr.io/ls1intum/charts/hades --version 0.2.0 \
+helm upgrade --install hades oci://ghcr.io/hades-scheduler/charts/hades --version 0.2.0 \
   -n hades --create-namespace \
   --set ingress.host=hades.example.com \
   --set ingress.tls.secretName=my-tls-secret
@@ -67,14 +67,14 @@ INFO Using operator mode (dynamic client)
 Helm applies CRDs only on first install. When a release changes the `BuildJob` CRD, apply it manually from the matching chart version:
 
 ```bash
-helm show crds oci://ghcr.io/ls1intum/charts/hades --version 0.2.0 | kubectl apply -f -
+helm show crds oci://ghcr.io/hades-scheduler/charts/hades --version 0.2.0 | kubectl apply -f -
 ```
 :::
 
 ## Upgrade & Rollback
 
 ```bash
-helm upgrade hades oci://ghcr.io/ls1intum/charts/hades --version <version> -n hades
+helm upgrade hades oci://ghcr.io/hades-scheduler/charts/hades --version <version> -n hades
 
 # Roll back to a previous revision
 helm history hades -n hades

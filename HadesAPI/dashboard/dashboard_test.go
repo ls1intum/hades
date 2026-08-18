@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	hades "github.com/ls1intum/hades/shared"
-	"github.com/ls1intum/hades/shared/buildstatus"
-	"github.com/ls1intum/hades/shared/redact"
+	hades "github.com/hades-scheduler/hades/shared"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
+	"github.com/hades-scheduler/hades/shared/redact"
 	"golang.org/x/crypto/bcrypt"
 )
 

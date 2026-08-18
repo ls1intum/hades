@@ -3,7 +3,7 @@ package nats
 import (
 	"testing"
 
-	hades "github.com/ls1intum/hades/shared"
+	hades "github.com/hades-scheduler/hades/shared"
 	"github.com/stretchr/testify/assert"
 )
 

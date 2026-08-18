@@ -3,7 +3,7 @@
     <module name="hades" />
     <working_directory value="$PROJECT_DIR$" />
     <kind value="PACKAGE" />
-    <package value="github.com/ls1intum/hades/HadesScheduler/HadesOperator/cmd" />
+    <package value="github.com/hades-scheduler/hades/HadesScheduler/HadesOperator/cmd" />
     <directory value="$PROJECT_DIR$" />
     <filePath value="$PROJECT_DIR$/HadesScheduler/HadesOperator/cmd/main.go" />
     <method v="2" />

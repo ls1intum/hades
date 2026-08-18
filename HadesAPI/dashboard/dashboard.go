@@ -24,10 +24,10 @@ import (
 	"net/http"
 	"time"
 
-	hades "github.com/ls1intum/hades/shared"
-	"github.com/ls1intum/hades/shared/buildstatus"
-	"github.com/ls1intum/hades/shared/redact"
-	"github.com/ls1intum/hades/shared/utils"
+	hades "github.com/hades-scheduler/hades/shared"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
+	"github.com/hades-scheduler/hades/shared/redact"
+	"github.com/hades-scheduler/hades/shared/utils"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )

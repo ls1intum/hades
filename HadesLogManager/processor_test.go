@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

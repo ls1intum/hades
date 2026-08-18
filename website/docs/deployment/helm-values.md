@@ -163,7 +163,7 @@ helm upgrade hades ./helm/hades -n hades
 
 > **CRDs are not upgraded by Helm.** When a release changes the `BuildJob` CRD,
 > apply it manually from the matching chart version:
-> `helm show crds oci://ghcr.io/ls1intum/charts/hades --version <version> | kubectl apply -f -`
+> `helm show crds oci://ghcr.io/hades-scheduler/charts/hades --version <version> | kubectl apply -f -`
 
 Roll back to a previous release revision:
 

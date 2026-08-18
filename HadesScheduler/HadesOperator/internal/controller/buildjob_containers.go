@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
-	"github.com/ls1intum/hades/hadesScheduler/k8s"
-	"github.com/ls1intum/hades/shared/buildlogs"
+	buildv1 "github.com/hades-scheduler/hades/HadesScheduler/HadesOperator/api/v1"
+	"github.com/hades-scheduler/hades/hadesScheduler/k8s"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

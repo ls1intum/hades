@@ -14,13 +14,13 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/ls1intum/hades/hadesAPI/dashboard"
-	_ "github.com/ls1intum/hades/hadesAPI/docs" // generated OpenAPI spec (make docs-api)
-	"github.com/ls1intum/hades/hadesAPI/web"
-	hades "github.com/ls1intum/hades/shared"
-	"github.com/ls1intum/hades/shared/buildstatus"
-	"github.com/ls1intum/hades/shared/payload"
-	"github.com/ls1intum/hades/shared/utils"
+	"github.com/hades-scheduler/hades/hadesAPI/dashboard"
+	_ "github.com/hades-scheduler/hades/hadesAPI/docs" // generated OpenAPI spec (make docs-api)
+	"github.com/hades-scheduler/hades/hadesAPI/web"
+	hades "github.com/hades-scheduler/hades/shared"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
+	"github.com/hades-scheduler/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/utils"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )

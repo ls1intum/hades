@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
-	"github.com/ls1intum/hades/hadesScheduler/log"
-	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/hadesScheduler/log"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"

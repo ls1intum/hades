@@ -1,4 +1,4 @@
-module github.com/ls1intum/hades/shared
+module github.com/hades-scheduler/hades/shared
 
 go 1.26.0
 
