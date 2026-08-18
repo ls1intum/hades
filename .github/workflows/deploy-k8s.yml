@@ -1,0 +1,150 @@
+name: Deploy to Kubernetes
+
+# Reusable workflow that installs/upgrades the Hades Helm chart into a Kubernetes
+# cluster. It is called by deploy-k8s-prod.yml and deploy-k8s-test.yml, which set the
+# target GitHub environment, namespace, values file and image tag. It never runs on its
+# own trigger.
+#
+# The GitHub environment supplies these secrets (add them once per environment):
+#   KUBE_CONFIG               - base64-encoded kubeconfig for the target cluster
+#   AUTH_KEY                  - protects the API /build endpoint
+#   DASHBOARD_USERNAME        - dashboard login user
+#   DASHBOARD_PASSWORD_HASH   - bcrypt hash of the dashboard password
+#   DASHBOARD_SESSION_SECRET  - dashboard session signing secret (>=32 chars)
+# The AUTH_KEY and dashboard values are materialised as in-cluster Secrets
+# (hades-auth, hades-dashboard) on every run; the first run creates them and later runs
+# keep them in sync.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub environment to deploy to (k8s-prod or k8s-test).
+        required: true
+        type: string
+      namespace:
+        description: Kubernetes namespace to deploy into.
+        required: true
+        type: string
+      values-file:
+        description: Environment values file under helm/hades/ (e.g. values-prod.yaml).
+        required: true
+        type: string
+      image-tag:
+        description: Container image tag to deploy for all four components.
+        required: true
+        type: string
+      chart-ref:
+        description: Git ref to source the chart and CRDs from. Empty = the triggering ref.
+        required: false
+        type: string
+        default: ""
+      release-name:
+        description: Helm release name.
+        required: false
+        type: string
+        default: hades
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout chart source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.chart-ref }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      - name: Ensure namespace exists
+        run: |
+          set -euo pipefail
+          kubectl create namespace "${{ inputs.namespace }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create/update application Secrets
+        env:
+          NAMESPACE: ${{ inputs.namespace }}
+          AUTH_KEY: ${{ secrets.AUTH_KEY }}
+          DASHBOARD_USERNAME: ${{ secrets.DASHBOARD_USERNAME }}
+          DASHBOARD_PASSWORD_HASH: ${{ secrets.DASHBOARD_PASSWORD_HASH }}
+          DASHBOARD_SESSION_SECRET: ${{ secrets.DASHBOARD_SESSION_SECRET }}
+        run: |
+          set -euo pipefail
+          kubectl create secret generic hades-auth \
+            --namespace "$NAMESPACE" \
+            --from-literal=AUTH_KEY="$AUTH_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic hades-dashboard \
+            --namespace "$NAMESPACE" \
+            --from-literal=DASHBOARD_USERNAME="$DASHBOARD_USERNAME" \
+            --from-literal=DASHBOARD_PASSWORD_HASH="$DASHBOARD_PASSWORD_HASH" \
+            --from-literal=DASHBOARD_SESSION_SECRET="$DASHBOARD_SESSION_SECRET" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply CRDs
+        # Helm does not upgrade CRDs after the first install, so apply them explicitly.
+        # Server-side apply avoids the 264KB client-side last-applied-configuration
+        # annotation limit on the (large) BuildJob CRD.
+        run: kubectl apply --server-side --force-conflicts -f helm/hades/crds/
+
+      - name: Build chart dependencies
+        run: |
+          set -euo pipefail
+          helm repo add nats https://nats-io.github.io/k8s/helm/charts/
+          helm dependency build helm/hades
+
+      - name: Deploy with Helm
+        run: |
+          set -euo pipefail
+          helm upgrade --install "${{ inputs.release-name }}" helm/hades \
+            --namespace "${{ inputs.namespace }}" --create-namespace \
+            -f helm/hades/values.yaml \
+            -f "helm/hades/${{ inputs.values-file }}" \
+            --set-string hadesApi.image.tag="${{ inputs.image-tag }}" \
+            --set-string hadesScheduler.image.tag="${{ inputs.image-tag }}" \
+            --set-string hadesOperator.image.tag="${{ inputs.image-tag }}" \
+            --set-string hadesLogManager.image.tag="${{ inputs.image-tag }}" \
+            --atomic --timeout 10m
+
+      - name: Deployment summary
+        run: |
+          helm status "${{ inputs.release-name }}" --namespace "${{ inputs.namespace }}"
+          kubectl get pods --namespace "${{ inputs.namespace }}"
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo "::group::Pods"
+          kubectl get pods --namespace "${{ inputs.namespace }}" -o wide || true
+          echo "::endgroup::"
+          echo "::group::Events"
+          kubectl get events --namespace "${{ inputs.namespace }}" \
+            --sort-by=.lastTimestamp || true
+          echo "::endgroup::"
+          echo "::group::Not-ready pod details"
+          for pod in $(kubectl get pods --namespace "${{ inputs.namespace }}" \
+            --field-selector=status.phase!=Running -o name 2>/dev/null); do
+            kubectl describe "$pod" --namespace "${{ inputs.namespace }}" || true
+            kubectl logs "$pod" --namespace "${{ inputs.namespace }}" \
+              --all-containers --tail=100 || true
+          done
+          echo "::endgroup::"

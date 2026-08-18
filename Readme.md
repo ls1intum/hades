@@ -369,6 +369,41 @@ For production deployments in a VM:
 Hades includes Ansible playbooks for automated deployment.
 See the `ansible/hades/README.md` file for more details.
 
+### Kubernetes (GitHub Actions)
+
+Two manual workflows deploy the Helm chart to a Kubernetes cluster (one cluster,
+two namespaces):
+
+- **`Deploy to Kubernetes (prod)`** (`.github/workflows/deploy-k8s-prod.yml`) - deploys
+  into namespace `hades` from the `k8s-prod` environment. The `version` input must be
+  `latest` or a published GitHub Release tag; it is validated before anything touches the
+  cluster. To deploy a release, run the workflow **from that release's tag** so the chart
+  and CRDs match the released images.
+- **`Deploy to Kubernetes (test)`** (`.github/workflows/deploy-k8s-test.yml`) - deploys
+  into namespace `hades-test` from the `k8s-test` environment. The `version` input
+  accepts any image tag (`latest`, a release tag, `pr-N`, or a branch/sha tag). The chart
+  and CRDs come from the ref the workflow runs from.
+
+Both call the reusable `deploy-k8s.yml`, which writes the kubeconfig, creates the app
+Secrets, applies the CRDs (server-side, since Helm never upgrades CRDs), and runs
+`helm upgrade --install --atomic`. Per-environment, non-secret config lives in committed
+values files (`helm/hades/values-prod.yaml`, `helm/hades/values-test.yaml`).
+
+Each GitHub environment needs these secrets (add them once; the app Secrets are created
+on the first deploy and kept in sync afterwards):
+
+| Secret | Purpose |
+|---|---|
+| `KUBE_CONFIG` | base64-encoded kubeconfig for the target cluster |
+| `AUTH_KEY` | protects the API `/build` endpoint (Secret `hades-auth`) |
+| `DASHBOARD_USERNAME` | dashboard login user (Secret `hades-dashboard`) |
+| `DASHBOARD_PASSWORD_HASH` | bcrypt hash of the dashboard password |
+| `DASHBOARD_SESSION_SECRET` | dashboard session signing secret (>=32 chars) |
+
+`k8s-prod` uses a required-reviewer protection rule, so a production deploy waits for
+manual approval. TLS is handled in-cluster by cert-manager (the `letsencrypt-prod`
+cluster-issuer), so no ACME secrets are needed in the workflow.
+
 ### Releasing the Helm Chart
 
 The chart is published to GHCR as an OCI artifact by

@@ -1,0 +1,14 @@
+# Production overrides, layered on top of values.yaml by the
+# "Deploy to Kubernetes (prod)" workflow (namespace: hades).
+# Only non-secret configuration lives here; credentials are injected as
+# Kubernetes Secrets (hades-auth, hades-dashboard) created by the deploy workflow.
+
+hadesApi:
+  # Protect the /build endpoint with the AUTH_KEY from the hades-auth Secret.
+  authKeySecret: hades-auth
+  dashboard:
+    # Enable the dashboard, backed by the hades-dashboard Secret.
+    secretName: hades-dashboard
+
+ingress:
+  host: hades.student.k8s.aet.cit.tum.de
