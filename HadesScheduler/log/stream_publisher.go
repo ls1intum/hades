@@ -59,9 +59,10 @@ type StreamOptions struct {
 // stream closes when the container stops).
 //
 // The function blocks until all sources are drained. Steady-state and final
-// flushes preserve per-container order because a single mutex serializes the
-// buffer even though the sources are scanned concurrently; LogEntry.Timestamp
-// disambiguates stdout/stderr interleave.
+// flushes preserve per-container order: a dedicated publish mutex serializes the
+// take-and-publish sequence so only one batch is in flight at a time, even though
+// several goroutines (the size trigger, the ticker, and the final flush) can call
+// flush concurrently; LogEntry.Timestamp disambiguates stdout/stderr interleave.
 func StreamContainerLogs(ctx context.Context, pub logs.LogPublisher, jobID, containerID string, opts StreamOptions, sources ...StreamSource) error {
 	// Register the container's slot up front so a zero-output step is not skipped.
 	if opts.RegisterSlot {
@@ -72,8 +73,16 @@ func StreamContainerLogs(ctx context.Context, pub logs.LogPublisher, jobID, cont
 
 	var mu sync.Mutex
 	var buf []logs.LogEntry
+	// pubMu serializes the whole take-and-publish sequence so batches reach NATS in
+	// buffer order even when several goroutines trigger a flush at once. Without it,
+	// two flushes could take batch A then batch B under mu but publish B before A,
+	// persisting reordered logs and regressing opts.Progress.
+	var pubMu sync.Mutex
 
 	flush := func(pubCtx context.Context) {
+		pubMu.Lock()
+		defer pubMu.Unlock()
+
 		mu.Lock()
 		if len(buf) == 0 {
 			mu.Unlock()
