@@ -223,9 +223,12 @@ live logs, and system metrics, all updating live.
   `Queued` on enqueue so newly submitted jobs appear immediately.
 - **Job detail** is read on demand from the `HADES_JOBS` JetStream KV bucket (the
   full submitted payload) and **redacted** before it leaves the process.
-- **Logs** are proxied to the internal `HadesLogManager` service, which remains the
-  log aggregator (the proxy is authenticated, so that internal service is never
-  exposed directly).
+- **Logs** stream **live** over SSE (`GET /api/jobs/:id/logs/stream`): for a running
+  job the API opens its own ephemeral JetStream consumer on `hades.logs.<jobID>`
+  (full backlog + live tail) and pushes each new batch to the browser as it is
+  produced - no polling. Completed jobs fall back to a one-shot snapshot proxied to
+  the internal `HadesLogManager` (authenticated, so that service is never exposed
+  directly). `HadesLogManager` remains the aggregator for the Artemis-forwarding path.
 
 Read-side state is in-memory and recent-only (bounded by `DASHBOARD_JOB_RETENTION`),
 so both `HadesAPI` and `HadesLogManager` must stay at a single replica.
@@ -271,8 +274,9 @@ Step **scripts** are scanned with the same heuristics and have inline secrets
 masked. Keys stay visible so operators can see which variables exist;
 `SECRET_REDACT_MODE=all` masks every metadata value.
 
-**Residual exposure (by design):** job **logs** are proxied and shown *verbatim* -
-a secret a job echoes to stdout will be visible (the log panel warns about this).
+**Residual exposure (by design):** job **logs** are shown *verbatim* - streamed live
+over SSE for running jobs and proxied as a snapshot for completed ones - so a secret a
+job echoes to stdout will be visible (the log panel warns about this).
 Script redaction is best-effort heuristic scrubbing, not a guarantee. Sessions are
 stateless HMAC tokens, so `logout` and expiry are enforced by the cookie/TTL but a
 leaked token cannot be revoked before it expires - keep `DASHBOARD_SESSION_TTL`

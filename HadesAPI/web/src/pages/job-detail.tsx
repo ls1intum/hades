@@ -27,8 +27,10 @@ export function JobDetailPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild>
+    // Fill the viewport below the header (h-14) and the main padding (py-6) so the
+    // logs tab can grow to the bottom of the window with a single scroll region.
+    <div className="flex h-[calc(100vh-6.5rem)] flex-col gap-6">
+      <Button variant="ghost" size="sm" asChild className="self-start">
         <Link to="/jobs">
           <ArrowLeft /> Back to jobs
         </Link>
@@ -68,8 +70,8 @@ export function JobDetailPage() {
             <TimeField label="Finished" value={formatTime(job.data.finishedAt)} />
           </div>
 
-          <Tabs defaultValue="steps">
-            <TabsList>
+          <Tabs defaultValue="steps" className="flex min-h-0 flex-1 flex-col">
+            <TabsList className="self-start">
               <TabsTrigger value="steps">
                 Steps ({(job.data.steps ?? []).length})
               </TabsTrigger>
@@ -77,7 +79,7 @@ export function JobDetailPage() {
               <TabsTrigger value="logs">Logs</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="steps" className="space-y-3">
+            <TabsContent value="steps" className="min-h-0 flex-1 space-y-3 overflow-auto">
               {!job.data.payloadAvailable && (
                 <p className="text-sm text-muted-foreground">
                   The full job definition has aged out of storage.
@@ -118,11 +120,11 @@ export function JobDetailPage() {
               ))}
             </TabsContent>
 
-            <TabsContent value="metadata">
+            <TabsContent value="metadata" className="min-h-0 flex-1 overflow-auto">
               <MetadataList metadata={job.data.metadata} />
             </TabsContent>
 
-            <TabsContent value="logs">
+            <TabsContent value="logs" className="flex min-h-0 flex-1 flex-col">
               <LogsViewer jobId={job.data.id} status={job.data.status as JobStatus} />
             </TabsContent>
           </Tabs>

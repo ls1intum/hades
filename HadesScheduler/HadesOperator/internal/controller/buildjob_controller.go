@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -88,6 +89,22 @@ type BuildJobReconciler struct {
 	DeleteOnComplete bool
 	Publisher        *log.NATSPublisher
 	MaxParallelism   uint
+
+	// LogStreams tracks live per-container log-follow goroutines. It is created
+	// lazily by logStreams() if left nil.
+	LogStreams     *logStreamRegistry
+	logStreamsOnce sync.Once
+}
+
+// logStreams returns the reconciler's log-stream registry, creating it on first
+// use so a reconciler constructed without one still works.
+func (r *BuildJobReconciler) logStreams() *logStreamRegistry {
+	r.logStreamsOnce.Do(func() {
+		if r.LogStreams == nil {
+			r.LogStreams = NewLogStreamRegistry()
+		}
+	})
+	return r.LogStreams
 }
 
 // +kubebuilder:rbac:groups=build.hades.tum.de,resources=buildjobs;buildjobs/status;buildjobs/finalizers,verbs=get;list;watch;create;update;patch;delete
@@ -111,12 +128,14 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// ----------------------------- 0b. If being deleted, skip (avoid recreating children) --------
 	if !bj.DeletionTimestamp.IsZero() {
+		r.logStreams().stopJob(bj.Namespace, bj.Name)
 		return ctrl.Result{}, nil
 	}
 
 	// ----------------------------- 1. Exit if already processed ----------------------------------
 	// Only process objects that are not marked as "finalized" (i.e., not deleted)
 	if bj.Status.Phase == string(buildstatus.StatusSucceeded) || bj.Status.Phase == string(buildstatus.StatusFailed) {
+		r.logStreams().stopJob(bj.Namespace, bj.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -125,14 +144,25 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	var existingJob batchv1.Job
 	err := r.Get(ctx, client.ObjectKey{Namespace: bj.Namespace, Name: jobName}, &existingJob)
 	if err == nil {
-		// Job already exists check the status of the containers
-		if err := r.updateContainerStatuses(ctx, &bj); err != nil {
+		// Job already exists check the status of the containers. draining is true
+		// while a terminated container's live log stream is still publishing.
+		draining, err := r.updateContainerStatuses(ctx, &bj)
+		if err != nil {
+			// draining is unreliable when the status update failed, so requeue
+			// instead of proceeding: finalizing here could delete the pod while a
+			// container's log stream is still draining and lose its tail logs.
 			slog.Error("Failed to update container statuses", "error", err)
+			return ctrl.Result{}, fmt.Errorf("updating container statuses: %w", err)
 		}
 
 		// Job already exists, check the status of the job
 		done, succeeded, msg := jobFinished(&existingJob)
 		if done {
+			// Hold off finalizing (and deleting the pod) until every container's
+			// log stream has drained, so no tail logs are lost.
+			if draining {
+				return ctrl.Result{RequeueAfter: requeueDelay}, nil
+			}
 
 			// Drain gate: when the CR (and thus the pod) will be deleted on
 			// completion, all logs of terminated containers must be published
@@ -166,6 +196,9 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				return ctrl.Result{}, err
 			}
 
+			// All logs are published; stop tracking this job's streams.
+			r.logStreams().stopJob(bj.Namespace, bj.Name)
+
 			// If DeleteOnComplete is false, don't delete the CR, used for debugging
 			if !r.DeleteOnComplete {
 				// If there is available concurrency, admit one suspended job (optional)
@@ -197,7 +230,13 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				return ctrl.Result{}, err
 			}
 		}
-		return ctrl.Result{}, nil
+
+		// Requeue while the job runs. The operator watches only BuildJobs and owned
+		// Jobs, not Pods, so a Job whose init containers are progressing produces no
+		// events between creation and completion. Periodic requeues are how the
+		// operator observes each container entering Running (to start its live log
+		// stream) and terminating (to finalize once its stream drains).
+		return ctrl.Result{RequeueAfter: requeueDelay}, nil
 	}
 
 	if !apierrors.IsNotFound(err) {
@@ -259,8 +298,9 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// Do not requeue; later Job status changes will re-trigger reconciliation
-	return ctrl.Result{}, nil
+	// Requeue so the operator observes container transitions and drives live log
+	// streaming while the Job runs (Pods are not watched directly).
+	return ctrl.Result{RequeueAfter: requeueDelay}, nil
 }
 
 // setStatusRunning sets BuildJob.Status to "Running", records StartTime and PodName.

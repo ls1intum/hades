@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
 	"github.com/ls1intum/hades/hadesScheduler/k8s"
+	"github.com/ls1intum/hades/shared/buildlogs"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -125,8 +127,12 @@ func (r *BuildJobReconciler) logsDrained(ctx context.Context, bj *buildv1.BuildJ
 	return allTerminatedLogsPublished(p, fresh.Status.ContainerStatuses), false, nil
 }
 
-// updateContainerStatuses resolves PodName using the BuildJob and updates each BuildJob's container statuses accordingly
-func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) error {
+// updateContainerStatuses resolves PodName using the BuildJob and updates each
+// BuildJob's container statuses accordingly. It returns draining=true when at
+// least one container has terminated but its live log stream has not finished
+// publishing, signalling the caller to requeue so the job is not finalized (and
+// its pod deleted) before the tail logs are captured.
+func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) (draining bool, err error) {
 	slog.Info("Updating container statuses for BuildJob", "buildJob", bj.Name)
 
 	pl := r.podLogReader(bj.Namespace, bj.Name)
@@ -134,15 +140,15 @@ func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *bu
 	podName, err := pl.ResolvePodName(ctx)
 	if err != nil {
 		slog.Error("Failed to resolve pod name", "error", err)
-		return err
+		return false, err
 	}
 
 	p, err := r.K8sClient.CoreV1().Pods(bj.Namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		var fresh buildv1.BuildJob
 		if err := r.Get(ctx, client.ObjectKeyFromObject(bj), &fresh); err != nil {
 			return err
@@ -173,6 +179,16 @@ func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *bu
 			newStatuses = append(newStatuses, cs)
 		}
 
+		// A terminated container whose logs are not yet published still has a log
+		// stream draining; keep requeueing until it finishes.
+		draining = false
+		for _, cs := range newStatuses {
+			if (cs.State == buildv1.ContainerStateSucceeded || cs.State == buildv1.ContainerStateFailed) && !cs.LogsPublished {
+				draining = true
+				break
+			}
+		}
+
 		// Update BuildJob status
 
 		fresh.Status.ContainerStatuses = newStatuses
@@ -180,30 +196,103 @@ func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *bu
 		fresh.Status.PodName = p.Name
 		return r.Status().Update(ctx, &fresh)
 	})
+	return draining, err
 }
 
-// updateContainerStateMap updates the ContainerStatus for a specific container in the status map
+// updateContainerStateMap updates the ContainerStatus for a specific container
+// in the status map and drives its live log stream.
+//
+// A single follow-stream goroutine is started once the container is running (or,
+// after an operator restart or for a very short container, once it is
+// terminated) and follows the container to EOF, publishing logs incrementally.
+// A terminated container's logs are marked published only after its stream has
+// fully drained, so the caller can hold off finalizing the job until then.
 func (r *BuildJobReconciler) updateContainerStateMap(ctx context.Context, bj *buildv1.BuildJob, p *corev1.Pod, statusMap map[string]buildv1.ContainerStatus, containerState corev1.ContainerStatus) buildv1.ContainerStatus {
 	cs := statusMap[containerState.Name]
 
 	newCS := r.buildContainerStatus(containerState.Name, cs.StepID, containerState.State)
 	cs.State = newCS.State
 
-	if cs.State == buildv1.ContainerStateSucceeded || cs.State == buildv1.ContainerStateFailed {
-		if !cs.LogsPublished {
-			slog.Info("Container terminated, reading logs", "container", cs.Name)
+	terminated := cs.State == buildv1.ContainerStateSucceeded || cs.State == buildv1.ContainerStateFailed
+	key := logStreamKey(bj.Namespace, bj.Name, cs.Name)
 
+	// If the stream for a still-running container has already finished, it must
+	// have failed: a healthy follow stays open until the container stops. Drop the
+	// entry so the block below re-establishes it (from the persisted offset)
+	// instead of leaving it dead until termination; the running-job requeue drives
+	// the retry.
+	if !terminated && !cs.LogsPublished {
+		if stream := r.logStreams().get(key); stream != nil {
+			if finished, streamErr := stream.result(); finished {
+				if streamErr != nil {
+					slog.Warn("Container log stream failed while running; restarting", "container", cs.Name, "error", streamErr)
+				}
+				r.logStreams().remove(key)
+			}
+		}
+	}
+
+	// Start (idempotently) the live log stream once the container is running or
+	// terminated and its logs have not yet been fully published. The stream
+	// captures LogsStreamedUntil at start time so a re-established stream (after
+	// an operator restart) skips already-published lines.
+	if (cs.State == buildv1.ContainerStateRunning || terminated) && !cs.LogsPublished {
+		podName := p.Name
+		sinceTime := cs.LogsStreamedUntil
+		containerName := cs.Name
+		started := r.logStreams().ensureStarted(key, func(streamCtx context.Context, progress func(time.Time)) error {
 			pl := r.podLogReader(bj.Namespace, bj.Name)
+			return pl.StreamContainerLogs(streamCtx, podName, containerName, sinceTime, progress)
+		})
+		// Register the container's slot synchronously, in container order (this
+		// function is called per container in pod order), so a step producing no
+		// output keeps its position even though streams run concurrently. Done
+		// once per container, guarded by started.
+		if started {
+			if err := r.Publisher.PublishJobLog(ctx, buildlogs.Log{JobID: bj.Name, ContainerID: containerName}); err != nil {
+				slog.Warn("Failed to register container log slot", "container", containerName, "error", err)
+			}
+		}
+	}
 
-			if err := pl.ProcessContainerLogs(ctx, p.Name, cs.Name); err != nil {
-				slog.Error("Failed to read/publish logs", "container", cs.Name, "error", err)
-			} else {
-				cs.LogsPublished = true
+	// Persist streaming progress, throttled, so a restart re-follows from near the
+	// last published line rather than from the container's start.
+	if stream := r.logStreams().get(key); stream != nil {
+		cs.LogsStreamedUntil = throttledStreamOffset(cs.LogsStreamedUntil, stream.progress())
+	}
+
+	// Once terminated, mark logs published only after the stream has drained.
+	if terminated && !cs.LogsPublished {
+		if stream := r.logStreams().get(key); stream != nil {
+			if finished, streamErr := stream.result(); finished {
+				if streamErr == nil {
+					cs.LogsPublished = true
+				} else {
+					slog.Error("Container log stream failed; will retry", "container", cs.Name, "error", streamErr)
+				}
+				// Drop the entry either way: on success it is done; on failure the
+				// next reconcile re-establishes it (from the persisted offset).
+				r.logStreams().remove(key)
 			}
 		}
 	}
 
 	return cs
+}
+
+// throttledStreamOffset returns the LogsStreamedUntil value to persist. It keeps
+// the previously persisted value unless streaming progress has advanced by at
+// least logStreamPersistThrottle, so the field changes rarely and does not cause
+// a reconcile/etcd write storm.
+func throttledStreamOffset(persisted *metav1.Time, progress time.Time) *metav1.Time {
+	if progress.IsZero() {
+		return persisted
+	}
+	if persisted == nil || progress.Sub(persisted.Time) >= logStreamPersistThrottle {
+		t := metav1.NewTime(progress)
+		return &t
+	}
+	return persisted
 }
 
 // buildContainerStatus maps K8s container state to BuildJob ContainerStatus
