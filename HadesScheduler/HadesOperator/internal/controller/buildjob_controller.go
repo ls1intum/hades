@@ -128,14 +128,14 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// ----------------------------- 0b. If being deleted, skip (avoid recreating children) --------
 	if !bj.DeletionTimestamp.IsZero() {
-		r.logStreams().stopJob(bj.Name)
+		r.logStreams().stopJob(bj.Namespace, bj.Name)
 		return ctrl.Result{}, nil
 	}
 
 	// ----------------------------- 1. Exit if already processed ----------------------------------
 	// Only process objects that are not marked as "finalized" (i.e., not deleted)
 	if bj.Status.Phase == string(buildstatus.StatusSucceeded) || bj.Status.Phase == string(buildstatus.StatusFailed) {
-		r.logStreams().stopJob(bj.Name)
+		r.logStreams().stopJob(bj.Namespace, bj.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -148,7 +148,11 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// while a terminated container's live log stream is still publishing.
 		draining, err := r.updateContainerStatuses(ctx, &bj)
 		if err != nil {
+			// draining is unreliable when the status update failed, so requeue
+			// instead of proceeding: finalizing here could delete the pod while a
+			// container's log stream is still draining and lose its tail logs.
 			slog.Error("Failed to update container statuses", "error", err)
+			return ctrl.Result{}, fmt.Errorf("updating container statuses: %w", err)
 		}
 
 		// Job already exists, check the status of the job
@@ -193,7 +197,7 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 
 			// All logs are published; stop tracking this job's streams.
-			r.logStreams().stopJob(bj.Name)
+			r.logStreams().stopJob(bj.Namespace, bj.Name)
 
 			// If DeleteOnComplete is false, don't delete the CR, used for debugging
 			if !r.DeleteOnComplete {

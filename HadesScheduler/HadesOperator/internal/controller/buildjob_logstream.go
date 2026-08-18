@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 )
@@ -19,11 +20,17 @@ func logStreamKey(namespace, jobID, container string) string {
 	return namespace + "/" + jobID + "/" + container
 }
 
+// logStreamJobPrefix is the key prefix shared by all of a BuildJob's container
+// streams. It includes the namespace so same-named BuildJobs in different
+// namespaces (possible in cluster-wide mode) never match each other.
+func logStreamJobPrefix(namespace, jobID string) string {
+	return namespace + "/" + jobID + "/"
+}
+
 // logStream is a single running (or just-finished) container log-follow goroutine.
 type logStream struct {
 	cancel context.CancelFunc
 	done   chan struct{}
-	jobID  string
 
 	mu     sync.Mutex
 	lastTS time.Time // in-memory streaming progress
@@ -75,7 +82,7 @@ func NewLogStreamRegistry() *logStreamRegistry {
 // the stream exists. run receives a cancellable context and a progress recorder.
 // It returns true only when it actually started a new stream, so the caller can
 // perform one-time, ordered side effects (e.g. registering the container's slot).
-func (r *logStreamRegistry) ensureStarted(key, jobID string, run func(ctx context.Context, progress func(time.Time)) error) (started bool) {
+func (r *logStreamRegistry) ensureStarted(key string, run func(ctx context.Context, progress func(time.Time)) error) (started bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.streams == nil {
@@ -86,7 +93,7 @@ func (r *logStreamRegistry) ensureStarted(key, jobID string, run func(ctx contex
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &logStream{cancel: cancel, done: make(chan struct{}), jobID: jobID}
+	s := &logStream{cancel: cancel, done: make(chan struct{})}
 	r.streams[key] = s
 
 	go func() {
@@ -119,12 +126,15 @@ func (r *logStreamRegistry) remove(key string) {
 	}
 }
 
-// stopJob cancels and forgets every stream belonging to jobID.
-func (r *logStreamRegistry) stopJob(jobID string) {
+// stopJob cancels and forgets every stream belonging to the BuildJob identified
+// by namespace and jobID. Matching on the namespaced key prefix keeps same-named
+// BuildJobs in different namespaces isolated.
+func (r *logStreamRegistry) stopJob(namespace, jobID string) {
+	prefix := logStreamJobPrefix(namespace, jobID)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for key, s := range r.streams {
-		if s.jobID == jobID {
+		if strings.HasPrefix(key, prefix) {
 			s.cancel()
 			delete(r.streams, key)
 		}

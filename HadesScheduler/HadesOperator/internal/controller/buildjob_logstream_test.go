@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -52,10 +53,10 @@ func TestLogStreamRegistry_EnsureStartedIdempotentAndResult(t *testing.T) {
 		return nil
 	}
 
-	reg.ensureStarted(key, "job-1", run)
+	reg.ensureStarted(key, run)
 	<-started
 	// Second call must not start a second goroutine.
-	reg.ensureStarted(key, "job-1", func(context.Context, func(time.Time)) error {
+	reg.ensureStarted(key, func(context.Context, func(time.Time)) error {
 		t.Error("run should not be called again while the stream exists")
 		return nil
 	})
@@ -99,7 +100,7 @@ func TestLogStreamRegistry_RemoveCancelsContext(t *testing.T) {
 	key := logStreamKey("ns", "job-1", "step-1")
 
 	cancelled := make(chan struct{})
-	reg.ensureStarted(key, "job-1", func(ctx context.Context, _ func(time.Time)) error {
+	reg.ensureStarted(key, func(ctx context.Context, _ func(time.Time)) error {
 		<-ctx.Done()
 		close(cancelled)
 		return ctx.Err()
@@ -123,17 +124,84 @@ func TestLogStreamRegistry_StopJobCancelsAllForJob(t *testing.T) {
 		<-ctx.Done()
 		return ctx.Err()
 	}
-	reg.ensureStarted(logStreamKey("ns", "job-1", "step-1"), "job-1", block)
-	reg.ensureStarted(logStreamKey("ns", "job-1", "step-2"), "job-1", block)
-	reg.ensureStarted(logStreamKey("ns", "job-2", "step-1"), "job-2", block)
+	reg.ensureStarted(logStreamKey("ns", "job-1", "step-1"), block)
+	reg.ensureStarted(logStreamKey("ns", "job-1", "step-2"), block)
+	reg.ensureStarted(logStreamKey("ns", "job-2", "step-1"), block)
+	// Same job name in a different namespace must not be affected (cluster-wide mode).
+	reg.ensureStarted(logStreamKey("other-ns", "job-1", "step-1"), block)
 
-	reg.stopJob("job-1")
+	reg.stopJob("ns", "job-1")
 
 	if reg.get(logStreamKey("ns", "job-1", "step-1")) != nil || reg.get(logStreamKey("ns", "job-1", "step-2")) != nil {
 		t.Fatal("expected all job-1 streams removed")
 	}
 	if reg.get(logStreamKey("ns", "job-2", "step-1")) == nil {
 		t.Fatal("expected job-2 stream to remain")
+	}
+	if reg.get(logStreamKey("other-ns", "job-1", "step-1")) == nil {
+		t.Fatal("expected same-named job in another namespace to remain (no cross-namespace cancel)")
+	}
+}
+
+// A stream that finishes with an error can be dropped and re-established, which is
+// how the operator retries a follow that failed while its container is still
+// running (via ensureStarted on the next reconcile).
+func TestLogStreamRegistry_RestartAfterFailure(t *testing.T) {
+	reg := NewLogStreamRegistry()
+	key := logStreamKey("ns", "job-1", "step-1")
+
+	var runs int32
+	if !reg.ensureStarted(key, func(context.Context, func(time.Time)) error {
+		atomic.AddInt32(&runs, 1)
+		return errors.New("stream failed")
+	}) {
+		t.Fatal("first ensureStarted should start a stream")
+	}
+
+	// Wait for the first run to finish (with error).
+	s := reg.get(key)
+	deadline := time.After(2 * time.Second)
+	for {
+		if finished, _ := s.result(); finished {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("stream did not finish")
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+
+	// While the entry is still tracked, ensureStarted is a no-op (would leave a
+	// failed stream dead) - the caller must remove it first.
+	if reg.ensureStarted(key, func(context.Context, func(time.Time)) error { return nil }) {
+		t.Fatal("ensureStarted should not restart while the finished entry is still tracked")
+	}
+	reg.remove(key)
+	if !reg.ensureStarted(key, func(context.Context, func(time.Time)) error {
+		atomic.AddInt32(&runs, 1)
+		return nil
+	}) {
+		t.Fatal("ensureStarted should restart after the failed entry is removed")
+	}
+
+	// Wait for the restarted stream to run before asserting.
+	s2 := reg.get(key)
+	deadline = time.After(2 * time.Second)
+	for {
+		if finished, _ := s2.result(); finished {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("restarted stream did not finish")
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	if got := atomic.LoadInt32(&runs); got != 2 {
+		t.Fatalf("expected 2 runs (fail then restart), got %d", got)
 	}
 }
 
@@ -142,7 +210,7 @@ func TestLogStream_ResultReportsError(t *testing.T) {
 	key := logStreamKey("ns", "job-1", "step-1")
 	wantErr := errors.New("boom")
 
-	reg.ensureStarted(key, "job-1", func(context.Context, func(time.Time)) error {
+	reg.ensureStarted(key, func(context.Context, func(time.Time)) error {
 		return wantErr
 	})
 

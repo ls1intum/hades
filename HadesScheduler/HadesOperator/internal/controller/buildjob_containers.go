@@ -216,6 +216,22 @@ func (r *BuildJobReconciler) updateContainerStateMap(ctx context.Context, bj *bu
 	terminated := cs.State == buildv1.ContainerStateSucceeded || cs.State == buildv1.ContainerStateFailed
 	key := logStreamKey(bj.Namespace, bj.Name, cs.Name)
 
+	// If the stream for a still-running container has already finished, it must
+	// have failed: a healthy follow stays open until the container stops. Drop the
+	// entry so the block below re-establishes it (from the persisted offset)
+	// instead of leaving it dead until termination; the running-job requeue drives
+	// the retry.
+	if !terminated && !cs.LogsPublished {
+		if stream := r.logStreams().get(key); stream != nil {
+			if finished, streamErr := stream.result(); finished {
+				if streamErr != nil {
+					slog.Warn("Container log stream failed while running; restarting", "container", cs.Name, "error", streamErr)
+				}
+				r.logStreams().remove(key)
+			}
+		}
+	}
+
 	// Start (idempotently) the live log stream once the container is running or
 	// terminated and its logs have not yet been fully published. The stream
 	// captures LogsStreamedUntil at start time so a re-established stream (after
@@ -224,7 +240,7 @@ func (r *BuildJobReconciler) updateContainerStateMap(ctx context.Context, bj *bu
 		podName := p.Name
 		sinceTime := cs.LogsStreamedUntil
 		containerName := cs.Name
-		started := r.logStreams().ensureStarted(key, bj.Name, func(streamCtx context.Context, progress func(time.Time)) error {
+		started := r.logStreams().ensureStarted(key, func(streamCtx context.Context, progress func(time.Time)) error {
 			pl := r.podLogReader(bj.Namespace, bj.Name)
 			return pl.StreamContainerLogs(streamCtx, podName, containerName, sinceTime, progress)
 		})
