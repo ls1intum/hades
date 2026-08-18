@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	logs "github.com/ls1intum/hades/shared/buildlogs"
+	logs "github.com/hades-scheduler/hades/shared/buildlogs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

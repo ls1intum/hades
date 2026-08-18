@@ -31,7 +31,7 @@ Traefik handles:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/ls1intum/hades.git
+git clone https://github.com/Hades-Scheduler/hades.git
 cd hades
 ```
 

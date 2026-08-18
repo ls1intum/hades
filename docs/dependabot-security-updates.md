@@ -1,6 +1,6 @@
 # Dependabot security updates (2026-08-11)
 
-Resolves the 18 open Dependabot alerts on `ls1intum/hades`. 16 are fixed; 2 have
+Resolves the 18 open Dependabot alerts on `Hades-Scheduler/hades`. 16 are fixed; 2 have
 no patched release in existence and are documented below.
 
 ## Go: migrate off `github.com/docker/docker`

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ls1intum/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/payload"
 	"github.com/nats-io/nats.go/jetstream"
 )
 

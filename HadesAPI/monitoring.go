@@ -6,8 +6,8 @@ import (
 
 	"log/slog"
 
-	"github.com/ls1intum/hades/shared/payload"
-	"github.com/ls1intum/hades/shared/redact"
+	"github.com/hades-scheduler/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/redact"
 )
 
 // PayloadInput constrains the accepted input types for SafePayloadFormat.

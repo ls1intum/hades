@@ -53,7 +53,7 @@ hadesOperator:
 By default the Operator is scoped to the release namespace. To schedule jobs across multiple namespaces:
 
 ```bash
-helm upgrade hades oci://ghcr.io/ls1intum/charts/hades --version <version> -n hades \
+helm upgrade hades oci://ghcr.io/hades-scheduler/charts/hades --version <version> -n hades \
   --set hadesOperator.clusterWide=true
 ```
 
@@ -62,7 +62,7 @@ This switches the `Role`/`RoleBinding` to a `ClusterRole`/`ClusterRoleBinding`.
 ## Upgrade & Rollback
 
 ```bash
-helm upgrade hades oci://ghcr.io/ls1intum/charts/hades --version <version> -n hades
+helm upgrade hades oci://ghcr.io/hades-scheduler/charts/hades --version <version> -n hades
 
 helm history hades -n hades
 helm rollback hades <revision> -n hades

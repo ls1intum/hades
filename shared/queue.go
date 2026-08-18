@@ -3,7 +3,7 @@ package hades
 import (
 	"context"
 
-	"github.com/ls1intum/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/payload"
 )
 
 // JobPublisher manages job publishing.

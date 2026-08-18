@@ -3,8 +3,8 @@ package docker
 import (
 	"fmt"
 
-	"github.com/ls1intum/hades/shared/buildlogs"
-	"github.com/ls1intum/hades/shared/buildstatus"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
 	"github.com/moby/moby/client"
 )
 

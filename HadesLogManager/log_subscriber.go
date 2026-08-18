@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"sync"
 
-	logs "github.com/ls1intum/hades/shared/buildlogs"
-	"github.com/ls1intum/hades/shared/buildstatus"
+	logs "github.com/hades-scheduler/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
 	"github.com/nats-io/nats.go"
 )
 

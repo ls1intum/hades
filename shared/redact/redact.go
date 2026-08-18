@@ -24,7 +24,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ls1intum/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/payload"
 )
 
 // Mask is the placeholder shown in place of a redacted value.

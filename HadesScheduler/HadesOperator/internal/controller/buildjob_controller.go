@@ -36,11 +36,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
-	"github.com/ls1intum/hades/hadesScheduler/log"
-	hades "github.com/ls1intum/hades/shared"
-	"github.com/ls1intum/hades/shared/buildlogs"
-	"github.com/ls1intum/hades/shared/buildstatus"
+	buildv1 "github.com/hades-scheduler/hades/HadesScheduler/HadesOperator/api/v1"
+	"github.com/hades-scheduler/hades/hadesScheduler/log"
+	hades "github.com/hades-scheduler/hades/shared"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
 	"github.com/nats-io/nats.go"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

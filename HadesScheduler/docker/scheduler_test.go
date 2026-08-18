@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ls1intum/hades/hadesScheduler/log"
-	"github.com/ls1intum/hades/shared/buildlogs"
-	"github.com/ls1intum/hades/shared/payload"
+	"github.com/hades-scheduler/hades/hadesScheduler/log"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/payload"
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/require"
 )
@@ -137,6 +137,6 @@ func TestPullImagesReportsErrorForMissingImage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	err := pullImages(ctx, scheduler.cli, "ls1intum/hades-no-such-image:definitely-missing")
+	err := pullImages(ctx, scheduler.cli, "hades-scheduler/hades-no-such-image:definitely-missing")
 	require.Error(t, err)
 }

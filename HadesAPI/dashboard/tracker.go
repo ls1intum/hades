@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	hades "github.com/ls1intum/hades/shared"
-	"github.com/ls1intum/hades/shared/buildstatus"
+	hades "github.com/hades-scheduler/hades/shared"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
 )
 
 // cleanupInterval bounds how often finished jobs are swept from the tracker.

@@ -15,13 +15,13 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://ls1intum.github.io',
+  url: 'https://hades-scheduler.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   baseUrl: '/hades/',
   trailingSlash: false,
 
   // GitHub pages deployment config.
-  organizationName: 'ls1intum',
+  organizationName: 'Hades-Scheduler',
   projectName: 'hades',
 
   onBrokenLinks: 'throw',
@@ -50,7 +50,7 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/ls1intum/hades/edit/main/website/',
+          editUrl: 'https://github.com/Hades-Scheduler/hades/edit/main/website/',
         },
         blog: {
           path: 'release',
@@ -96,7 +96,7 @@ const config: Config = {
         },
         {to: 'releases', label: 'Releases', position: 'left'},
         {
-          href: 'https://github.com/ls1intum/hades',
+          href: 'https://github.com/Hades-Scheduler/hades',
           label: 'GitHub',
           position: 'right',
         },
@@ -116,13 +116,13 @@ const config: Config = {
         {
           title: 'Project',
           items: [
-            {label: 'GitHub', href: 'https://github.com/ls1intum/hades'},
+            {label: 'GitHub', href: 'https://github.com/Hades-Scheduler/hades'},
             {label: 'Releases', to: '/releases'},
-            {label: 'License (MIT)', href: 'https://github.com/ls1intum/hades/blob/main/LICENSE'},
+            {label: 'License (MIT)', href: 'https://github.com/Hades-Scheduler/hades/blob/main/LICENSE'},
           ],
         },
       ],
-      copyright: `Copyright © ${'2026'} ls1intum. Built with Docusaurus.`,
+      copyright: `Copyright © ${'2026'} Hades-Scheduler. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

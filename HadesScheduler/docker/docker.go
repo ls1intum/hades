@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/ls1intum/hades/hadesScheduler/log"
-	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/hadesScheduler/log"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/jsonmessage"

@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ls1intum/hades/hadesAPI/dashboard"
-	hades "github.com/ls1intum/hades/shared"
-	"github.com/ls1intum/hades/shared/buildlogs"
-	"github.com/ls1intum/hades/shared/buildstatus"
-	"github.com/ls1intum/hades/shared/payload"
+	"github.com/hades-scheduler/hades/hadesAPI/dashboard"
+	hades "github.com/hades-scheduler/hades/shared"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
+	"github.com/hades-scheduler/hades/shared/payload"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/gin-gonic/gin"
@@ -28,7 +28,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	hadesnats "github.com/ls1intum/hades/shared/nats"
+	hadesnats "github.com/hades-scheduler/hades/shared/nats"
 )
 
 const NATS_IMAGE = "nats:2.11.4"

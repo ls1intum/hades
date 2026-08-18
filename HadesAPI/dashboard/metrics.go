@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	hades "github.com/ls1intum/hades/shared"
+	hades "github.com/hades-scheduler/hades/shared"
 )
 
 // throughputWindow is the rolling window used for the jobs/min throughput stat.

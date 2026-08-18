@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/ls1intum/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
 	"github.com/nats-io/nats.go/jetstream"
 )
 

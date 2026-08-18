@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ls1intum/hades/shared/buildlogs"
-	hadesnats "github.com/ls1intum/hades/shared/nats"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
+	hadesnats "github.com/hades-scheduler/hades/shared/nats"
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"

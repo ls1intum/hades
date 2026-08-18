@@ -1,6 +1,6 @@
 services:
   hadesAPI:
-    image: ghcr.io/ls1intum/hades/hades-api:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ghcr.io/hades-scheduler/hades/hades-api:${IMAGE_TAG:?IMAGE_TAG is required}
     expose:
       - "8080"
     networks:
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
 
   hadesScheduler:
-    image: ghcr.io/ls1intum/hades/hades-scheduler:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ghcr.io/hades-scheduler/hades/hades-scheduler:${IMAGE_TAG:?IMAGE_TAG is required}
     volumes:
       - type: bind
         source: /var/run/docker.sock
@@ -57,7 +57,7 @@ services:
     restart: unless-stopped
 
   hadesLogManager:
-    image: ghcr.io/ls1intum/hades/hades-log-manager:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ghcr.io/hades-scheduler/hades/hades-log-manager:${IMAGE_TAG:?IMAGE_TAG is required}
     expose:
       - "8081"
     networks:

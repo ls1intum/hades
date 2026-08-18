@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	_ "github.com/ls1intum/hades/hadesLogManager/docs" // generated OpenAPI spec (make docs-api)
-	"github.com/ls1intum/hades/shared/buildlogs"
-	hadesnats "github.com/ls1intum/hades/shared/nats"
-	"github.com/ls1intum/hades/shared/utils"
+	_ "github.com/hades-scheduler/hades/hadesLogManager/docs" // generated OpenAPI spec (make docs-api)
+	"github.com/hades-scheduler/hades/shared/buildlogs"
+	hadesnats "github.com/hades-scheduler/hades/shared/nats"
+	"github.com/hades-scheduler/hades/shared/utils"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	swaggerFiles "github.com/swaggo/files"

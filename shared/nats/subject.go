@@ -3,7 +3,7 @@ package nats
 import (
 	"fmt"
 
-	hades "github.com/ls1intum/hades/shared"
+	hades "github.com/hades-scheduler/hades/shared"
 )
 
 // natsSubjectBase is the base NATS subject for all job messages

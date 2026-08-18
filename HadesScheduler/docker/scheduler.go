@@ -12,10 +12,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ls1intum/hades/hadesScheduler/log"
-	"github.com/ls1intum/hades/shared/buildlogs"
-	"github.com/ls1intum/hades/shared/buildstatus"
-	"github.com/ls1intum/hades/shared/payload"
+	"github.com/hades-scheduler/hades/hadesScheduler/log"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/buildstatus"
+	"github.com/hades-scheduler/hades/shared/payload"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 )

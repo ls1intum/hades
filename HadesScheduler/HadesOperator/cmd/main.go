@@ -20,12 +20,12 @@ import (
 	"flag"
 	"os"
 
-	"github.com/ls1intum/hades/hadesScheduler/log"
-	"github.com/ls1intum/hades/shared/utils"
+	"github.com/hades-scheduler/hades/hadesScheduler/log"
+	"github.com/hades-scheduler/hades/shared/utils"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	hadesnats "github.com/ls1intum/hades/shared/nats"
+	hadesnats "github.com/hades-scheduler/hades/shared/nats"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -36,8 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	buildv1 "github.com/ls1intum/hades/HadesScheduler/HadesOperator/api/v1"
-	"github.com/ls1intum/hades/HadesScheduler/HadesOperator/internal/controller"
+	buildv1 "github.com/hades-scheduler/hades/HadesScheduler/HadesOperator/api/v1"
+	"github.com/hades-scheduler/hades/HadesScheduler/HadesOperator/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 

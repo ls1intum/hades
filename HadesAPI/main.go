@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ls1intum/hades/hadesAPI/dashboard"
-	hadesnats "github.com/ls1intum/hades/shared/nats"
-	"github.com/ls1intum/hades/shared/utils"
+	"github.com/hades-scheduler/hades/hadesAPI/dashboard"
+	hadesnats "github.com/hades-scheduler/hades/shared/nats"
+	"github.com/hades-scheduler/hades/shared/utils"
 )
 
 // HadesAPIConfig holds the API server configuration. An empty AuthKey disables

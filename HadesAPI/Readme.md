@@ -17,7 +17,7 @@ It does **not** run jobs itself and holds no state.
 | `GET` | `/ping` | none | Liveness probe (`{"status":"ok","timestamp":...}`). |
 | `POST` | `/build` | Basic (when `AUTH_KEY` set) | Validate and enqueue a job. Returns the assigned `job_id`. |
 
-The full request/response contract and the job payload schema are in [docs/api.md](../docs/api.md) and the [published API reference](https://ls1intum.github.io/hades/docs/reference/api).
+The full request/response contract and the job payload schema are in [docs/api.md](../docs/api.md) and the [published API reference](https://hades-scheduler.github.io/hades/docs/reference/api).
 
 ### Example
 

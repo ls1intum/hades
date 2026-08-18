@@ -3,8 +3,8 @@ package log
 import (
 	"context"
 
-	logs "github.com/ls1intum/hades/shared/buildlogs"
-	status "github.com/ls1intum/hades/shared/buildstatus"
+	logs "github.com/hades-scheduler/hades/shared/buildlogs"
+	status "github.com/hades-scheduler/hades/shared/buildstatus"
 )
 
 // NoopPublisher is a Publisher implementation that does nothing.

@@ -8,7 +8,7 @@ Welcome to Hades, a robust job scheduler designed with scalability in mind. Hade
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **📖 Documentation:** the full docs live at **[ls1intum.github.io/hades](https://ls1intum.github.io/hades/)** (a Docusaurus site, source in [`website/`](./website)). The in-repo [`docs/`](./docs/README.md) index and per-component READMEs cover the same material for offline/agent use.
+> **📖 Documentation:** the full docs live at **[hades-scheduler.github.io/hades](https://hades-scheduler.github.io/hades/)** (a Docusaurus site, source in [`website/`](./website)). The in-repo [`docs/`](./docs/README.md) index and per-component READMEs cover the same material for offline/agent use.
 
 ## Design Goals
 
@@ -107,7 +107,7 @@ For production deployments, Hades is designed to run natively within a Kubernete
    
    ```fish
    # Install the published chart from GHCR (recommended)
-   helm upgrade --install hades oci://ghcr.io/ls1intum/charts/hades \
+   helm upgrade --install hades oci://ghcr.io/hades-scheduler/charts/hades \
      --version 0.2.0 -n hades --create-namespace
    ```
 
@@ -122,7 +122,7 @@ For production deployments, Hades is designed to run natively within a Kubernete
    > **Note:** Helm does not upgrade CRDs after the first install. When a release
    > changes the `BuildJob` CRD, apply it manually from the same chart version you
    > installed (not from the mutable `main` branch):
-   > `helm show crds oci://ghcr.io/ls1intum/charts/hades --version 0.2.0 | kubectl apply -f -`
+   > `helm show crds oci://ghcr.io/hades-scheduler/charts/hades --version 0.2.0 | kubectl apply -f -`
 
 3. **Detailed Documentation**: For advanced configuration (Ingress, TLS, resource limits) and step-by-step setup, please refer to the: [Hades Helm Chart Guide](./helm/hades/Readme.md)
 
@@ -374,7 +374,7 @@ See the `ansible/hades/README.md` file for more details.
 The chart is published to GHCR as an OCI artifact by
 `.github/workflows/release-chart.yml`. It runs on pushes to `main` that touch
 `helm/**` (or via `workflow_dispatch`) and publishes to
-`oci://ghcr.io/ls1intum/charts/hades`.
+`oci://ghcr.io/hades-scheduler/charts/hades`.
 
 Checklist when cutting a chart release:
 
@@ -388,7 +388,7 @@ Checklist when cutting a chart release:
    applied on first install and never on `helm upgrade`. If a release changes
    the `BuildJob` CRD, bump the chart version, note it in the release, and tell
    users to apply the CRD from the matching chart version on existing clusters:
-   `helm show crds oci://ghcr.io/ls1intum/charts/hades --version <version> | kubectl apply -f -`.
+   `helm show crds oci://ghcr.io/hades-scheduler/charts/hades --version <version> | kubectl apply -f -`.
 4. **Subchart dependencies** (currently `nats`): if you change a dependency
    version in `Chart.yaml`, run `helm dependency update helm/hades` and commit
    the updated `Chart.lock`. CI vendors the subchart at package time; the

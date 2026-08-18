@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"maps"
 
-	"github.com/ls1intum/hades/shared/buildlogs"
-	"github.com/ls1intum/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/buildlogs"
+	"github.com/hades-scheduler/hades/shared/payload"
 	"github.com/moby/moby/client"
 )
 
