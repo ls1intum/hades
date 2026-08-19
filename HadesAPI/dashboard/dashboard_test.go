@@ -127,6 +127,52 @@ func TestLoginThenSessionAndLogout(t *testing.T) {
 	}
 }
 
+func TestLoginAndSessionReturnVersion(t *testing.T) {
+	s := testServer(t, true)
+	s.cfg.Version = "1.2.3"
+	r := newRouter(s)
+
+	// Login response carries the deployed version.
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"username":"admin","password":"`+testPassword+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("login failed: %d %s", w.Code, w.Body.String())
+	}
+	var loginResp struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &loginResp); err != nil {
+		t.Fatal(err)
+	}
+	if loginResp.Version != "1.2.3" {
+		t.Fatalf("login version = %q, want 1.2.3", loginResp.Version)
+	}
+
+	var cookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == sessionCookieName {
+			cookie = c
+		}
+	}
+
+	// Session response carries it too.
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/session", nil)
+	req.AddCookie(cookie)
+	r.ServeHTTP(w, req)
+	var sessionResp struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &sessionResp); err != nil {
+		t.Fatal(err)
+	}
+	if sessionResp.Version != "1.2.3" {
+		t.Fatalf("session version = %q, want 1.2.3", sessionResp.Version)
+	}
+}
+
 func TestExpiredSessionRejected(t *testing.T) {
 	s := testServer(t, true)
 	s.auth.ttl = -time.Minute // issue already-expired tokens

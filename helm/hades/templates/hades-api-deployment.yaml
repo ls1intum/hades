@@ -49,6 +49,10 @@ spec:
               value: {{ .Values.debug | quote }}
             - name: NATS_URL
               value: "nats://{{ .Values.nats.host }}:{{ .Values.nats.port }}"
+            # Deployed version shown in the dashboard header. Derived from the
+            # image tag so it always matches the running build.
+            - name: HADES_VERSION
+              value: {{ .Values.hadesApi.image.tag | quote }}
             {{- if .Values.hadesApi.authKeySecret }}
             - name: AUTH_KEY
               valueFrom:

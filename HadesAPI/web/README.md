@@ -2,7 +2,9 @@
 
 A React + TypeScript single-page app (Vite, Tailwind v4, shadcn/ui) that provides
 a secured, live operator dashboard for Hades: job list, job detail with redacted
-metadata and logs, and system metrics.
+metadata and logs, and system metrics. The header shows the deployed version,
+which the API returns in the `/api/session` and `/api/login` responses from the
+`HADES_VERSION` env var (set from the deployed container image tag; `dev` locally).
 
 It is **embedded into the `HadesAPI` binary** (`//go:embed` of `./dist`) and
 served from the API origin, so in production the app talks to the same host over

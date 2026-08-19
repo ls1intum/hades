@@ -44,3 +44,32 @@ describe("api 401 handling", () => {
     expect(fired).toBe(false);
   });
 });
+
+describe("api version", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("parses version from the session response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => res(200, { username: "admin", version: "1.0.0" })),
+    );
+    await expect(api.session()).resolves.toEqual({
+      username: "admin",
+      version: "1.0.0",
+    });
+  });
+
+  it("parses version from the login response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => res(200, { username: "admin", version: "latest" })),
+    );
+    await expect(api.login("admin", "pw")).resolves.toEqual({
+      username: "admin",
+      version: "latest",
+    });
+  });
+});
