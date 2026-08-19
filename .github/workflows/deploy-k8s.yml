@@ -113,17 +113,34 @@ jobs:
           helm dependency build helm/hades
 
       - name: Deploy with Helm
+        env:
+          # Pass the (user-supplied) image tag through the environment and expand it as a
+          # quoted shell variable, so a value with shell metacharacters can't be injected
+          # into the rendered script.
+          IMAGE_TAG: ${{ inputs.image-tag }}
         run: |
           set -euo pipefail
           helm upgrade --install "${{ inputs.release-name }}" helm/hades \
             --namespace "${{ inputs.namespace }}" --create-namespace \
             -f helm/hades/values.yaml \
             -f "helm/hades/${{ inputs.values-file }}" \
-            --set-string hadesApi.image.tag="${{ inputs.image-tag }}" \
-            --set-string hadesScheduler.image.tag="${{ inputs.image-tag }}" \
-            --set-string hadesOperator.image.tag="${{ inputs.image-tag }}" \
-            --set-string hadesLogManager.image.tag="${{ inputs.image-tag }}" \
+            --set-string hadesApi.image.tag="$IMAGE_TAG" \
+            --set-string hadesScheduler.image.tag="$IMAGE_TAG" \
+            --set-string hadesOperator.image.tag="$IMAGE_TAG" \
+            --set-string hadesLogManager.image.tag="$IMAGE_TAG" \
             --atomic --timeout 10m
+
+      - name: Roll the API to pick up Secret changes
+        # The API reads AUTH_KEY and the dashboard credentials as env vars, resolved only
+        # at pod start. When a redeploy rotates those Secrets without changing the image
+        # tag, Helm leaves the Deployment untouched and the running pods keep the old
+        # values, so restart the API explicitly.
+        run: |
+          set -euo pipefail
+          kubectl rollout restart deployment/hades-api \
+            --namespace "${{ inputs.namespace }}"
+          kubectl rollout status deployment/hades-api \
+            --namespace "${{ inputs.namespace }}" --timeout=5m
 
       - name: Deployment summary
         run: |
