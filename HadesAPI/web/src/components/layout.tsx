@@ -11,17 +11,28 @@ const navItems = [
   { to: "/jobs", label: "Jobs", icon: ListChecks, end: false },
 ];
 
+/** Prefix a leading "v" only for numeric version tags (e.g. 1.0.0 -> v1.0.0);
+ *  leave tags like "latest", "dev", "v1.0.0", or SHAs untouched. */
+export function formatVersion(version: string): string {
+  return /^\d/.test(version) ? `v${version}` : version;
+}
+
 export function Layout() {
-  const { username, logout } = useAuth();
+  const { username, version, logout } = useAuth();
   const connected = useStream(true);
 
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
-          <div className="flex items-center gap-2 font-semibold">
-            <Activity className="size-5" />
+          <div className="flex items-baseline gap-2 font-semibold">
+            <Activity className="size-5 self-center" />
             <span>Hades</span>
+            {version && (
+              <span className="text-xs font-normal text-muted-foreground">
+                {formatVersion(version)}
+              </span>
+            )}
           </div>
           <nav className="flex items-center gap-1">
             {navItems.map((item) => (
