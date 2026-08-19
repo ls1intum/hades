@@ -30,6 +30,7 @@ type JobSummary struct {
 	Name       string     `json:"name,omitempty"`
 	Priority   string     `json:"priority,omitempty"`
 	Status     string     `json:"status"`
+	Reason     string     `json:"reason,omitempty"`
 	StepCount  int        `json:"stepCount,omitempty"`
 	QueuedAt   *time.Time `json:"queuedAt,omitempty"`
 	StartedAt  *time.Time `json:"startedAt,omitempty"`
@@ -44,6 +45,7 @@ type jobRecord struct {
 	priority   hades.Priority
 	stepCount  int
 	status     buildstatus.JobStatus
+	reason     string
 	queuedAt   time.Time
 	startedAt  time.Time
 	finishedAt time.Time
@@ -57,6 +59,7 @@ func (r *jobRecord) dto() JobSummary {
 		Priority:  string(r.priority),
 		StepCount: r.stepCount,
 		Status:    r.status.String(),
+		Reason:    r.reason,
 	}
 	if !r.queuedAt.IsZero() {
 		t := r.queuedAt
@@ -130,8 +133,10 @@ func (t *tracker) enqueue(jobID, name string, stepCount int, priority hades.Prio
 	return rec.dto()
 }
 
-// observe applies a status transition learned from the live subscription.
-func (t *tracker) observe(jobID string, status buildstatus.JobStatus) JobSummary {
+// observe applies a status transition learned from the live subscription. An
+// optional reason (e.g. "ImagePullBackOff: ...") explaining the status is stored
+// when present and retained across later empty-reason updates.
+func (t *tracker) observe(jobID string, status buildstatus.JobStatus, reason string) JobSummary {
 	now := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -142,6 +147,9 @@ func (t *tracker) observe(jobID string, status buildstatus.JobStatus) JobSummary
 		t.enforceInsertCapLocked()
 	}
 	rec.status = status
+	if reason != "" {
+		rec.reason = reason
+	}
 	rec.updatedAt = now
 	switch status {
 	case buildstatus.StatusQueued:

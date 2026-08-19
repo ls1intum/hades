@@ -22,6 +22,6 @@ func (np *NoopPublisher) PublishJobLog(ctx context.Context, buildJobLog logs.Log
 }
 
 // PublishJobStatus does nothing and always returns nil
-func (np *NoopPublisher) PublishJobStatus(ctx context.Context, status status.JobStatus, jobID string) error {
+func (np *NoopPublisher) PublishJobStatus(ctx context.Context, status status.JobStatus, jobID string, reason ...string) error {
 	return nil
 }

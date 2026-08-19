@@ -16,9 +16,14 @@ import (
 	"github.com/hades-scheduler/hades/shared/buildlogs"
 	"github.com/hades-scheduler/hades/shared/buildstatus"
 	"github.com/hades-scheduler/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/redact"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 )
+
+// maxStatusReasonLen caps the failure reason attached to a status event so a
+// verbose executor error stays within NATS header limits.
+const maxStatusReasonLen = 500
 
 // Options holds the per-scheduler Docker execution settings applied to every
 // step container (script shell, resource limits, autoremove, and the per-job
@@ -143,8 +148,15 @@ func (d *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) e
 
 	err := dockerJob.execute(ctx)
 	if err != nil {
-		if err := d.statusPublisher.PublishJobStatus(ctx, buildstatus.StatusFailed, job.ID.String()); err != nil {
-			jobLogger.Warn("failed to publish failed status", "error", err)
+		// Surface why the job failed (e.g. an image pull error) to the dashboard.
+		// Redact secret-looking tokens and cap the length so a verbose daemon error
+		// stays within NATS header limits.
+		reason := redact.Default().Text(err.Error())
+		if runes := []rune(reason); len(runes) > maxStatusReasonLen {
+			reason = string(runes[:maxStatusReasonLen]) + "…"
+		}
+		if perr := d.statusPublisher.PublishJobStatus(ctx, buildstatus.StatusFailed, job.ID.String(), reason); perr != nil {
+			jobLogger.Warn("failed to publish failed status", "error", perr)
 		}
 		jobLogger.Error("Failed to execute job", "error", err)
 		return err
