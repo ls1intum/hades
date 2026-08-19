@@ -15,10 +15,18 @@ import (
 // in sync.
 type JobStatus string
 
-// StatusPublisher publishes job status transitions to NATS JetStream.
+// StatusPublisher publishes job status transitions to NATS JetStream. An
+// optional reason may accompany a status (typically a terminal Failed) to
+// explain it, e.g. "ImagePullBackOff: ...". Only the first reason is used.
 type StatusPublisher interface {
-	PublishJobStatus(ctx context.Context, status JobStatus, jobID string) error
+	PublishJobStatus(ctx context.Context, status JobStatus, jobID string, reason ...string) error
 }
+
+// ReasonHeader is the NATS message header carrying an optional human-readable
+// reason for a status transition (e.g. why a job Failed). The message payload
+// stays the bare job ID for backward compatibility, so subscribers that only
+// read the payload (e.g. HadesLogManager) are unaffected.
+const ReasonHeader = "X-Hades-Reason"
 
 // The job lifecycle statuses. Queued and Running are transient; Succeeded,
 // Failed, and Stopped are terminal.
@@ -52,4 +60,16 @@ func (js JobStatus) IsValid() bool {
 // StatusSubject returns the NATS subject for publishing the given status.
 func StatusSubject(status JobStatus) string {
 	return fmt.Sprintf(StatusSubjectFormat, status)
+}
+
+// FirstReason returns the first non-empty reason from a variadic reason list,
+// or "" if none was provided. Publishers use it to normalize the optional
+// PublishJobStatus reason argument.
+func FirstReason(reason ...string) string {
+	for _, r := range reason {
+		if r != "" {
+			return r
+		}
+	}
+	return ""
 }

@@ -70,3 +70,23 @@ func TestJobStatus_IsValid(t *testing.T) {
 		})
 	}
 }
+
+func TestFirstReason(t *testing.T) {
+	tests := []struct {
+		name    string
+		reasons []string
+		want    string
+	}{
+		{"none", nil, ""},
+		{"single", []string{"ImagePullBackOff"}, "ImagePullBackOff"},
+		{"skips empty", []string{"", "boom"}, "boom"},
+		{"all empty", []string{"", ""}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FirstReason(tt.reasons...); got != tt.want {
+				t.Fatalf("FirstReason(%v) = %q, want %q", tt.reasons, got, tt.want)
+			}
+		})
+	}
+}

@@ -170,7 +170,7 @@ func TestListJobsReflectsTracker(t *testing.T) {
 	s := testServer(t, true)
 	r := newRouter(s)
 	s.tracker.enqueue("job-1", "build", 3, hades.HighPriority)
-	s.tracker.observe("job-1", buildstatus.StatusRunning)
+	s.tracker.observe("job-1", buildstatus.StatusRunning, "")
 
 	cookie := login(t, r)
 	w := httptest.NewRecorder()
@@ -348,9 +348,26 @@ func TestJobLogsRejectsNonUUID(t *testing.T) {
 	}
 }
 
+func TestTrackerObserveReason(t *testing.T) {
+	tr := newTracker(time.Hour)
+	// A reason attached to a Failed transition is surfaced on the summary.
+	sum := tr.observe("j", buildstatus.StatusFailed, "ImagePullBackOff: back-off")
+	if sum.Status != "Failed" {
+		t.Fatalf("status = %q, want Failed", sum.Status)
+	}
+	if sum.Reason != "ImagePullBackOff: back-off" {
+		t.Fatalf("reason = %q, want the ImagePullBackOff message", sum.Reason)
+	}
+	// A later empty-reason update must not wipe the stored reason.
+	sum = tr.observe("j", buildstatus.StatusFailed, "")
+	if sum.Reason != "ImagePullBackOff: back-off" {
+		t.Fatalf("reason was cleared by an empty update: %q", sum.Reason)
+	}
+}
+
 func TestTrackerSweep(t *testing.T) {
 	tr := newTracker(time.Millisecond)
-	tr.observe("j", buildstatus.StatusSucceeded)
+	tr.observe("j", buildstatus.StatusSucceeded, "")
 	// Force updatedAt into the past.
 	tr.mu.Lock()
 	tr.jobs["j"].updatedAt = time.Now().Add(-time.Hour)

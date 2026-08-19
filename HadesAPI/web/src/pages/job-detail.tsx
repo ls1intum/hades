@@ -64,6 +64,12 @@ export function JobDetailPage() {
             </div>
           </div>
 
+          {job.data.reason && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {job.data.reason}
+            </div>
+          )}
+
           <div className="grid gap-3 text-sm sm:grid-cols-3">
             <TimeField label="Queued" value={formatTime(job.data.queuedAt)} />
             <TimeField label="Started" value={formatTime(job.data.startedAt)} />

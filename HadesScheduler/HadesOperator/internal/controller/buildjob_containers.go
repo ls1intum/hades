@@ -132,7 +132,7 @@ func (r *BuildJobReconciler) logsDrained(ctx context.Context, bj *buildv1.BuildJ
 // least one container has terminated but its live log stream has not finished
 // publishing, signalling the caller to requeue so the job is not finalized (and
 // its pod deleted) before the tail logs are captured.
-func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) (draining bool, err error) {
+func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *buildv1.BuildJob) (draining bool, pod *corev1.Pod, err error) {
 	slog.Info("Updating container statuses for BuildJob", "buildJob", bj.Name)
 
 	pl := r.podLogReader(bj.Namespace, bj.Name)
@@ -140,12 +140,12 @@ func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *bu
 	podName, err := pl.ResolvePodName(ctx)
 	if err != nil {
 		slog.Error("Failed to resolve pod name", "error", err)
-		return false, err
+		return false, nil, err
 	}
 
 	p, err := r.K8sClient.CoreV1().Pods(bj.Namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -196,7 +196,48 @@ func (r *BuildJobReconciler) updateContainerStatuses(ctx context.Context, bj *bu
 		fresh.Status.PodName = p.Name
 		return r.Status().Update(ctx, &fresh)
 	})
-	return draining, err
+	return draining, p, err
+}
+
+// terminalWaitingReasons are container Waiting.Reason values that do not clear on
+// their own, so a pod sitting in one is stuck and its BuildJob should fail.
+// Transient reasons (ErrImagePull, ContainerCreating, PodInitializing) are
+// intentionally excluded: the backoff/permanent states below only surface after
+// the kubelet has already retried, so they act as an implicit grace period and a
+// merely slow or first-attempt pull is not mistaken for a failure.
+var terminalWaitingReasons = map[string]bool{
+	"ImagePullBackOff":           true,
+	"ErrImageNeverPull":          true,
+	"InvalidImageName":           true,
+	"CreateContainerConfigError": true,
+	"CreateContainerError":       true,
+	"CrashLoopBackOff":           true,
+}
+
+// podStuckReason reports whether pod has a container wedged in a terminal waiting
+// state (e.g. ImagePullBackOff) and, if so, a concise human-readable reason. Init
+// containers (the build steps) are checked first, so a stuck step is reported
+// before the app/finalizer container, which sits in PodInitializing until the
+// steps finish.
+func podStuckReason(pod *corev1.Pod) (string, bool) {
+	check := func(statuses []corev1.ContainerStatus, label string) (string, bool) {
+		for i, cs := range statuses {
+			w := cs.State.Waiting
+			if w == nil || !terminalWaitingReasons[w.Reason] {
+				continue
+			}
+			detail := w.Reason
+			if w.Message != "" {
+				detail = fmt.Sprintf("%s: %s", w.Reason, w.Message)
+			}
+			return fmt.Sprintf("%s (%s %d, %s)", detail, label, i+1, cs.Name), true
+		}
+		return "", false
+	}
+	if reason, ok := check(pod.Status.InitContainerStatuses, "step"); ok {
+		return reason, true
+	}
+	return check(pod.Status.ContainerStatuses, "container")
 }
 
 // updateContainerStateMap updates the ContainerStatus for a specific container
