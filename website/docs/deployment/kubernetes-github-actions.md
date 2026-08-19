@@ -32,10 +32,12 @@ Both are `workflow_dispatch` only - nothing deploys automatically. They call the
 6. **`helm upgrade --install --atomic`** with the base `values.yaml` plus the
    environment values file, pinning all four component image tags to the chosen version.
    `--atomic` rolls the release back on failure.
-7. **Restart `hades-api`** and wait for the rollout. The API reads `AUTH_KEY` and the
-   dashboard credentials as environment variables (resolved only at pod start), so a
-   redeploy that rotates those Secrets without changing the image tag would otherwise
-   leave the running pods on the old values.
+7. **Roll all four Hades deployments** and wait for each rollout. This covers the two
+   cases Helm does not roll on its own: a **mutable image tag** (`latest`, `pr-N`) whose
+   digest changed but whose tag string did not (Helm sees an unchanged spec, so the
+   restart re-pulls the new digest via `pullPolicy: Always`), and **rotated Secrets**
+   (`AUTH_KEY`, dashboard credentials) that pods read as environment variables only at
+   start. For an immutable release tag Helm already rolls, so the restart is a no-op.
 
 The `version` input maps directly to the container image tag (this repo tags images with
 the release tag verbatim, with no `v` prefix).
