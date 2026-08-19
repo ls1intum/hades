@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: "hades-api"
-          image: "{{ .Values.hadesApi.image.repository }}:{{ .Values.hadesApi.image.tag }}"
+          image: "{{ .Values.hadesApi.image.repository }}:{{ .Values.hadesApi.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.hadesApi.image.pullPolicy }}
           resources:
             limits:

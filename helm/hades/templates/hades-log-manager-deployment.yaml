@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: "hades-log-manager"
-          image: "{{ .Values.hadesLogManager.image.repository }}:{{ .Values.hadesLogManager.image.tag }}"
+          image: "{{ .Values.hadesLogManager.image.repository }}:{{ .Values.hadesLogManager.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.hadesLogManager.image.pullPolicy }}
           resources:
             limits:
