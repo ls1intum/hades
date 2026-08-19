@@ -394,7 +394,7 @@ on the first deploy and kept in sync afterwards):
 
 | Secret | Purpose |
 |---|---|
-| `KUBE_CONFIG` | base64-encoded kubeconfig for the target cluster |
+| `KUBE_CONFIG` | kubeconfig (plain YAML) for the target cluster |
 | `AUTH_KEY` | protects the API `/build` endpoint (Secret `hades-auth`) |
 | `DASHBOARD_USERNAME` | dashboard login user (Secret `hades-dashboard`) |
 | `DASHBOARD_PASSWORD_HASH` | bcrypt hash of the dashboard password |

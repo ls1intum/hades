@@ -60,14 +60,13 @@ Add these to **each** GitHub environment (`k8s-prod` and `k8s-test`):
 
 | Secret | Purpose |
 |---|---|
-| `KUBE_CONFIG` | base64-encoded kubeconfig for the target cluster |
+| `KUBE_CONFIG` | kubeconfig (plain YAML) for the target cluster |
 | `AUTH_KEY` | protects the API `/build` endpoint (Secret `hades-auth`) |
 | `DASHBOARD_USERNAME` | dashboard login user (Secret `hades-dashboard`) |
 | `DASHBOARD_PASSWORD_HASH` | bcrypt hash of the dashboard password |
 | `DASHBOARD_SESSION_SECRET` | dashboard session signing secret (>=32 chars) |
 
-Encode the kubeconfig with `base64 -w0 < kubeconfig` (or `base64 < kubeconfig | tr -d '\n'`
-on macOS) and paste the result as `KUBE_CONFIG`.
+Paste the kubeconfig file's contents directly as `KUBE_CONFIG` (plain YAML, no encoding).
 
 ## Production approval
 
