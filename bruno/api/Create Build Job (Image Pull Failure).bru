@@ -1,0 +1,55 @@
+meta {
+  name: Create Build Job (Image Pull Failure)
+  type: http
+  seq: 8
+}
+
+post {
+  url: http://{{hostname}}/build
+  body: json
+  auth: basic
+}
+
+auth:basic {
+  username: hades
+  password: {{auth_key}}
+}
+
+body:json {
+  {
+    // Reproduces the ImagePullBackOff case: the step image does not exist, so the
+    // pod never runs. The operator detects the stuck pod, marks the job Failed with
+    // an "ImagePullBackOff: ..." reason, and deletes the underlying Job. Watch the
+    // job flip to Failed (with the reason) in the dashboard job detail page.
+    "name": "Image Pull Failure",
+    "metadata": {
+      "GLOBAL": "test"
+    },
+    "timestamp": "2021-01-01T00:00:00.000Z",
+    "priority": 3,
+    "steps": [
+      {
+        "id": 1,
+        "name": "Missing image",
+        "image": "ghcr.io/hades-scheduler/this-image-does-not-exist:latest",
+        "script": "echo this never runs"
+      }
+    ]
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("build request is accepted", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().job_id).to.be.a("string");
+  });
+
+  // Store the id so the failure can be verified in the dashboard job detail page.
+  bru.setVar("stuck_job_id", res.getBody().job_id);
+  console.log("Submitted image-pull-failure job:", res.getBody().job_id);
+  console.log("It should flip to Failed with an ImagePullBackOff reason in the dashboard.");
+}
