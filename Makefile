@@ -19,10 +19,12 @@ help: ## Show this help.
 .PHONY: run
 run: docker-run-nats ## Run api, scheduler, and logmanager locally via go run (Ctrl-C stops all).
 	@echo "Starting api, scheduler, logmanager (Ctrl-C to stop all)..."
+	@# Distinct METRICS_PORT per service: they share this host, so they cannot all
+	@# bind the default 8082 (in Kubernetes each pod has its own network namespace).
 	@trap 'kill 0' INT TERM EXIT; \
-		(cd HadesAPI       && go run .) & \
-		(cd HadesScheduler && go run .) & \
-		(cd HadesLogManager && go run .) & \
+		(cd HadesAPI       && METRICS_PORT=8082 go run .) & \
+		(cd HadesScheduler && METRICS_PORT=8084 go run .) & \
+		(cd HadesLogManager && METRICS_PORT=8086 go run .) & \
 		wait
 
 .PHONY: run-api

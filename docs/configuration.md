@@ -23,22 +23,30 @@ Every component connects to NATS with the same `ConnectionConfig`.
 | `NATS_PASSWORD` | | NATS password (optional). | `shared/nats/connection.go` |
 | `NATS_TLS_ENABLED` | `false` | Enable TLS for the NATS connection. | `shared/nats/connection.go` |
 
+## Metrics (all components)
+
+Every service exposes a Prometheus `/metrics` endpoint on a dedicated, cluster-internal port (`METRICS_PORT`, default `8082`; the operator uses the `--metrics-bind-address` flag). The endpoint always includes Go runtime and process collectors; the API and scheduler add a few domain counters (`hades_build_requests_total`, `hades_jobs_enqueued_total`, `hades_jobs_scheduled_total`), and the operator adds controller-runtime reconcile/workqueue metrics.
+
+The metrics port is never routed through the public ingress. In Kubernetes, enable scraping by a Prometheus Operator with `--set monitoring.enabled=true` (see the [Kubernetes deployment guide](./deployment/kubernetes-github-actions.md#monitoring)). The `shared/metrics` package serves the endpoint (`shared/metrics/metrics.go`).
+
 ## HadesAPI
 
 | Variable | Default | Description | Source |
 | -------- | ------- | ----------- | ------ |
 | `API_PORT` | `8080` | Port the HTTP API listens on. | `HadesAPI/main.go` (`HadesAPIConfig`) |
+| `METRICS_PORT` | `8082` | Port the Prometheus `/metrics` endpoint listens on (see [Metrics](#metrics-all-components)). | `HadesAPI/main.go` (`HadesAPIConfig`) |
 | `AUTH_KEY` | | HTTP Basic Auth key for the `hades` user. Empty disables auth (a warning is logged). | `HadesAPI/main.go` (`HadesAPIConfig`) |
 
 Plus the [NATS](#nats-connection-all-components) and [global](#global-all-components) variables.
 
-> **Reserved (not yet implemented):** `PROMETHEUS_ADDRESS`, `RETENTION_IN_MIN`, `MAX_RETRIES`, and `TIMEOUT_IN_MIN` appear in `.env.example` and some compose files but are **not read by any component today**. They are placeholders for planned features and currently have no effect.
+> **Reserved (not yet implemented):** `PROMETHEUS_ADDRESS`, `RETENTION_IN_MIN`, `MAX_RETRIES`, and `TIMEOUT_IN_MIN` appear in `.env.example` and some compose files but are **not read by any component today**. They are placeholders for planned features and currently have no effect. Prometheus metrics are served on `METRICS_PORT`, not `PROMETHEUS_ADDRESS`.
 
 ## HadesScheduler
 
 | Variable | Default | Description | Source |
 | -------- | ------- | ----------- | ------ |
 | `CONCURRENCY` | `1` | Number of jobs processed concurrently. | `HadesScheduler/main.go` (`HadesSchedulerConfig`) |
+| `METRICS_PORT` | `8082` | Port the Prometheus `/metrics` endpoint listens on (see [Metrics](#metrics-all-components)). | `HadesScheduler/main.go` (`HadesSchedulerConfig`) |
 | `HADES_EXECUTOR` | `docker` | Execution platform: `docker` or `k8s`. | `shared/utils/config.go` (`ExecutorConfig`) |
 
 Plus the [NATS](#nats-connection-all-components) and [global](#global-all-components) variables, and - depending on `HADES_EXECUTOR` - the Docker or Kubernetes variables below.
@@ -73,7 +81,7 @@ Only deployed when the scheduler runs in `operator` mode.
 | `MAX_PARALLELISM` | `100` | Maximum number of `Job`s the operator admits concurrently; excess jobs are suspended. | `HadesScheduler/HadesOperator/cmd/main.go` (`OperatorConfig`) |
 | `DEV_MODE` | `false` | Enable the controller-runtime development logger. | `HadesScheduler/HadesOperator/cmd/main.go` |
 
-Plus the [NATS](#nats-connection-all-components) variables (the operator publishes status/log events). The operator also accepts standard controller-runtime **flags**: `--health-probe-bind-address` (default `:8083`), `--leader-elect`, and the metrics flags bound via `opts.BindFlags`.
+Plus the [NATS](#nats-connection-all-components) variables (the operator publishes status/log events). The operator also accepts standard controller-runtime **flags**: `--health-probe-bind-address` (default `:8083`), `--metrics-bind-address` (default `:8082`, set `0` to disable), `--leader-elect`, and the log flags bound via `opts.BindFlags`.
 
 ## HadesLogManager
 
@@ -82,6 +90,7 @@ Deployed by the Helm chart (`hades-log-manager`); also run locally via `make run
 | Variable | Default | Description | Source |
 | -------- | ------- | ----------- | ------ |
 | `HADESLOGMANAGER_API_PORT` | `8081` | HTTP API port. | `HadesLogManager/main.go` (`HadesLogManagerConfig`) |
+| `METRICS_PORT` | `8082` | Port the Prometheus `/metrics` endpoint listens on (see [Metrics](#metrics-all-components)). | `HadesLogManager/main.go` (`HadesLogManagerConfig`) |
 | `LOG_BATCH_SIZE` | `100` | Log entries buffered before a flush. | `HadesLogManager/processor.go` (`AggregatorConfig`) |
 | `LOG_RETENTION` | `1h` | How long completed-job logs are kept in memory (Go duration). | `HadesLogManager/processor.go` |
 | `MAX_JOB_LOGS` | `1000` | Max log entries retained per job. | `HadesLogManager/processor.go` |

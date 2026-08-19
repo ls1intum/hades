@@ -67,6 +67,7 @@ const DefaultMaxParallelism = 100
 func main() {
 	var enableLeaderElection bool
 	var probeAddr string
+	var metricsAddr string
 	var enableDevMode bool
 
 	if os.Getenv("DEV_MODE") == "true" {
@@ -74,6 +75,7 @@ func main() {
 	}
 
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8083", "The address the probe endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8082", "The address the metrics endpoint binds to. Set to \"0\" to disable.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager.")
 	opts := zap.Options{Development: enableDevMode}
 	opts.BindFlags(flag.CommandLine)
@@ -107,8 +109,11 @@ func main() {
 
 	mgrOpts := ctrl.Options{
 		Scheme: scheme,
-		// Disable the metrics server
-		Metrics:                metricsserver.Options{BindAddress: "0"},
+		// controller-runtime serves its own registry here (reconcile/workqueue/Go
+		// runtime metrics) over plain HTTP on a dedicated, cluster-internal port.
+		// SecureServing stays off for parity with the other Hades services; the
+		// port is never exposed via the public ingress. Set to "0" to disable.
+		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "715d8f3b.hades.tum.de",
@@ -151,6 +156,7 @@ func main() {
 		"cluster_wide", nsConfig.WatchNamespace == "",
 		"delete_on_complete", operatorConfig.DeleteOnComplete,
 		"max_parallelism", operatorConfig.MaxParallelism,
+		"metrics_addr", metricsAddr,
 		"dev_mode", enableDevMode,
 		"nats_url", natsConfig.URL,
 		"nats_tls", natsConfig.TLS,

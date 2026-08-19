@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hades-scheduler/hades/hadesAPI/dashboard"
+	"github.com/hades-scheduler/hades/shared/metrics"
 	hadesnats "github.com/hades-scheduler/hades/shared/nats"
 	"github.com/hades-scheduler/hades/shared/utils"
 )
@@ -20,9 +21,10 @@ import (
 // HadesAPIConfig holds the API server configuration. An empty AuthKey disables
 // Basic Auth on the /build endpoint.
 type HadesAPIConfig struct {
-	APIPort    uint `env:"API_PORT,notEmpty" envDefault:"8080"`
-	NatsConfig hadesnats.ConnectionConfig
-	AuthKey    string `env:"AUTH_KEY"`
+	APIPort     uint `env:"API_PORT,notEmpty" envDefault:"8080"`
+	MetricsPort uint `env:"METRICS_PORT,notEmpty" envDefault:"8082"`
+	NatsConfig  hadesnats.ConnectionConfig
+	AuthKey     string `env:"AUTH_KEY"`
 	// TrustedProxies are the CIDRs/IPs of front proxies (e.g. the ingress) that
 	// may set X-Forwarded-For. Empty (default) trusts none, so ClientIP() uses
 	// the direct RemoteAddr and cannot be spoofed via a forged XFF header - which
@@ -48,6 +50,7 @@ func main() {
 
 	slog.Info("HadesAPI configuration",
 		"api_port", cfg.APIPort,
+		"metrics_port", cfg.MetricsPort,
 		"nats_url", cfg.NatsConfig.URL,
 		"nats_tls", cfg.NatsConfig.TLS,
 		"auth_enabled", cfg.AuthKey != "",
@@ -122,6 +125,15 @@ func main() {
 	go func() {
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Failed to start HadesAPI", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Prometheus metrics on a dedicated, cluster-internal port (not exposed via
+	// the public ingress). Stops when the shutdown context is cancelled.
+	go func() {
+		if err := metrics.Serve(ctx, fmt.Sprintf(":%d", cfg.MetricsPort)); err != nil {
+			slog.Error("Metrics server failed", "error", err)
 			os.Exit(1)
 		}
 	}()

@@ -163,6 +163,7 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublishe
 	if err := c.ShouldBind(&p); err != nil {
 		msg := bindErrorMessage(err)
 		slog.Error("Failed to bind request payload", "error", err)
+		buildRequestsTotal.WithLabelValues("rejected").Inc()
 		c.String(http.StatusBadRequest, msg)
 		return
 	}
@@ -171,6 +172,7 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublishe
 		if step.MemoryLimit != "" {
 			if _, err := utils.ParseMemoryLimit(step.MemoryLimit); err != nil {
 				slog.Error("Failed to parse RAM limit", "error", err)
+				buildRequestsTotal.WithLabelValues("rejected").Inc()
 				c.String(http.StatusBadRequest, "Failed to parse RAM limit")
 				return
 			}
@@ -180,6 +182,7 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublishe
 	if p.QueuePayload.CallbackURL != "" {
 		if err := utils.ValidateCallbackURL(p.QueuePayload.CallbackURL); err != nil {
 			slog.Error("Invalid callback_url", "error", err)
+			buildRequestsTotal.WithLabelValues("rejected").Inc()
 			c.String(http.StatusBadRequest, "Invalid callback_url: "+err.Error())
 			return
 		}
@@ -193,9 +196,13 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublishe
 	err := producer.EnqueueJobWithPriority(c.Request.Context(), p.QueuePayload, queuePrio)
 	if err != nil {
 		slog.Error("Failed to enqueue job", "error", err)
+		buildRequestsTotal.WithLabelValues("rejected").Inc()
 		c.String(http.StatusInternalServerError, "Failed to enqueue job")
 		return
 	}
+
+	buildRequestsTotal.WithLabelValues("accepted").Inc()
+	jobsEnqueuedTotal.WithLabelValues(string(queuePrio)).Inc()
 
 	// Announce the job as Queued so lifecycle subscribers (HadesLogManager, the
 	// dashboard live feed) see it immediately. This is best-effort: a publish

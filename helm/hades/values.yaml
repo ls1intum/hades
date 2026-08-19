@@ -171,6 +171,26 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 
+# -- Prometheus monitoring. Every Hades service exposes a Prometheus `/metrics`
+# endpoint on a dedicated, cluster-internal port (never via the public ingress);
+# a ServiceMonitor registers them with a cluster Prometheus Operator.
+monitoring:
+  # -- Render a ServiceMonitor for the Hades services. Requires the Prometheus
+  # Operator CRDs (`monitoring.coreos.com`) on the cluster. The `/metrics`
+  # endpoints are always exposed; this flag only controls the ServiceMonitor, so
+  # the chart installs cleanly on clusters without the Prometheus Operator.
+  enabled: false
+  # -- Container/Service port each service serves `/metrics` on.
+  port: 8082
+  serviceMonitor:
+    # -- Prometheus scrape interval.
+    interval: 30s
+    # -- Per-scrape timeout.
+    scrapeTimeout: 10s
+    # -- Extra labels on the ServiceMonitor so a Prometheus instance selects it
+    # (e.g. `{ release: kube-prometheus-stack }`).
+    labels: {}
+
 nats:
   config:
     jetstream:
