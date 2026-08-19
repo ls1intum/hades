@@ -143,7 +143,10 @@ func (s *Server) Start(ctx context.Context) error {
 		if jobID == "" || !status.IsValid() {
 			return
 		}
-		summary := s.tracker.observe(jobID, status)
+		// An optional reason (e.g. why the job Failed) rides in a header; Get is
+		// nil-safe when no header was set.
+		reason := msg.Header.Get(buildstatus.ReasonHeader)
+		summary := s.tracker.observe(jobID, status, reason)
 		s.hub.broadcast(event{Type: eventJob, Job: summary})
 	})
 	if err != nil {

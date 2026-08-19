@@ -148,13 +148,48 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err == nil {
 		// Job already exists check the status of the containers. draining is true
 		// while a terminated container's live log stream is still publishing.
-		draining, err := r.updateContainerStatuses(ctx, &bj)
+		draining, pod, err := r.updateContainerStatuses(ctx, &bj)
 		if err != nil {
 			// draining is unreliable when the status update failed, so requeue
 			// instead of proceeding: finalizing here could delete the pod while a
 			// container's log stream is still draining and lose its tail logs.
 			slog.Error("Failed to update container statuses", "error", err)
 			return ctrl.Result{}, fmt.Errorf("updating container statuses: %w", err)
+		}
+
+		// A pod wedged in a terminal waiting state (e.g. ImagePullBackOff) never
+		// runs, so its Job never gets a Complete/Failed condition and jobFinished
+		// would keep the BuildJob "Running" forever. Fail it with the reason and
+		// delete the Job (removing the runaway pod and stopping the endless pull
+		// retries, which TTLSecondsAfterFinished would never reap on an unfinished
+		// Job). No log-drain gate: the containers never started, so there are no
+		// logs to wait for.
+		if reason, stuck := podStuckReason(pod); stuck {
+			slog.Warn("BuildJob pod is stuck; failing", "buildJob", bj.Name, "reason", reason)
+			if err := r.setStatusCompleted(ctx, req.NamespacedName, bj.Name, false, reason); err != nil {
+				if apierrors.IsConflict(err) {
+					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+				}
+				return ctrl.Result{}, err
+			}
+			r.logStreams().stopJob(bj.Namespace, bj.Name)
+
+			policy := metav1.DeletePropagationForeground
+			if err := r.Delete(ctx, &existingJob, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil && !apierrors.IsNotFound(err) {
+				return ctrl.Result{}, err
+			}
+			// Remove the CR too only when configured to clean up on completion;
+			// otherwise keep it as the failure record (phase Failed, reason in
+			// Status.Message).
+			if r.DeleteOnComplete {
+				if err := r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil && !apierrors.IsNotFound(err) {
+					return ctrl.Result{}, err
+				}
+			}
+			if err := r.admitOneSuspendedJob(ctx, bj.Namespace); err != nil {
+				slog.Error("Failed to admit suspended job after stuck-pod failure", "error", err)
+			}
+			return ctrl.Result{}, nil
 		}
 
 		// Job already exists, check the status of the job
@@ -384,7 +419,7 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 		slog.Info("Published job succeeded status", "job_id", jobID)
 		return nil
 	} else {
-		if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusFailed, jobID); err != nil {
+		if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusFailed, jobID, msg); err != nil {
 			slog.Error("Failed to publish job failed status", "job_id", jobID, "error", err)
 			return err
 		}

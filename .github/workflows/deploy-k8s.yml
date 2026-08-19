@@ -130,17 +130,26 @@ jobs:
             --set-string hadesLogManager.image.tag="$IMAGE_TAG" \
             --atomic --timeout 10m
 
-      - name: Roll the API to pick up Secret changes
-        # The API reads AUTH_KEY and the dashboard credentials as env vars, resolved only
-        # at pod start. When a redeploy rotates those Secrets without changing the image
-        # tag, Helm leaves the Deployment untouched and the running pods keep the old
-        # values, so restart the API explicitly.
+      - name: Roll all Hades deployments
+        # Force a rollout of every Hades component after the upgrade. This covers two
+        # cases Helm does not roll on its own:
+        #   1. A mutable image tag (latest, pr-N) whose digest changed but whose tag
+        #      string did not: Helm sees an unchanged Deployment spec and rolls nothing,
+        #      so the pods keep the previous image. A restart re-pulls (pullPolicy:
+        #      Always) the new digest.
+        #   2. Rotated Secrets (AUTH_KEY, dashboard creds) that pods read as env vars
+        #      only at start.
+        # For an immutable tag (a release) Helm already rolls; the extra restart is a
+        # harmless no-op.
         run: |
           set -euo pipefail
-          kubectl rollout restart deployment/hades-api \
-            --namespace "${{ inputs.namespace }}"
-          kubectl rollout status deployment/hades-api \
-            --namespace "${{ inputs.namespace }}" --timeout=5m
+          deployments="hades-api hades-scheduler hades-operator hades-log-manager"
+          for d in $deployments; do
+            kubectl rollout restart "deployment/$d" --namespace "${{ inputs.namespace }}"
+          done
+          for d in $deployments; do
+            kubectl rollout status "deployment/$d" --namespace "${{ inputs.namespace }}" --timeout=5m
+          done
 
       - name: Deployment summary
         run: |

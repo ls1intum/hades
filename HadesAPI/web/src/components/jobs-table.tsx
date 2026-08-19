@@ -83,6 +83,14 @@ export function JobsTable({
               </TableCell>
               <TableCell>
                 <StatusBadge status={job.status} />
+                {job.reason && (
+                  <div
+                    className="mt-1 max-w-[22rem] truncate text-xs text-muted-foreground"
+                    title={job.reason}
+                  >
+                    {job.reason}
+                  </div>
+                )}
               </TableCell>
               <TableCell className="hidden sm:table-cell">
                 {job.priority ? (

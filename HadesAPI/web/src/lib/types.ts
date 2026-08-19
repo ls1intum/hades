@@ -13,6 +13,8 @@ export interface JobSummary {
   name?: string;
   priority?: string;
   status: JobStatus;
+  /** Optional explanation of the status, e.g. why the job Failed. */
+  reason?: string;
   stepCount?: number;
   queuedAt?: string;
   startedAt?: string;
