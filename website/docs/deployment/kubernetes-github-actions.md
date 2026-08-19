@@ -32,6 +32,10 @@ Both are `workflow_dispatch` only - nothing deploys automatically. They call the
 6. **`helm upgrade --install --atomic`** with the base `values.yaml` plus the
    environment values file, pinning all four component image tags to the chosen version.
    `--atomic` rolls the release back on failure.
+7. **Restart `hades-api`** and wait for the rollout. The API reads `AUTH_KEY` and the
+   dashboard credentials as environment variables (resolved only at pod start), so a
+   redeploy that rotates those Secrets without changing the image tag would otherwise
+   leave the running pods on the old values.
 
 The `version` input maps directly to the container image tag (this repo tags images with
 the release tag verbatim, with no `v` prefix).
@@ -41,8 +45,9 @@ the release tag verbatim, with no `v` prefix).
 - **Test**: type any image tag. Handy tags: `latest` (current `main`), `pr-123` (a PR
   build), or a release tag.
 - **Prod**: type `latest` or an existing release tag (for example `1.0.0`). A bogus value
-  fails the `validate` job before the cluster is touched. To deploy a specific release,
-  also set **"Use workflow from"** to that release's tag so the chart matches the images.
+  fails the `validate` job before the cluster is touched. The prod deploy pins the chart
+  source automatically - `main` for `latest`, or the release tag otherwise - so the chart
+  and CRDs match the images regardless of which ref the run was dispatched from.
 
 ## Per-environment configuration
 

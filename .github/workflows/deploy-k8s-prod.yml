@@ -50,12 +50,14 @@ jobs:
 
   deploy:
     needs: validate
+    # No `secrets: inherit`: the reusable job reads its secrets from the k8s-prod
+    # environment it selects, so inheriting the caller's secrets would only widen exposure.
     uses: ./.github/workflows/deploy-k8s.yml
-    secrets: inherit
     with:
       environment: k8s-prod
       namespace: hades
       values-file: values-prod.yaml
       image-tag: ${{ inputs.version }}
-      # Deploy a release's chart from its tag so templates/CRDs match the images.
-      chart-ref: ${{ inputs.version != 'latest' && inputs.version || '' }}
+      # Deploy a release's chart from its tag so templates/CRDs match the images; for
+      # `latest`, pin the chart to `main` (not whatever ref the run was dispatched from).
+      chart-ref: ${{ inputs.version != 'latest' && inputs.version || 'main' }}
