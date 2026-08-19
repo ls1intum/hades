@@ -123,7 +123,7 @@ jobs:
                   {
                     id: 2,
                     name: "Clone",
-                    image: "ghcr.io/hades-scheduler/hades/hades-clone-container:latest",
+                    image: "ghcr.io/hades-scheduler/git-container:1.0.0",
                     metadata: {
                       REPOSITORY_DIR: "/shared",
                       HADES_TEST_USERNAME: $gh_user,
