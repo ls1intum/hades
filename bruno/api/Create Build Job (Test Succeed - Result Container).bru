@@ -33,7 +33,7 @@ body:json {
       {
         "id": 1, // mandatory to declare the order of execution
         "name": "Clone",
-        "image": "ghcr.io/hades-scheduler/hades/hades-clone-container:latest", // mandatory
+        "image": "ghcr.io/hades-scheduler/git-container:1.0.0", // mandatory
         "volumeMounts": [
           { "name": "shared", "mountPath": "/shared" }
         ],
