@@ -105,6 +105,9 @@ For production deployments, Hades is designed to run natively within a Kubernete
 
 2. **Deployment**: We provide a comprehensive Helm Chart that packages the API, Scheduler, Operator, and NATS broker. By default the scheduler runs in `operator` mode, delegating job lifecycle management to the HadesOperator via `BuildJob` custom resources.
    
+   Replace `<version>` in the commands below with the chart version you want to
+   install (for example `1.0.0`).
+
    ```fish
    # Install the published chart from GHCR (recommended)
    helm upgrade --install hades oci://ghcr.io/hades-scheduler/charts/hades \

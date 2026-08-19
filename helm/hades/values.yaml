@@ -5,7 +5,8 @@ debug: false
 hadesApi:
   image:
     repository: ghcr.io/hades-scheduler/hades/hades-api
-    tag: latest
+    # Empty tag defaults to the chart appVersion (see Chart.yaml). Override to pin a specific image tag.
+    tag: ""
     # -- Image pull policy for the API.
     pullPolicy: Always
   service:
@@ -57,7 +58,8 @@ hadesApi:
 hadesScheduler:
   image:
     repository: ghcr.io/hades-scheduler/hades/hades-scheduler
-    tag: latest
+    # Empty tag defaults to the chart appVersion (see Chart.yaml). Override to pin a specific image tag.
+    tag: ""
     # -- Image pull policy for the scheduler.
     pullPolicy: Always
   service:
@@ -80,7 +82,8 @@ hadesScheduler:
 hadesOperator:
   image:
     repository: ghcr.io/hades-scheduler/hades/hades-operator
-    tag: latest
+    # Empty tag defaults to the chart appVersion (see Chart.yaml). Override to pin a specific image tag.
+    tag: ""
     # -- Image pull policy for the operator.
     pullPolicy: Always
   service:
@@ -117,7 +120,8 @@ hadesOperator:
 hadesLogManager:
   image:
     repository: ghcr.io/hades-scheduler/hades/hades-log-manager
-    tag: latest
+    # Empty tag defaults to the chart appVersion (see Chart.yaml). Override to pin a specific image tag.
+    tag: ""
     # -- Image pull policy for the log manager.
     pullPolicy: Always
   service:

@@ -16,7 +16,9 @@ The recommended way to deploy Hades in production is with **Helm**. The chart bu
 
 ### Option A - Published chart from GHCR (recommended)
 
-The chart is published to GHCR as an OCI artifact:
+The chart is published to GHCR as an OCI artifact. In every command below, replace
+`<version>` with the chart version you want to install (for example `1.0.0`; see the
+[available versions](https://github.com/Hades-Scheduler/hades/pkgs/container/charts%2Fhades)):
 
 ```bash
 helm upgrade --install hades oci://ghcr.io/hades-scheduler/charts/hades \
