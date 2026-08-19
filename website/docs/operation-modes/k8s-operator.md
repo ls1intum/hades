@@ -21,7 +21,10 @@ The **Hades Operator** is the production-grade execution mode for Kubernetes. It
 The Operator introduces a `BuildJob` Custom Resource Definition (CRD). When the Scheduler receives a job (in `operator` mode), it creates a `BuildJob` resource instead of a Pod. The Operator's controller loop watches for `BuildJob` resources and:
 
 1. Creates a Kubernetes `Job` with one init-container per step plus a finalizer container.
-2. Monitors Pod status and updates the `BuildJob` status accordingly.
+2. Monitors Pod status and updates the `BuildJob` status accordingly. A pod wedged in a
+   terminal waiting state (e.g. `ImagePullBackOff` on a bad step image) is failed with the
+   reason recorded in the status and surfaced in the dashboard, and its `Job` is deleted so
+   it stops retrying.
 3. Publishes status transitions and logs back to NATS.
 4. Cleans up completed resources (configurable via `DeleteOnComplete`).
 
