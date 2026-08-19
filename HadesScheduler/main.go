@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/hades-scheduler/hades/hadesScheduler/docker"
 	"github.com/hades-scheduler/hades/hadesScheduler/k8s"
@@ -15,7 +16,9 @@ import (
 	"github.com/hades-scheduler/hades/shared/metrics"
 	hadesnats "github.com/hades-scheduler/hades/shared/nats"
 	"github.com/hades-scheduler/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/timing"
 	"github.com/hades-scheduler/hades/shared/utils"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // HadesSchedulerConfig holds the scheduler's runtime configuration. The
@@ -117,6 +120,21 @@ func main() {
 		sig := <-sigChan
 		slog.Info("Received shutdown signal", "signal", sig.String())
 		cancel()
+	}()
+
+	// Expose the phase-timing histograms on the default registry that
+	// metrics.Serve scrapes, and enable tracing (noop unless an OTLP endpoint is
+	// configured).
+	timing.MustRegister(prometheus.DefaultRegisterer)
+	tracingShutdown, err := timing.InitTracing(ctx, "hades-scheduler")
+	if err != nil {
+		slog.Error("Failed to init tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tracingShutdown(shutdownCtx)
 	}()
 
 	// Prometheus metrics on a dedicated, cluster-internal port. This is the

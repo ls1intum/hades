@@ -20,6 +20,7 @@ import (
 	hades "github.com/hades-scheduler/hades/shared"
 	"github.com/hades-scheduler/hades/shared/buildstatus"
 	"github.com/hades-scheduler/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/timing"
 	"github.com/hades-scheduler/hades/shared/utils"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -189,11 +190,22 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublishe
 	}
 
 	p.QueuePayload.ID = uuid.New()
+	// Stamp the server-side submission time so queue_wait (submit -> scheduler
+	// dequeue) is measured against a trusted clock rather than a client value.
+	p.QueuePayload.Timestamp = time.Now()
 	slog.Debug("Received build request ", "payload", SafePayloadFormat(p.QueuePayload))
 
 	queuePrio := hades.PriorityFromInt(p.Priority)
 
-	err := producer.EnqueueJobWithPriority(c.Request.Context(), p.QueuePayload, queuePrio)
+	// Open the job's root span and propagate its context in the payload so the
+	// scheduler/operator spans nest under it. Noop unless tracing is enabled.
+	spanCtx, endSpan := timing.StartSpan(c.Request.Context(), "hades.enqueue")
+	if carrier := timing.Inject(spanCtx); carrier != nil {
+		p.QueuePayload.TraceParent = carrier["traceparent"]
+	}
+	defer endSpan()
+
+	err := producer.EnqueueJobWithPriority(spanCtx, p.QueuePayload, queuePrio)
 	if err != nil {
 		slog.Error("Failed to enqueue job", "error", err)
 		buildRequestsTotal.WithLabelValues("rejected").Inc()

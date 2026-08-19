@@ -29,6 +29,43 @@ Every service exposes a Prometheus `/metrics` endpoint on a dedicated, cluster-i
 
 The metrics port is never routed through the public ingress. In Kubernetes, enable scraping by a Prometheus Operator with `--set monitoring.enabled=true` (see the [Kubernetes deployment guide](./deployment/kubernetes-github-actions.md#monitoring)). The `shared/metrics` package serves the endpoint (`shared/metrics/metrics.go`).
 
+## Overhead timing & tracing (all components)
+
+Hades instruments how much overhead it adds around a job, broken down per step and per phase, so you can answer "what fraction of wall-clock was Hades coordination versus the user's container actually running". A single `shared/timing.JobTimer` drives three sinks from the same measurement seams.
+
+**Phase taxonomy.** Each phase is classified as `runtime` (the user's container executing) or `overhead` (everything Hades/Kubernetes does around it):
+
+| Phase | Kind | Executor | Meaning |
+| ----- | ---- | -------- | ------- |
+| `queue_wait` | overhead | both | API submission → scheduler starts handling the job |
+| `provision` | overhead | both | setup before the first container runs (Docker: volume create; K8s: CR create → first step starts) |
+| `image_pull` | overhead | docker | pulling the step image (labelled `cached` for warm vs cold pulls) |
+| `container_create` | overhead | docker | `ContainerCreate` |
+| `container_startup` | overhead | docker | `ContainerStart` |
+| `container_run` | **runtime** | docker | the container process running until it exits |
+| `log_drain` | overhead | docker | flushing the container's final logs after exit |
+| `container_remove` | overhead | docker | container cleanup |
+| `step_wait` | overhead | k8s | scheduling + image pull before a step's container starts |
+| `step_run` | **runtime** | k8s | the step container running (from pod timestamps) |
+| `reconcile_detection_lag` | overhead | k8s | last step finishing → the operator observing completion (dominated by the 2 s requeue poll) |
+
+Per-job rollups are logged and exported: `overhead_total`, `runtime_total`, `wall_total`, and `overhead_pct = overhead / (overhead + runtime)`.
+
+**1. Structured logs (always on).** Each phase emits an slog event at debug level (`phase`, `kind`, `executor`, `job_id`, `step`, `dur_ms`); each job emits one info-level `job timing summary` line with `overhead_ms`/`runtime_ms`/`wall_ms`/`overhead_pct`. Set `DEBUG=true` to see per-phase lines.
+
+**2. Prometheus histograms.** On the same `/metrics` endpoint as the counters above: `hades_phase_seconds{executor,phase,kind}`, `hades_image_pull_seconds{executor,cached}`, and the rollups `hades_job_overhead_seconds{executor}`, `hades_job_runtime_seconds{executor}`, `hades_job_wall_seconds{executor}`. Buckets span 1 ms–1 h.
+
+**3. OpenTelemetry traces (opt-in).** When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, every service exports spans so a job renders as a per-job waterfall across API → scheduler → operator. The trace context is propagated from the API through NATS (the job payload's `traceparent`) and into Kubernetes (the BuildJob's `hades.tum.de/traceparent` annotation); the operator emits backdated step spans from the pod's container timestamps. With the endpoint unset, a noop tracer runs and tracing costs nothing.
+
+| Variable | Default | Description | Source |
+| -------- | ------- | ----------- | ------ |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | | OTLP gRPC endpoint spans are exported to (e.g. `http://jaeger:4317`). Unset disables tracing. | `shared/timing/tracing.go` |
+| `OTEL_SERVICE_NAME` | per service | Overrides the service name shown in traces. | `shared/timing/tracing.go` |
+
+The local stacks ship a working backend: `make run` and `make docker-run` start a Jaeger all-in-one (UI on <http://localhost:16686>) and point the services at it. In Kubernetes, enable it with `--set tracing.enabled=true` and either `--set tracing.endpoint=<your-collector>:4317` or `--set tracing.deployJaeger=true` (bundled Jaeger, dev/test only).
+
+**Accuracy notes.** Docker phases use a single monotonic clock, so they are millisecond-precise and tile the timeline (`overhead + runtime = wall`). Kubernetes records container timestamps to whole-second precision, so K8s per-step phases are second-granular; `queue_wait` crosses hosts, so a skewed clock is clamped to zero.
+
 ## HadesAPI
 
 | Variable | Default | Description | Source |

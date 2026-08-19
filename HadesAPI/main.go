@@ -15,7 +15,9 @@ import (
 	"github.com/hades-scheduler/hades/hadesAPI/dashboard"
 	"github.com/hades-scheduler/hades/shared/metrics"
 	hadesnats "github.com/hades-scheduler/hades/shared/nats"
+	"github.com/hades-scheduler/hades/shared/timing"
 	"github.com/hades-scheduler/hades/shared/utils"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // HadesAPIConfig holds the API server configuration. An empty AuthKey disables
@@ -73,6 +75,21 @@ func main() {
 	// subscription and background loops.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Expose the phase-timing histograms on the default registry that
+	// metrics.Serve scrapes, and enable tracing (noop unless an OTLP endpoint is
+	// configured). The API opens each job's root span in addBuildToQueue.
+	timing.MustRegister(prometheus.DefaultRegisterer)
+	tracingShutdown, err := timing.InitTracing(ctx, "hades-api")
+	if err != nil {
+		slog.Error("Failed to init tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tracingShutdown(shutdownCtx)
+	}()
 
 	dashCfg, err := dashboard.LoadConfig()
 	if err != nil {

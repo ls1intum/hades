@@ -30,6 +30,21 @@ Hades is configured entirely through environment variables (loaded via `caarlos0
 
 Every service exposes a Prometheus `/metrics` endpoint on a dedicated, cluster-internal port (`METRICS_PORT`, default `8082`; the operator uses the `--metrics-bind-address` flag). It always includes Go runtime and process collectors, plus a few domain counters (`hades_build_requests_total`, `hades_jobs_enqueued_total`, `hades_jobs_scheduled_total`) and, for the operator, controller-runtime reconcile/workqueue metrics. The port is never routed through the public ingress; enable scraping by a Prometheus Operator with `--set monitoring.enabled=true`.
 
+## Overhead timing & tracing (all components)
+
+Hades measures how much overhead it adds around a job, per step and per phase, classifying every phase as `runtime` (the user's container executing) or `overhead` (Hades/Kubernetes coordination). One `shared/timing.JobTimer` drives three sinks:
+
+- **Logs** (always on): a debug-level event per phase and one info-level `job timing summary` per job (`overhead_ms`/`runtime_ms`/`wall_ms`/`overhead_pct`).
+- **Prometheus** (same `/metrics` endpoint): `hades_phase_seconds{executor,phase,kind}`, `hades_image_pull_seconds{executor,cached}`, and rollups `hades_job_overhead_seconds` / `hades_job_runtime_seconds` / `hades_job_wall_seconds`.
+- **OpenTelemetry traces** (opt-in): set `OTEL_EXPORTER_OTLP_ENDPOINT` to render each job as a waterfall across API → scheduler → operator. The trace context flows via the payload `traceparent` and the BuildJob `hades.tum.de/traceparent` annotation; unset leaves a zero-cost noop tracer.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | | OTLP gRPC endpoint (e.g. `http://jaeger:4317`). Unset disables tracing. |
+| `OTEL_SERVICE_NAME` | per service | Overrides the service name shown in traces. |
+
+`make run` / `make docker-run` ship a Jaeger backend (UI on `http://localhost:16686`); in Kubernetes use `--set tracing.enabled=true` with `tracing.endpoint` or `tracing.deployJaeger=true`. Docker phases are millisecond-precise; Kubernetes step phases are second-granular (Kubernetes truncates container timestamps to whole seconds).
+
 ## HadesAPI
 
 | Variable | Default | Description |

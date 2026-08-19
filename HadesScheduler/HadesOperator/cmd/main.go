@@ -17,10 +17,13 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
+	"time"
 
 	"github.com/hades-scheduler/hades/hadesScheduler/log"
+	"github.com/hades-scheduler/hades/shared/timing"
 	"github.com/hades-scheduler/hades/shared/utils"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -34,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	buildv1 "github.com/hades-scheduler/hades/HadesScheduler/HadesOperator/api/v1"
@@ -144,6 +148,25 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	// Serve the Hades timing histograms on controller-runtime's registry, i.e. the
+	// same /metrics endpoint (metricsAddr) as its built-in reconcile/workqueue
+	// metrics.
+	timing.MustRegister(ctrlmetrics.Registry)
+
+	// Enable OpenTelemetry tracing when OTEL_EXPORTER_OTLP_ENDPOINT is set; noop
+	// otherwise. The operator's backdated step spans nest under the job trace
+	// propagated via the BuildJob annotation.
+	tracingShutdown, err := timing.InitTracing(context.Background(), "hades-operator")
+	if err != nil {
+		setupLog.Error(err, "unable to init tracing")
+		os.Exit(1)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tracingShutdown(shutdownCtx)
+	}()
 
 	var natsConfig hadesnats.ConnectionConfig
 	if err := utils.LoadConfig(&natsConfig); err != nil {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/hades-scheduler/hades/shared/buildlogs"
 	"github.com/hades-scheduler/hades/shared/payload"
+	"github.com/hades-scheduler/hades/shared/timing"
 	"github.com/hades-scheduler/hades/shared/utils"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
@@ -30,11 +31,17 @@ type Step struct {
 	Options
 	payload.Step
 	publisher buildlogs.LogPublisher
+	timer     *timing.JobTimer
 }
 
 func (s Step) execute(ctx context.Context) error {
-	// Pull the images
+	// Pull the image. Record whether it was already present locally (a cache
+	// hit) so cold and warm pulls are distinguishable - the pull dominates the
+	// step's overhead when the image is cold.
+	pullStart := time.Now()
+	cached := imagePresentLocally(ctx, s.cli, s.Image)
 	err := pullImages(ctx, s.cli, s.Image)
+	s.timer.RecordImagePull(s.ID, pullStart, time.Now(), cached)
 	if err != nil {
 		s.logger.Error("Failed to pull image", slog.Any("error", err))
 		return err
@@ -91,10 +98,12 @@ func (s Step) execute(ctx context.Context) error {
 		containerConfig.Entrypoint = append(containerConfig.Entrypoint, s.Script)
 	}
 
+	createStart := time.Now()
 	resp, err := s.cli.ContainerCreate(ctx, client.ContainerCreateOptions{
 		Config:     &containerConfig,
 		HostConfig: &hostConfig,
 	})
+	s.timer.Record(s.ID, timing.PhaseContainerCreate, createStart, time.Now())
 	if err != nil {
 		s.logger.Error("Failed to create container", slog.Any("error", err))
 		return err
@@ -104,17 +113,24 @@ func (s Step) execute(ctx context.Context) error {
 		if s.Options.containerAutoremove {
 			return
 		}
+		removeStart := time.Now()
 		if err := removeContainer(ctx, s.cli, resp.ID); err != nil {
 			s.logger.Error("Failed to cleanup container", slog.Any("error", err), slog.Any("container_id", resp.ID))
 		}
+		s.timer.Record(s.ID, timing.PhaseContainerRemove, removeStart, time.Now())
 	}()
 
 	// Start the container
+	startupStart := time.Now()
 	_, err = s.cli.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{})
+	s.timer.Record(s.ID, timing.PhaseContainerStartup, startupStart, time.Now())
 	if err != nil {
 		s.logger.Error("Failed to start container", slog.Any("error", err))
 		return err
 	}
+	// The container process now runs until it exits; ContainerWait below returns
+	// when it stops. This monotonic window is the step's runtime.
+	runStart := time.Now()
 
 	// Follow the container's logs live, concurrently with the wait, so they are
 	// published to NATS as they are produced rather than only after the container
@@ -136,20 +152,24 @@ func (s Step) execute(ctx context.Context) error {
 	})
 	select {
 	case err := <-waitResult.Error:
+		s.timer.Record(s.ID, timing.PhaseContainerRun, runStart, time.Now())
 		if err != nil {
 			s.logger.Error("Error waiting for container", slog.Any("error", err), slog.Any("container_id", resp.ID))
 			return err
 		}
 	case status := <-waitResult.Result:
+		s.timer.Record(s.ID, timing.PhaseContainerRun, runStart, time.Now())
 		// Wait (bounded) for the log streamer to drain and flush the container's
 		// final output before checking status, so no tail lines are lost. A wedged
 		// log stream cannot hang the step.
+		drainStart := time.Now()
 		select {
 		case <-streamDone:
 			s.logger.Debug("Container logs streamed to NATS", slog.Any("container_id", resp.ID), slog.Any("image", s.Image))
 		case <-time.After(logStreamDrainTimeout):
 			s.logger.Warn("Timed out waiting for container log stream to drain", slog.Any("container_id", resp.ID))
 		}
+		s.timer.Record(s.ID, timing.PhaseLogDrain, drainStart, time.Now())
 
 		if status.StatusCode != 0 {
 			s.logger.Error("Container exited with status", slog.Any("status", status.StatusCode), slog.Any("container_id", resp.ID), slog.Any("image", s.Image))

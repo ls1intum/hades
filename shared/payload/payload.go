@@ -28,6 +28,7 @@ type QueuePayload struct {
 	Metadata    map[string]string `json:"metadata"`                            // Additional job-level metadata
 	Steps       []Step            `json:"steps"`                               // Ordered list of steps to execute
 	CallbackURL string            `json:"callback_url,omitempty" format:"uri"` // Optional per-job destination for forwarding aggregated logs/results. Must be an absolute http/https URL with a host.
+	TraceParent string            `json:"traceparent,omitempty"`               // W3C trace context propagated from the API so scheduler/operator spans nest under the job trace. Not injected into containers.
 }
 
 // Step represents a single execution step in a job.
