@@ -1,0 +1,26 @@
+name: Deploy to Kubernetes (test)
+
+# Manual test deploy. Any image tag is allowed: `latest`, a release tag, a branch/sha
+# tag, or `pr-N`. The chart and CRDs come from the ref this workflow is run from.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image tag to deploy (e.g. latest, 1.0.0, pr-123, or a branch/sha tag)."
+        required: true
+        type: string
+        default: latest
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-k8s.yml
+    secrets: inherit
+    with:
+      environment: k8s-test
+      namespace: hades-test
+      values-file: values-test.yaml
+      image-tag: ${{ inputs.version }}

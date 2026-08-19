@@ -1,0 +1,19 @@
+# Test overrides, layered on top of values.yaml by the
+# "Deploy to Kubernetes (test)" workflow (namespace: hades-test).
+# Only non-secret configuration lives here; credentials are injected as
+# Kubernetes Secrets (hades-auth, hades-dashboard) created by the deploy workflow.
+
+hadesApi:
+  # Protect the /build endpoint with the AUTH_KEY from the hades-auth Secret.
+  authKeySecret: hades-auth
+  dashboard:
+    # Enable the dashboard, backed by the hades-dashboard Secret.
+    secretName: hades-dashboard
+
+ingress:
+  host: hades-test.student.k8s.aet.cit.tum.de
+
+nats:
+  # values.yaml hardcodes the "hades" namespace in the NATS service FQDN, so the
+  # test namespace must point at its own NATS release (hades-nats.<namespace>).
+  host: hades-nats.hades-test.svc.cluster.local

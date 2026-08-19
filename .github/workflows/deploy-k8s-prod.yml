@@ -1,0 +1,61 @@
+name: Deploy to Kubernetes (prod)
+
+# Manual production deploy. The version must be `latest` or a published GitHub Release
+# tag (validated before anything touches the cluster). To deploy a release, run this
+# workflow from that release's tag so the chart and CRDs match the released images.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image tag to deploy: `latest` or a published release tag (e.g. 1.0.0)."
+        required: true
+        type: string
+        default: latest
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Validate version is a release or latest
+        run: |
+          set -euo pipefail
+          if [ "$VERSION" = "latest" ]; then
+            echo "Deploying 'latest'; skipping release validation."
+            exit 0
+          fi
+          # Require a published GitHub Release with this exact tag (no `v` prefix in this
+          # repo; the image tag equals the release tag).
+          if ! gh api "repos/${{ github.repository }}/releases/tags/$VERSION" >/dev/null 2>&1; then
+            echo "::error title=Invalid version::'$VERSION' is not a published GitHub release. Use 'latest' or an existing release tag."
+            exit 1
+          fi
+          echo "Release '$VERSION' exists."
+          # Best-effort guard: warn if no matching image was published to GHCR (a release
+          # existing does not prove the image build succeeded). The deploy still fails
+          # safely later (--atomic rolls back) if the image is truly missing.
+          if gh api --paginate "/orgs/hades-scheduler/packages/container/hades%2Fhades-api/versions" \
+               --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -qx "$VERSION"; then
+            echo "Image tag '$VERSION' found on GHCR."
+          else
+            echo "::warning title=Image not confirmed::Could not confirm image tag '$VERSION' on ghcr.io/hades-scheduler/hades/hades-api. Continuing; the deploy will fail and roll back if the image is missing."
+          fi
+
+  deploy:
+    needs: validate
+    uses: ./.github/workflows/deploy-k8s.yml
+    secrets: inherit
+    with:
+      environment: k8s-prod
+      namespace: hades
+      values-file: values-prod.yaml
+      image-tag: ${{ inputs.version }}
+      # Deploy a release's chart from its tag so templates/CRDs match the images.
+      chart-ref: ${{ inputs.version != 'latest' && inputs.version || '' }}
