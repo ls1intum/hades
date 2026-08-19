@@ -124,6 +124,10 @@ jobs:
     with:
       image-name: hades-scheduler/hades/hades-api
       docker-file: ./HadesAPI/Dockerfile
+      tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+        type=raw,value=latest,enable={{is_default_branch}}
     secrets: inherit
 
   build-scheduler:
@@ -133,6 +137,10 @@ jobs:
     with:
       image-name: hades-scheduler/hades/hades-scheduler
       docker-file: ./HadesScheduler/Dockerfile
+      tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+        type=raw,value=latest,enable={{is_default_branch}}
     secrets: inherit
 
   build-operator:
@@ -142,6 +150,10 @@ jobs:
     with:
       image-name: hades-scheduler/hades/hades-operator
       docker-file: ./HadesScheduler/HadesOperator/Dockerfile
+      tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+        type=raw,value=latest,enable={{is_default_branch}}
     secrets: inherit
 
   build-log-manager:
@@ -151,4 +163,8 @@ jobs:
     with:
       image-name: hades-scheduler/hades/hades-log-manager
       docker-file: ./HadesLogManager/Dockerfile
+      tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+        type=raw,value=latest,enable={{is_default_branch}}
     secrets: inherit
