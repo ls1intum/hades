@@ -50,9 +50,12 @@ jobs:
 
   deploy:
     needs: validate
-    # No `secrets: inherit`: the reusable job reads its secrets from the k8s-prod
-    # environment it selects, so inheriting the caller's secrets would only widen exposure.
+    # `secrets: inherit` is REQUIRED: the reusable job reads environment secrets
+    # (KUBE_CONFIG, AUTH_KEY, DASHBOARD_*) from the k8s-prod environment it selects,
+    # and a reusable workflow only receives those when the caller inherits secrets -
+    # its own `environment:` declaration alone does not grant access.
     uses: ./.github/workflows/deploy-k8s.yml
+    secrets: inherit
     with:
       environment: k8s-prod
       namespace: hades
