@@ -226,11 +226,10 @@ func podStuckReason(pod *corev1.Pod) (string, bool) {
 			if w == nil || !terminalWaitingReasons[w.Reason] {
 				continue
 			}
-			detail := w.Reason
-			if w.Message != "" {
-				detail = fmt.Sprintf("%s: %s", w.Reason, w.Message)
-			}
-			return fmt.Sprintf("%s (%s %d, %s)", detail, label, i+1, cs.Name), true
+			// Keep it concise: the reason plus the offending image and step, not the
+			// kubelet's verbose multi-line Waiting.Message (which repeats the pull
+			// error in full).
+			return fmt.Sprintf("%s (%s %d): %s", w.Reason, label, i+1, cs.Image), true
 		}
 		return "", false
 	}

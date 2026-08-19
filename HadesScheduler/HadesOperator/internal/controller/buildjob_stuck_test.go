@@ -7,11 +7,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func waitingStatus(name, reason, message string) corev1.ContainerStatus {
+func waitingStatus(name, image, reason string) corev1.ContainerStatus {
 	return corev1.ContainerStatus{
-		Name: name,
+		Name:  name,
+		Image: image,
 		State: corev1.ContainerState{
-			Waiting: &corev1.ContainerStateWaiting{Reason: reason, Message: message},
+			Waiting: &corev1.ContainerStateWaiting{Reason: reason},
 		},
 	}
 }
@@ -25,36 +26,36 @@ func runningStatus(name string) corev1.ContainerStatus {
 
 func TestPodStuckReason(t *testing.T) {
 	tests := []struct {
-		name       string
-		pod        corev1.Pod
-		wantStuck  bool
-		wantSubstr string
+		name        string
+		pod         corev1.Pod
+		wantStuck   bool
+		wantSubstrs []string
 	}{
 		{
 			name: "init container ImagePullBackOff is stuck",
 			pod: corev1.Pod{Status: corev1.PodStatus{
 				InitContainerStatuses: []corev1.ContainerStatus{
-					waitingStatus("step-1", "ImagePullBackOff", `Back-off pulling image "ghcr.io/x/y:1.0.0"`),
+					waitingStatus("step-1", "ghcr.io/x/y:1.0.0", "ImagePullBackOff"),
 				},
 			}},
-			wantStuck:  true,
-			wantSubstr: "ImagePullBackOff",
+			wantStuck:   true,
+			wantSubstrs: []string{"ImagePullBackOff", "step 1", "ghcr.io/x/y:1.0.0"},
 		},
 		{
 			name: "app container CrashLoopBackOff is stuck",
 			pod: corev1.Pod{Status: corev1.PodStatus{
 				ContainerStatuses: []corev1.ContainerStatus{
-					waitingStatus("finalizer", "CrashLoopBackOff", "back-off restarting failed container"),
+					waitingStatus("finalizer", "busybox:latest", "CrashLoopBackOff"),
 				},
 			}},
-			wantStuck:  true,
-			wantSubstr: "CrashLoopBackOff",
+			wantStuck:   true,
+			wantSubstrs: []string{"CrashLoopBackOff", "busybox:latest"},
 		},
 		{
 			name: "transient ErrImagePull is not stuck",
 			pod: corev1.Pod{Status: corev1.PodStatus{
 				InitContainerStatuses: []corev1.ContainerStatus{
-					waitingStatus("step-1", "ErrImagePull", "pulling"),
+					waitingStatus("step-1", "ghcr.io/x/y:1.0.0", "ErrImagePull"),
 				},
 			}},
 			wantStuck: false,
@@ -63,7 +64,7 @@ func TestPodStuckReason(t *testing.T) {
 			name: "transient ContainerCreating is not stuck",
 			pod: corev1.Pod{Status: corev1.PodStatus{
 				InitContainerStatuses: []corev1.ContainerStatus{
-					waitingStatus("step-1", "ContainerCreating", ""),
+					waitingStatus("step-1", "ghcr.io/x/y:1.0.0", "ContainerCreating"),
 				},
 			}},
 			wantStuck: false,
@@ -79,14 +80,14 @@ func TestPodStuckReason(t *testing.T) {
 			name: "init container reason wins over app container PodInitializing",
 			pod: corev1.Pod{Status: corev1.PodStatus{
 				InitContainerStatuses: []corev1.ContainerStatus{
-					waitingStatus("step-2", "ImagePullBackOff", "back-off"),
+					waitingStatus("step-2", "ghcr.io/x/y:2.0.0", "ImagePullBackOff"),
 				},
 				ContainerStatuses: []corev1.ContainerStatus{
-					waitingStatus("finalizer", "PodInitializing", ""),
+					waitingStatus("finalizer", "hades-finalizer:latest", "PodInitializing"),
 				},
 			}},
-			wantStuck:  true,
-			wantSubstr: "step 1",
+			wantStuck:   true,
+			wantSubstrs: []string{"step 1", "ghcr.io/x/y:2.0.0"},
 		},
 	}
 
@@ -96,11 +97,16 @@ func TestPodStuckReason(t *testing.T) {
 			if stuck != tt.wantStuck {
 				t.Fatalf("stuck = %v, want %v (reason=%q)", stuck, tt.wantStuck, reason)
 			}
-			if tt.wantStuck && !strings.Contains(reason, tt.wantSubstr) {
-				t.Fatalf("reason %q does not contain %q", reason, tt.wantSubstr)
+			if !tt.wantStuck {
+				if reason != "" {
+					t.Fatalf("expected empty reason, got %q", reason)
+				}
+				return
 			}
-			if !tt.wantStuck && reason != "" {
-				t.Fatalf("expected empty reason, got %q", reason)
+			for _, sub := range tt.wantSubstrs {
+				if !strings.Contains(reason, sub) {
+					t.Fatalf("reason %q does not contain %q", reason, sub)
+				}
 			}
 		})
 	}
