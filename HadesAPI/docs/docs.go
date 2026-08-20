@@ -165,7 +165,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "memory_swap": {
-                    "description": "Total memory+swap limit, same format as memory_limit (e.g., \"512M\", \"2G\"); must be \u003e= memory_limit. Docker executor only.",
+                    "description": "Total memory+swap limit, same format as memory_limit (e.g., \"512M\", \"2G\"); requires memory_limit to be set and must be \u003e= memory_limit. Docker executor only.",
                     "type": "string"
                 },
                 "metadata": {

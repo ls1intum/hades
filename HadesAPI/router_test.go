@@ -273,6 +273,12 @@ func (suite *APISuite) TestNegativeTimeoutSeconds() {
 	assert.Contains(suite.T(), w.Body.String(), "timeout_seconds")
 }
 
+func (suite *APISuite) TestTimeoutSecondsTooLarge() {
+	w := suite.postStep(payload.Step{ID: 1, Name: "s", Image: "image1"}, payload.MaxTimeoutSeconds+1)
+	assert.Equal(suite.T(), 400, w.Code)
+	assert.Contains(suite.T(), w.Body.String(), "timeout_seconds")
+}
+
 func (suite *APISuite) TestValidCallbackURL() {
 	w := httptest.NewRecorder()
 	restPayload := payload.RESTPayload{

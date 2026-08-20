@@ -151,8 +151,15 @@ func (d *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) e
 	// triggers its force-cleanup so no container is left running.
 	execCtx := ctx
 	if job.TimeoutSeconds > 0 {
+		// Clamp to the overflow-safe bound (the API rejects larger values, but a
+		// payload may reach the scheduler from other producers): seconds *
+		// time.Second must not overflow int64 nanoseconds into a negative duration.
+		timeoutSeconds := job.TimeoutSeconds
+		if timeoutSeconds > payload.MaxTimeoutSeconds {
+			timeoutSeconds = payload.MaxTimeoutSeconds
+		}
 		var cancel context.CancelFunc
-		execCtx, cancel = context.WithTimeout(ctx, time.Duration(job.TimeoutSeconds)*time.Second)
+		execCtx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 		defer cancel()
 	}
 

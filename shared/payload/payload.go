@@ -10,6 +10,12 @@ import (
 const (
 	// DefaultPriority is the default priority level for jobs when not specified
 	DefaultPriority = 3
+
+	// MaxTimeoutSeconds bounds TimeoutSeconds so that converting it to a
+	// time.Duration (seconds * time.Second) cannot overflow int64 nanoseconds,
+	// which would otherwise wrap to a negative duration and fire immediately.
+	// math.MaxInt64 / 1e9 ≈ 9.2e9 seconds (~292 years).
+	MaxTimeoutSeconds = int64(9223372036)
 )
 
 // RESTPayload represents the HTTP request payload for creating a new job.
@@ -43,7 +49,7 @@ type Step struct {
 	CPULimit        uint              `json:"cpu_limit"`             // CPU limit in whole cores (e.g., 1 = 1 CPU core, 2 = 2 cores)
 	MemoryLimit     string            `json:"memory_limit"`          // Memory limit (e.g., "512M", "2G")
 	Network         string            `json:"network,omitempty"`     // Docker network mode: "none", "bridge", "host", "default", or a named network. Empty = executor default. Docker executor only; accepted but not enforced on Kubernetes.
-	MemorySwap      string            `json:"memory_swap,omitempty"` // Total memory+swap limit, same format as memory_limit (e.g., "512M", "2G"); must be >= memory_limit. Docker executor only.
+	MemorySwap      string            `json:"memory_swap,omitempty"` // Total memory+swap limit, same format as memory_limit (e.g., "512M", "2G"); requires memory_limit to be set and must be >= memory_limit. Docker executor only.
 	PidsLimit       int64             `json:"pids_limit,omitempty"`  // Maximum number of PIDs in the container; 0 = unlimited. Docker executor only.
 }
 

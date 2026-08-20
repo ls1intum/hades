@@ -55,7 +55,8 @@ definitions:
         type: string
       memory_swap:
         description: Total memory+swap limit, same format as memory_limit (e.g., "512M",
-          "2G"); must be >= memory_limit. Docker executor only.
+          "2G"); requires memory_limit to be set and must be >= memory_limit. Docker
+          executor only.
         type: string
       metadata:
         additionalProperties:

@@ -172,6 +172,11 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublishe
 		c.String(http.StatusBadRequest, "timeout_seconds cannot be negative")
 		return
 	}
+	if p.QueuePayload.TimeoutSeconds > payload.MaxTimeoutSeconds {
+		slog.Error("timeout_seconds too large", "value", p.QueuePayload.TimeoutSeconds)
+		c.String(http.StatusBadRequest, fmt.Sprintf("timeout_seconds must not exceed %d", payload.MaxTimeoutSeconds))
+		return
+	}
 
 	for _, step := range p.QueuePayload.Steps {
 		var memLimitBytes int64

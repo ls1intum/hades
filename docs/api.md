@@ -123,9 +123,9 @@ Submitted to `POST /build`. Field semantics come from `shared/payload/payload.go
 Steps of a job share a per-job volume, so a file written by one step is visible to later steps.
 
 > **Executor parity:** `timeout_seconds`, environment variables (via `metadata`), `cpu_limit` and `memory_limit` are enforced on both the Docker and Kubernetes executors. `network`, `memory_swap` and `pids_limit` are enforced on the Docker executor only; Kubernetes accepts them (for schema parity) but does not apply them, because a pod's containers share one network namespace and Kubernetes has no per-container swap or PID-limit field.
-
+>
 > **CPU unit note:** `cpu_limit` is interpreted as **whole cores** by both executors. (An earlier revision documented millicores; the code has always treated the value as cores.)
-
+>
 > **Priority propagation:** once queued, the numeric priority and its name are attached to the job metadata under the keys `hades.tum.de/priority` and `hades.tum.de/priorityName` (constants `MetadataKeyPriority` / `MetadataKeyPriorityName` in `shared/prio.go`). The operator surfaces `hades.tum.de/priority` as a Job/Pod label.
 
 ---

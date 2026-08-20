@@ -127,7 +127,7 @@ func TestStep_AllFields(t *testing.T) {
 		Image:       "alpine/git:latest",
 		Script:      "git clone $GIT_URL",
 		Metadata:    metadata,
-		CPULimit:    2000,
+		CPULimit:    2,
 		MemoryLimit: "1G",
 		Network:     "none",
 		MemorySwap:  "2G",
@@ -139,7 +139,7 @@ func TestStep_AllFields(t *testing.T) {
 	assert.Equal(t, "alpine/git:latest", step.Image)
 	assert.Equal(t, "git clone $GIT_URL", step.Script)
 	assert.Equal(t, metadata, step.Metadata)
-	assert.Equal(t, uint(2000), step.CPULimit)
+	assert.Equal(t, uint(2), step.CPULimit)
 	assert.Equal(t, "1G", step.MemoryLimit)
 	assert.Equal(t, "none", step.Network)
 	assert.Equal(t, "2G", step.MemorySwap)

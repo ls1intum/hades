@@ -2,15 +2,15 @@
     "name": "",
     "metadata": {},
     "timestamp": "2021-01-01T00:00:00.000Z",
-    "priority": 1, // optional, default 3
-    "callback_url": "http://localhost:8082/adapter/logs", // optional; where aggregated logs are forwarded. If omitted, logs are not forwarded.
-    "timeout_seconds": 600, // optional; whole-job timeout, 0 = none
+    "priority": 1,
+    "callback_url": "http://localhost:8082/adapter/logs",
+    "timeout_seconds": 600,
     "steps" : [
         {
-            "id" : 1, // mandatory to declare the order of execution
+            "id" : 1,
             "name" : "Clone",
-            "image" : "git:alpine", // mandatory
-            "script" : "echo hello", // optional
+            "image" : "git:alpine",
+            "script" : "echo hello",
             "metadata" : {
                 "GIT_USERNAME[_*]" : "user",
                 "GIT_PASSWORD[_*]" : "pass",
@@ -25,11 +25,11 @@
             "image" : "java:alpine",
             "script" : "maven run",
             "metadata" : {},
-            "cpu_limit": 2, // optional; whole cores (both executors)
-            "memory_limit": "2G", // optional (both executors)
-            "network": "none", // optional; Docker executor only
-            "memory_swap": "2G", // optional; Docker executor only, >= memory_limit
-            "pids_limit": 512 // optional; Docker executor only
+            "cpu_limit": 2,
+            "memory_limit": "2G",
+            "network": "none",
+            "memory_swap": "2G",
+            "pids_limit": 512
         }
     ]
 }
