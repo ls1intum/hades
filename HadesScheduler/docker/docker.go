@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"sync"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/hades-scheduler/hades/hadesScheduler/log"
 	"github.com/hades-scheduler/hades/shared/buildlogs"
 	"github.com/moby/moby/api/pkg/stdcopy"
@@ -58,6 +59,11 @@ func removeContainer(ctx context.Context, cli *client.Client, containerID string
 		Force:         true, // Kill if running, then remove
 		RemoveVolumes: true, // Clean up any volumes
 	}); err != nil {
+		// The container may already be gone (e.g. AutoRemove reaped it, or it was
+		// removed on a prior cleanup): treat that as success rather than a noisy error.
+		if cerrdefs.IsNotFound(err) {
+			return nil
+		}
 		return fmt.Errorf("failed to cleanup container %s: %w", containerID, err)
 	}
 
