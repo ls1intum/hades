@@ -128,3 +128,19 @@ func TestParseMemoryLimit_InvalidInput(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateNetworkMode(t *testing.T) {
+	valid := []string{"", "none", "bridge", "host", "default", "my-net", "hades_net.1", "artemis-build-network"}
+	for _, n := range valid {
+		t.Run("valid/"+n, func(t *testing.T) {
+			assert.NoError(t, ValidateNetworkMode(n))
+		})
+	}
+
+	invalid := []string{" ", "no ne", "net work", "-leading", ".dot", "bad/slash", "tab\there"}
+	for _, n := range invalid {
+		t.Run("invalid/"+n, func(t *testing.T) {
+			assert.Error(t, ValidateNetworkMode(n))
+		})
+	}
+}

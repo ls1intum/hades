@@ -128,6 +128,65 @@ func TestScheduleJobFailsOnNonZeroExit(t *testing.T) {
 	require.NotContains(t, joined, "should-not-run")
 }
 
+// TestScheduleJobTimesOut asserts the whole-job timeout kills a long-running
+// step, fails the job promptly, and leaves no container running (so the shared
+// volume can be cleaned up).
+func TestScheduleJobTimesOut(t *testing.T) {
+	publisher := &capturingPublisher{}
+	scheduler := newTestScheduler(t, publisher)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	job := payload.QueuePayload{
+		ID:             uuid.New(),
+		Name:           "timeout-job",
+		TimeoutSeconds: 2,
+		Steps: []payload.Step{
+			{ID: 1, Image: testImage, Script: "sleep 120"},
+		},
+	}
+
+	start := time.Now()
+	err := scheduler.ScheduleJob(ctx, job)
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	// The job must abort near the 2s deadline, not run the full 120s sleep.
+	require.Less(t, elapsed, 60*time.Second, "job did not abort at the timeout")
+
+	// No container for this job may still be running: a cancelled ContainerWait
+	// does not stop the container, so the executor must force-remove it.
+	list, listErr := scheduler.cli.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: client.Filters{}.Add("label", "job_id="+job.ID.String()),
+	})
+	require.NoError(t, listErr)
+	require.Empty(t, list.Items, "container was leaked after timeout")
+}
+
+// TestScheduleJobNetworkNone asserts that network mode "none" fully isolates the
+// step container: only the loopback interface is present.
+func TestScheduleJobNetworkNone(t *testing.T) {
+	publisher := &capturingPublisher{}
+	scheduler := newTestScheduler(t, publisher)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// With network "none" the only network interface is "lo"; any other interface
+	// (e.g. eth0 on the default bridge) makes this fail.
+	job := payload.QueuePayload{
+		ID:   uuid.New(),
+		Name: "network-none-job",
+		Steps: []payload.Step{
+			{ID: 1, Image: testImage, Network: "none", Script: `test "$(ls /sys/class/net)" = "lo"`},
+		},
+	}
+
+	require.NoError(t, scheduler.ScheduleJob(ctx, job))
+}
+
 // TestPullImagesReportsErrorForMissingImage asserts that errors the daemon
 // reports in-band on the pull stream surface as errors rather than being
 // silently drained.

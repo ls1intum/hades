@@ -5,6 +5,7 @@ go 1.26.0
 replace github.com/hades-scheduler/hades/shared => ../shared
 
 require (
+	github.com/containerd/errdefs v1.0.0
 	github.com/hades-scheduler/hades/shared v0.0.0-20260731094431-f95c1b4a6d91
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.1
@@ -20,7 +21,6 @@ require (
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/go-openapi/swag/cmdutils v0.28.0 // indirect

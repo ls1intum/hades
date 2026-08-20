@@ -180,7 +180,30 @@ func buildBuildJobObject(job payload.QueuePayload, namespace string) *unstructur
 		if s.MemoryLimit != "" {
 			sm["memoryLimit"] = s.MemoryLimit
 		}
+		// network, memorySwap and pidsLimit are forwarded for schema symmetry with
+		// the Docker executor, but the operator does not enforce them on the pod
+		// (Kubernetes has no per-container field for swap/pids, and all containers
+		// in a pod share one network namespace). See buildK8sJob.
+		if s.Network != "" {
+			sm["network"] = s.Network
+		}
+		if s.MemorySwap != "" {
+			sm["memorySwap"] = s.MemorySwap
+		}
+		if s.PidsLimit > 0 {
+			sm["pidsLimit"] = s.PidsLimit
+		}
 		steps = append(steps, sm)
+	}
+
+	spec := map[string]interface{}{
+		"name":     job.Name,
+		"metadata": job.Metadata,
+		"steps":    steps,
+	}
+	// Whole-job timeout, enforced by the operator via Job.spec.activeDeadlineSeconds.
+	if job.TimeoutSeconds > 0 {
+		spec["timeoutSeconds"] = job.TimeoutSeconds
 	}
 
 	return &unstructured.Unstructured{
@@ -192,11 +215,7 @@ func buildBuildJobObject(job payload.QueuePayload, namespace string) *unstructur
 				"namespace": namespace,
 				"labels":    labels,
 			},
-			"spec": map[string]interface{}{
-				"name":     job.Name,
-				"metadata": job.Metadata,
-				"steps":    steps,
-			},
+			"spec": spec,
 		},
 	}
 }

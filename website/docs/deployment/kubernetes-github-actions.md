@@ -19,9 +19,13 @@ Both are `workflow_dispatch` only - nothing deploys automatically. They call the
 
 ## How a deploy runs
 
-1. **Checkout** the chart source. Prod checks out the **release tag** (when the version is
-   not `latest`) so the chart templates and CRDs match the released images; test uses the
-   ref the workflow was run from.
+1. **Checkout** the chart source. The chart templates and CRDs come from this ref, so it
+   must match the deployed image - especially for CRDs, which Helm never upgrades (see
+   step 5). Prod checks out the **release tag** (when the version is not `latest`). Test
+   resolves the ref automatically: an explicit `chart-ref` input wins; otherwise a `pr-N`
+   version sources the chart/CRDs from that PR's head (`refs/pull/N/head`); otherwise it
+   uses the ref the workflow was run from. This means deploying a `pr-N` image also
+   deploys that PR's CRDs, even when the run is dispatched from `main`.
 2. **Configure kubeconfig** from the environment's `KUBE_CONFIG` secret.
 3. **Ensure the namespace** exists.
 4. **Create/update the app Secrets** (`hades-auth`, `hades-dashboard`) from the
@@ -45,7 +49,10 @@ the release tag verbatim, with no `v` prefix).
 ## Selecting the version
 
 - **Test**: type any image tag. Handy tags: `latest` (current `main`), `pr-123` (a PR
-  build), or a release tag.
+  build), or a release tag. For a `pr-N` tag the chart and CRDs are taken from that PR's
+  head automatically, so you can dispatch from any branch and still get the PR's CRDs. To
+  source the chart from a specific branch or sha instead, set the optional `chart-ref`
+  input.
 - **Prod**: type `latest` or an existing release tag (for example `1.0.0`). A bogus value
   fails the `validate` job before the cluster is touched. The prod deploy pins the chart
   source automatically - `main` for `latest`, or the release tag otherwise - so the chart

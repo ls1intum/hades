@@ -32,7 +32,9 @@ Every component connects to NATS with the same `ConnectionConfig`.
 
 Plus the [NATS](#nats-connection-all-components) and [global](#global-all-components) variables.
 
-> **Reserved (not yet implemented):** `PROMETHEUS_ADDRESS`, `RETENTION_IN_MIN`, `MAX_RETRIES`, and `TIMEOUT_IN_MIN` appear in `.env.example` and some compose files but are **not read by any component today**. They are placeholders for planned features and currently have no effect.
+> **Reserved (not yet implemented):** `PROMETHEUS_ADDRESS`, `RETENTION_IN_MIN`, `MAX_RETRIES`, and `TIMEOUT_IN_MIN` appear in `.env.example` and some compose files but are **not read by any component today**. They are placeholders for planned features and currently have no effect. (Note: a per-job timeout *is* supported, but it is set on the job payload as `timeout_seconds`, not via this env var - see [API: `Step`/`QueuePayload`](./api.md#queuepayload).)
+>
+> **Per-job/per-step resource controls** are set on the job payload, not via environment variables: `timeout_seconds` (job), and per-step `cpu_limit`, `memory_limit`, `network`, `memory_swap`, `pids_limit`. Timeout, CPU, memory and environment variables are enforced on both executors; `network`, `memory_swap` and `pids_limit` are Docker-executor only (Kubernetes has no per-container swap/PID field, and a pod's containers share one network namespace). See [api.md](./api.md#step).
 
 ## HadesScheduler
 
