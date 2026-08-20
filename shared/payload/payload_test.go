@@ -129,6 +129,9 @@ func TestStep_AllFields(t *testing.T) {
 		Metadata:    metadata,
 		CPULimit:    2000,
 		MemoryLimit: "1G",
+		Network:     "none",
+		MemorySwap:  "2G",
+		PidsLimit:   256,
 	}
 
 	assert.Equal(t, 1, step.ID)
@@ -138,5 +141,55 @@ func TestStep_AllFields(t *testing.T) {
 	assert.Equal(t, metadata, step.Metadata)
 	assert.Equal(t, uint(2000), step.CPULimit)
 	assert.Equal(t, "1G", step.MemoryLimit)
+	assert.Equal(t, "none", step.Network)
+	assert.Equal(t, "2G", step.MemorySwap)
+	assert.Equal(t, int64(256), step.PidsLimit)
 	assert.Equal(t, "1", step.IDString())
+}
+
+// The new limit fields must round-trip through JSON and be omitted when unset so
+// legacy clients and payloads are unaffected.
+func TestStep_LimitFields_RoundTrip(t *testing.T) {
+	t.Run("present when set", func(t *testing.T) {
+		s := Step{ID: 1, Image: "alpine", Network: "none", MemorySwap: "2G", PidsLimit: 128}
+		data, err := json.Marshal(s)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), `"network":"none"`)
+		assert.Contains(t, string(data), `"memory_swap":"2G"`)
+		assert.Contains(t, string(data), `"pids_limit":128`)
+
+		var back Step
+		require.NoError(t, json.Unmarshal(data, &back))
+		assert.Equal(t, s.Network, back.Network)
+		assert.Equal(t, s.MemorySwap, back.MemorySwap)
+		assert.Equal(t, s.PidsLimit, back.PidsLimit)
+	})
+
+	t.Run("omitted when empty", func(t *testing.T) {
+		data, err := json.Marshal(Step{ID: 1, Image: "alpine"})
+		require.NoError(t, err)
+		assert.NotContains(t, string(data), "network")
+		assert.NotContains(t, string(data), "memory_swap")
+		assert.NotContains(t, string(data), "pids_limit")
+	})
+}
+
+// timeout_seconds must round-trip on the job and be omitted when unset.
+func TestQueuePayload_TimeoutSeconds_RoundTrip(t *testing.T) {
+	t.Run("present when set", func(t *testing.T) {
+		p := QueuePayload{Name: "job", TimeoutSeconds: 600}
+		data, err := json.Marshal(p)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), `"timeout_seconds":600`)
+
+		var back QueuePayload
+		require.NoError(t, json.Unmarshal(data, &back))
+		assert.Equal(t, int64(600), back.TimeoutSeconds)
+	})
+
+	t.Run("omitted when zero", func(t *testing.T) {
+		data, err := json.Marshal(QueuePayload{Name: "job"})
+		require.NoError(t, err)
+		assert.NotContains(t, string(data), "timeout_seconds")
+	})
 }

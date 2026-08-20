@@ -146,16 +146,34 @@ func (d *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) e
 		jobLogger.Warn("failed to publish running status", "error", err)
 	}
 
-	err := dockerJob.execute(ctx)
+	// Apply the whole-job timeout, if configured. When it fires, the derived
+	// context is cancelled, which unblocks the running step's ContainerWait and
+	// triggers its force-cleanup so no container is left running.
+	execCtx := ctx
+	if job.TimeoutSeconds > 0 {
+		var cancel context.CancelFunc
+		execCtx, cancel = context.WithTimeout(ctx, time.Duration(job.TimeoutSeconds)*time.Second)
+		defer cancel()
+	}
+
+	err := dockerJob.execute(execCtx)
 	if err != nil {
 		// Surface why the job failed (e.g. an image pull error) to the dashboard.
 		// Redact secret-looking tokens and cap the length so a verbose daemon error
 		// stays within NATS header limits.
 		reason := redact.Default().Text(err.Error())
+		// Distinguish a timeout from other failures for a clearer status message.
+		// The parent ctx being live while execCtx is done means the job timed out
+		// rather than the whole scheduler shutting down.
+		if job.TimeoutSeconds > 0 && execCtx.Err() != nil && ctx.Err() == nil {
+			reason = fmt.Sprintf("job timed out after %d seconds", job.TimeoutSeconds)
+		}
 		if runes := []rune(reason); len(runes) > maxStatusReasonLen {
 			reason = string(runes[:maxStatusReasonLen]) + "…"
 		}
-		if perr := d.statusPublisher.PublishJobStatus(ctx, buildstatus.StatusFailed, job.ID.String(), reason); perr != nil {
+		// Publish with a fresh context: the job ctx may already be cancelled (on a
+		// timeout), which would otherwise drop the failure status.
+		if perr := d.statusPublisher.PublishJobStatus(context.WithoutCancel(ctx), buildstatus.StatusFailed, job.ID.String(), reason); perr != nil {
 			jobLogger.Warn("failed to publish failed status", "error", perr)
 		}
 		jobLogger.Error("Failed to execute job", "error", err)

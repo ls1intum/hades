@@ -230,6 +230,49 @@ func (suite *APISuite) TestInvalidMemoryLimit() {
 	assert.Equal(suite.T(), "Failed to parse RAM limit", w.Body.String())
 }
 
+// postStep is a helper that submits a single-step job and returns the response.
+func (suite *APISuite) postStep(step payload.Step, timeoutSeconds int64) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	restPayload := payload.RESTPayload{
+		Priority: 1,
+		QueuePayload: payload.QueuePayload{
+			Name:           "example",
+			Timestamp:      time.Now(),
+			TimeoutSeconds: timeoutSeconds,
+			Steps:          []payload.Step{step},
+		},
+	}
+	jsonValue, _ := json.Marshal(restPayload)
+	req, _ := http.NewRequest("POST", "/build", bytes.NewBuffer(jsonValue))
+	req.Header.Set("Content-Type", "application/json")
+	suite.router.ServeHTTP(w, req)
+	return w
+}
+
+func (suite *APISuite) TestInvalidNetworkMode() {
+	w := suite.postStep(payload.Step{ID: 1, Name: "s", Image: "image1", Network: "bad net"}, 0)
+	assert.Equal(suite.T(), 400, w.Code)
+	assert.Contains(suite.T(), w.Body.String(), "network")
+}
+
+func (suite *APISuite) TestMemorySwapRequiresMemoryLimit() {
+	w := suite.postStep(payload.Step{ID: 1, Name: "s", Image: "image1", MemorySwap: "2G"}, 0)
+	assert.Equal(suite.T(), 400, w.Code)
+	assert.Contains(suite.T(), w.Body.String(), "memory_swap requires memory_limit")
+}
+
+func (suite *APISuite) TestMemorySwapSmallerThanMemoryLimit() {
+	w := suite.postStep(payload.Step{ID: 1, Name: "s", Image: "image1", MemoryLimit: "2G", MemorySwap: "1G"}, 0)
+	assert.Equal(suite.T(), 400, w.Code)
+	assert.Contains(suite.T(), w.Body.String(), "memory_swap must be greater than or equal to memory_limit")
+}
+
+func (suite *APISuite) TestNegativeTimeoutSeconds() {
+	w := suite.postStep(payload.Step{ID: 1, Name: "s", Image: "image1"}, -5)
+	assert.Equal(suite.T(), 400, w.Code)
+	assert.Contains(suite.T(), w.Body.String(), "timeout_seconds")
+}
+
 func (suite *APISuite) TestValidCallbackURL() {
 	w := httptest.NewRecorder()
 	restPayload := payload.RESTPayload{

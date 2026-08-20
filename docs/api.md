@@ -101,6 +101,8 @@ Submitted to `POST /build`. Field semantics come from `shared/payload/payload.go
 | `timestamp` | RFC3339 | no | Job creation time. |
 | `metadata` | map[string]string | no | Job-level metadata (also injected as environment variables). |
 | `steps` | `[]Step` | no | Ordered steps to execute. |
+| `callback_url` | string | no | Absolute http/https URL to forward aggregated logs/results to. |
+| `timeout_seconds` | int64 | no | Whole-job timeout in seconds. The job is killed and marked failed once exceeded. `0` (default) = no timeout. Enforced on both executors (Docker: context deadline; Kubernetes: Job `activeDeadlineSeconds`). |
 
 ### `Step`
 
@@ -112,10 +114,17 @@ Submitted to `POST /build`. Field semantics come from `shared/payload/payload.go
 | `script` | string | Shell script to run in the container. |
 | `continue_on_error` | bool | Continue with the next step if this one fails. |
 | `metadata` | map[string]string | Step-specific environment variables. |
-| `cpu_limit` | uint | CPU limit in millicores (e.g. `1000` = 1 core). |
+| `cpu_limit` | uint | CPU limit in whole cores (e.g. `1` = 1 core, `2` = 2 cores). |
 | `memory_limit` | string | Memory limit, e.g. `512M`, `2G`. |
+| `network` | string | Docker network mode: `none`, `bridge`, `host`, `default`, or a named network. Empty = executor default. **Docker executor only** - accepted but not enforced on Kubernetes. |
+| `memory_swap` | string | Total memory+swap limit (same format as `memory_limit`); must be set together with `memory_limit` and be `>=` it. **Docker executor only.** |
+| `pids_limit` | int64 | Max PIDs in the container; `0` = unlimited. **Docker executor only.** |
 
 Steps of a job share a per-job volume, so a file written by one step is visible to later steps.
+
+> **Executor parity:** `timeout_seconds`, environment variables (via `metadata`), `cpu_limit` and `memory_limit` are enforced on both the Docker and Kubernetes executors. `network`, `memory_swap` and `pids_limit` are enforced on the Docker executor only; Kubernetes accepts them (for schema parity) but does not apply them, because a pod's containers share one network namespace and Kubernetes has no per-container swap or PID-limit field.
+
+> **CPU unit note:** `cpu_limit` is interpreted as **whole cores** by both executors. (An earlier revision documented millicores; the code has always treated the value as cores.)
 
 > **Priority propagation:** once queued, the numeric priority and its name are attached to the job metadata under the keys `hades.tum.de/priority` and `hades.tum.de/priorityName` (constants `MetadataKeyPriority` / `MetadataKeyPriorityName` in `shared/prio.go`). The operator surfaces `hades.tum.de/priority` as a Job/Pod label.
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -73,6 +74,28 @@ func ParseMemoryLimit(limit string) (int64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported memory unit %q: must be G (gigabytes) or M (megabytes)", unit)
 	}
+}
+
+// namedNetworkPattern matches a valid Docker network name: it must start with an
+// alphanumeric character and may contain letters, digits, and the separators
+// "_", ".", "-". This rejects whitespace and control characters.
+var namedNetworkPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
+
+// ValidateNetworkMode checks that network is one of the fixed Docker network
+// modes ("none", "bridge", "host", "default") or a valid named network. An empty
+// string is valid and means "executor default".
+func ValidateNetworkMode(network string) error {
+	if network == "" {
+		return nil
+	}
+	switch network {
+	case "none", "bridge", "host", "default":
+		return nil
+	}
+	if !namedNetworkPattern.MatchString(network) {
+		return fmt.Errorf("invalid network mode: must be none, bridge, host, default, or a valid network name")
+	}
+	return nil
 }
 
 // ValidateCallbackURL checks that raw is a well-formed absolute http or https

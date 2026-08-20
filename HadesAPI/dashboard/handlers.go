@@ -30,15 +30,19 @@ type StepView struct {
 	Metadata        map[string]string `json:"metadata"`
 	CPULimit        uint              `json:"cpuLimit"`
 	MemoryLimit     string            `json:"memoryLimit"`
+	Network         string            `json:"network,omitempty"`
+	MemorySwap      string            `json:"memorySwap,omitempty"`
+	PidsLimit       int64             `json:"pidsLimit,omitempty"`
 }
 
 // JobDetail is the full job view: identity/status from the tracker plus the
 // redacted payload from the KV store.
 type JobDetail struct {
 	JobSummary
-	Timestamp time.Time         `json:"timestamp"`
-	Metadata  map[string]string `json:"metadata"`
-	Steps     []StepView        `json:"steps"`
+	Timestamp      time.Time         `json:"timestamp"`
+	Metadata       map[string]string `json:"metadata"`
+	Steps          []StepView        `json:"steps"`
+	TimeoutSeconds int64             `json:"timeoutSeconds,omitempty"`
 	// PayloadAvailable is false when the full payload has aged out of the KV
 	// store; identity/status from the tracker are still returned.
 	PayloadAvailable bool `json:"payloadAvailable"`
@@ -132,6 +136,7 @@ func (s *Server) handleJobDetail(c *gin.Context) {
 	}
 	detail.PayloadAvailable = true
 	detail.Timestamp = job.Timestamp
+	detail.TimeoutSeconds = job.TimeoutSeconds
 	if detail.Name == "" {
 		detail.Name = job.Name
 	}
@@ -151,6 +156,9 @@ func (s *Server) handleJobDetail(c *gin.Context) {
 			Metadata:        nonNil(st.Metadata),
 			CPULimit:        st.CPULimit,
 			MemoryLimit:     st.MemoryLimit,
+			Network:         st.Network,
+			MemorySwap:      st.MemorySwap,
+			PidsLimit:       st.PidsLimit,
 		}
 	}
 

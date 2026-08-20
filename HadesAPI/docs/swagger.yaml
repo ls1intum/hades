@@ -26,6 +26,10 @@ definitions:
         items:
           $ref: '#/definitions/payload.Step'
         type: array
+      timeout_seconds:
+        description: Whole-job timeout in seconds; the job is killed and marked failed
+          once exceeded. 0 = no timeout.
+        type: integer
       timestamp:
         description: Job creation timestamp
         type: string
@@ -38,7 +42,7 @@ definitions:
         description: Whether to continue with the next step if this step fails
         type: boolean
       cpu_limit:
-        description: CPU limit in millicores (e.g., 1000 = 1 CPU core)
+        description: CPU limit in whole cores (e.g., 1 = 1 CPU core, 2 = 2 cores)
         type: integer
       id:
         description: Step execution order (starts at 1)
@@ -49,6 +53,10 @@ definitions:
       memory_limit:
         description: Memory limit (e.g., "512M", "2G")
         type: string
+      memory_swap:
+        description: Total memory+swap limit, same format as memory_limit (e.g., "512M",
+          "2G"); must be >= memory_limit. Docker executor only.
+        type: string
       metadata:
         additionalProperties:
           type: string
@@ -57,6 +65,15 @@ definitions:
       name:
         description: Human-readable step name
         type: string
+      network:
+        description: 'Docker network mode: "none", "bridge", "host", "default", or
+          a named network. Empty = executor default. Docker executor only; accepted
+          but not enforced on Kubernetes.'
+        type: string
+      pids_limit:
+        description: Maximum number of PIDs in the container; 0 = unlimited. Docker
+          executor only.
+        type: integer
       script:
         description: Shell script to execute in the container
         type: string
