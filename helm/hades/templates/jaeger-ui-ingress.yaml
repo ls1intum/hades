@@ -3,6 +3,9 @@
 {{- if not $ui.ingress.host }}
 {{- fail "tracing.jaeger.ui.ingress.enabled is true but tracing.jaeger.ui.ingress.host is empty" }}
 {{- end }}
+{{- if and $ui.ingress.tls.enabled (not $ui.ingress.tls.secretName) }}
+{{- fail "tracing.jaeger.ui.ingress.tls.enabled is true but tracing.jaeger.ui.ingress.tls.secretName is empty" }}
+{{- end }}
 {{- /* Resolve the basic-auth secret: a pre-created one, or generate from user/pass.
        Fail closed so the UI is never exposed without authentication. */}}
 {{- $authSecret := $ui.auth.existingSecret }}
