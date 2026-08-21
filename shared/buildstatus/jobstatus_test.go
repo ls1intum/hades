@@ -90,3 +90,48 @@ func TestFirstReason(t *testing.T) {
 		})
 	}
 }
+
+func TestJobStatus_IsTerminal(t *testing.T) {
+	tests := []struct {
+		name   string
+		status JobStatus
+		want   bool
+	}{
+		{"queued is not terminal", StatusQueued, false},
+		{"running is not terminal", StatusRunning, false},
+		{"succeeded is terminal", StatusSucceeded, true},
+		{"failed is terminal", StatusFailed, true},
+		{"stopped is terminal", StatusStopped, true},
+		{"unknown is not terminal", JobStatus("random"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.status.IsTerminal(); got != tt.want {
+				t.Errorf("JobStatus.IsTerminal() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStatusFromSubject(t *testing.T) {
+	tests := []struct {
+		name    string
+		subject string
+		want    JobStatus
+	}{
+		{"succeeded", "hades.jobstatus.Succeeded", StatusSucceeded},
+		{"failed", "hades.jobstatus.Failed", StatusFailed},
+		{"round trip", StatusSubject(StatusStopped), StatusStopped},
+		{"no token", "hades.jobstatus.", JobStatus("")},
+		{"no separator", "hadesjobstatus", JobStatus("")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := StatusFromSubject(tt.subject); got != tt.want {
+				t.Errorf("StatusFromSubject(%q) = %q, want %q", tt.subject, got, tt.want)
+			}
+		})
+	}
+}

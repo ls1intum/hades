@@ -137,6 +137,26 @@ func TestSafePayloadFormat_CallbackURLCredentialsStripped(t *testing.T) {
 	}
 }
 
+func TestSafePayloadFormat_StatusCallbackURLCredentialsStripped(t *testing.T) {
+	job := baseJob()
+	job.StatusCallback = "https://user:token@example.com/status?secret=abc#frag"
+
+	result := SafePayloadFormat(job)
+
+	var out payload.QueuePayload
+	if err := json.Unmarshal([]byte(result), &out); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+	if out.StatusCallback != "https://example.com/status" {
+		t.Errorf("status callback URL not fully redacted: got %q", out.StatusCallback)
+	}
+	for _, leak := range []string{"user", "token", "secret", "abc", "frag"} {
+		if strings.Contains(out.StatusCallback, leak) {
+			t.Errorf("sanitized status callback URL leaked %q: %s", leak, out.StatusCallback)
+		}
+	}
+}
+
 func TestSafePayloadFormat_OriginalNotMutated(t *testing.T) {
 	job := baseJob()
 	_ = SafePayloadFormat(job)
