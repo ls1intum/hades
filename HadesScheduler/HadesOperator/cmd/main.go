@@ -71,17 +71,17 @@ type OperatorConfig struct {
 func (c *OperatorConfig) normalize() {
 	if c.MaxParallelism == 0 {
 		setupLog.WithValues("env", "MAX_PARALLELISM").
-			Info("MAX_PARALLELISM is 0 or invalid; falling back to default", "fallback", DefaultMaxParallelism)
+			Info("MAX_PARALLELISM is 0; falling back to default", "fallback", DefaultMaxParallelism)
 		c.MaxParallelism = DefaultMaxParallelism
 	}
 	if c.RequeueDelay <= 0 {
 		setupLog.WithValues("env", "REQUEUE_DELAY").
-			Info("REQUEUE_DELAY is 0 or invalid; falling back to default", "fallback", controller.DefaultRequeueDelay)
+			Info("REQUEUE_DELAY is not positive; falling back to default", "fallback", controller.DefaultRequeueDelay)
 		c.RequeueDelay = controller.DefaultRequeueDelay
 	}
 	if c.LogDrainTimeout <= 0 {
 		setupLog.WithValues("env", "LOG_DRAIN_TIMEOUT").
-			Info("LOG_DRAIN_TIMEOUT is 0 or invalid; falling back to default", "fallback", controller.DefaultLogDrainTimeout)
+			Info("LOG_DRAIN_TIMEOUT is not positive; falling back to default", "fallback", controller.DefaultLogDrainTimeout)
 		c.LogDrainTimeout = controller.DefaultLogDrainTimeout
 	}
 }
