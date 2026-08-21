@@ -44,8 +44,12 @@ func InitTracing(ctx context.Context, serviceName string) (func(context.Context)
 		return nil, err
 	}
 
-	res, err := resource.Merge(resource.Default(), resource.NewWithAttributes(
-		semconv.SchemaURL, semconv.ServiceName(serviceName),
+	// NewSchemaless avoids a schema-URL conflict with resource.Default() (whose
+	// schema tracks the SDK's semconv version); resource.Merge errors on differing
+	// non-empty schema URLs, which would otherwise drop the service name and leave
+	// spans labelled "unknown_service".
+	res, err := resource.Merge(resource.Default(), resource.NewSchemaless(
+		semconv.ServiceName(serviceName),
 	))
 	if err != nil {
 		res = resource.Default()
