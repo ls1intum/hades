@@ -35,9 +35,10 @@ func SafePayloadFormat[T PayloadInput](input T) string {
 }
 
 // stripURLSecrets removes userinfo, query, and fragment from raw so credentials
-// or tokens carried there never reach a log line. An unparseable value is
-// returned unchanged only when it is empty; otherwise the original is kept as-is
-// because url.Parse is extremely permissive and rarely fails.
+// or tokens carried there never reach a log line. url.Parse is permissive and
+// rarely fails, but when it does the value is dropped entirely rather than
+// logged as-is: a string that cannot be parsed cannot be sanitized, and an
+// empty log field is preferable to leaking an unknown one.
 func stripURLSecrets(raw string) string {
 	if raw == "" {
 		return ""

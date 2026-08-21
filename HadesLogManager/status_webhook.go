@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"sync"
@@ -141,6 +142,11 @@ type webhookSender interface {
 	Send(ctx context.Context, url string, event JobStatusEvent) error
 }
 
+// maxDrainedResponseBytes bounds how much of a webhook response body is read
+// before closing it. Draining is what lets the connection be reused; the body
+// itself is never parsed.
+const maxDrainedResponseBytes = 64 << 10
+
 // httpWebhookSender POSTs the event as JSON over HTTP.
 type httpWebhookSender struct {
 	client *http.Client
@@ -172,7 +178,13 @@ func (s *httpWebhookSender) Send(ctx context.Context, url string, event JobStatu
 	if err != nil {
 		return fmt.Errorf("sending status webhook: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		// Drain a bounded prefix before closing so the connection can go back to
+		// the keep-alive pool instead of being torn down on every delivery. The
+		// limit keeps a chatty receiver from making this read unbounded.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDrainedResponseBytes))
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("status webhook endpoint returned %s", resp.Status)
