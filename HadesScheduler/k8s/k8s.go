@@ -227,17 +227,23 @@ func buildBuildJobObject(job payload.QueuePayload, namespace string) *unstructur
 		spec["timeoutSeconds"] = job.TimeoutSeconds
 	}
 
+	metadata := map[string]interface{}{
+		"name":      job.ID.String(),
+		"namespace": namespace,
+		"labels":    labels,
+	}
+	// Only set annotations when there is something to carry, so the CR does not
+	// ship an empty "annotations": {} to the API server.
+	if len(annotations) > 0 {
+		metadata["annotations"] = annotations
+	}
+
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "build.hades.tum.de/v1",
 			"kind":       "BuildJob",
-			"metadata": map[string]interface{}{
-				"name":        job.ID.String(),
-				"namespace":   namespace,
-				"labels":      labels,
-				"annotations": annotations,
-			},
-			"spec": spec,
+			"metadata":   metadata,
+			"spec":       spec,
 		},
 	}
 }

@@ -35,11 +35,11 @@ type Step struct {
 }
 
 func (s Step) execute(ctx context.Context) error {
-	// Pull the image. Record whether it was already present locally (a cache
-	// hit) so cold and warm pulls are distinguishable - the pull dominates the
-	// step's overhead when the image is cold.
-	pullStart := time.Now()
+	// Record whether the image is already present locally (a cache hit) so cold
+	// and warm pulls are distinguishable. The probe is a local daemon call taken
+	// before the pull clock starts, so it is not counted as image-pull time.
 	cached := imagePresentLocally(ctx, s.cli, s.Image)
+	pullStart := time.Now()
 	err := pullImages(ctx, s.cli, s.Image)
 	s.timer.RecordImagePull(s.ID, pullStart, time.Now(), cached)
 	if err != nil {
