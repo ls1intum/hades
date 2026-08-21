@@ -78,7 +78,9 @@ hadesScheduler:
       memory: "256Mi"
   # -- Executor backend (`k8s` for in-cluster execution).
   executor: "k8s"
-  # -- Number of NATS consumer workers the scheduler runs. The meaning depends on
+  # -- Number of NATS consumer workers each scheduler pod runs. This is a
+  # per-replica setting, so the total number of workers consuming the queue is
+  # `concurrency * hadesScheduler.replicaCount`. The meaning depends on
   # the executor: with `k8s` a worker only creates a `BuildJob` CR and returns, so
   # this caps how fast queued jobs are turned into CRs (the operator's
   # `hadesOperator.maxParallelism` remains the real limit on running Jobs); with
