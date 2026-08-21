@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -417,4 +419,52 @@ func TestStatusWebhookConfigNormalizesInvalidValues(t *testing.T) {
 	assert.GreaterOrEqual(t, cfg.MaxBackoff, cfg.InitialBackoff)
 	assert.Positive(t, cfg.Concurrency)
 	assert.GreaterOrEqual(t, cfg.MaxPending, cfg.Concurrency)
+}
+
+// TestStatusWebhookConfigFallbacksMatchEnvDefaults guards the one way the two
+// halves of the config can drift apart: the envDefault tag is the value an
+// operator reads as "the default", while normalized() is what they actually get
+// when they set something invalid. envDefault tags are strings and cannot
+// reference a Go constant, so nothing but this test keeps the two in step.
+//
+// Only the fields with an absolute fallback are checked. Enabled, MaxBackoff,
+// and MaxPending are deliberately excluded: normalized() leaves Enabled alone so
+// an explicit "false" survives, and clamps MaxBackoff to InitialBackoff and
+// MaxPending to Concurrency, which are relative floors rather than defaults.
+func TestStatusWebhookConfigFallbacksMatchEnvDefaults(t *testing.T) {
+	fallbacks := StatusWebhookConfig{}.normalized()
+	v := reflect.ValueOf(fallbacks)
+	typ := v.Type()
+
+	absolute := map[string]bool{
+		"MaxAttempts":    true,
+		"Timeout":        true,
+		"InitialBackoff": true,
+		"Concurrency":    true,
+	}
+
+	checked := 0
+	for i := range typ.NumField() {
+		field := typ.Field(i)
+		if !absolute[field.Name] {
+			continue
+		}
+		tag, ok := field.Tag.Lookup("envDefault")
+		require.True(t, ok, "%s: expected an envDefault tag", field.Name)
+		checked++
+
+		switch want := v.Field(i).Interface().(type) {
+		case int:
+			parsed, err := strconv.Atoi(tag)
+			require.NoError(t, err, "%s: unparseable envDefault %q", field.Name, tag)
+			assert.Equal(t, parsed, want, "%s: envDefault and normalized() fallback disagree", field.Name)
+		case time.Duration:
+			parsed, err := time.ParseDuration(tag)
+			require.NoError(t, err, "%s: unparseable envDefault %q", field.Name, tag)
+			assert.Equal(t, parsed, want, "%s: envDefault and normalized() fallback disagree", field.Name)
+		default:
+			t.Fatalf("%s: envDefault tag on unhandled type %T", field.Name, want)
+		}
+	}
+	assert.Len(t, absolute, checked, "a field with an absolute default was renamed or removed")
 }
