@@ -130,6 +130,9 @@ idempotent and **deduplicate on `job_id`**. After the configured attempt budget 
 exhausted the event is dropped. Answer with any 2xx as soon as you have durably
 recorded the event; do the slow work afterwards.
 
+Redirects are **not** followed - a 3xx counts as a failed attempt - so
+`status_callback_url` must be the final destination.
+
 :::note
 `status_callback_url` is **not** the same as `callback_url`. `callback_url`
 forwards the job's aggregated **log lines** as a bare JSON array - it carries no

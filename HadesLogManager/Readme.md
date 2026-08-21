@@ -170,6 +170,11 @@ so it cannot be recovered when the terminal status arrives.
 - **Not sent** when a job has no `status_callback_url`, when the job payload is no
   longer in the KV bucket, or when the stored URL is malformed (a bad URL is not
   retried, since retrying cannot fix it).
+- **Redirects are not followed.** A 3xx is treated as a failed attempt and
+  retried. Following one would turn the POST into a bodyless GET (Go's default
+  policy for 301/302/303), so a redirecting receiver would answer 200 while never
+  seeing the event, and it would send the payload to a host the operator never
+  configured. Point `status_callback_url` at the final destination.
 
 ### Why this lives here
 

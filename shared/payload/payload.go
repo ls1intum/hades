@@ -34,7 +34,7 @@ type QueuePayload struct {
 	Metadata       map[string]string `json:"metadata"`                                   // Additional job-level metadata
 	Steps          []Step            `json:"steps"`                                      // Ordered list of steps to execute
 	CallbackURL    string            `json:"callback_url,omitempty" format:"uri"`        // Optional per-job destination for forwarding aggregated logs/results. Must be an absolute http/https URL with a host.
-	StatusCallback string            `json:"status_callback_url,omitempty" format:"uri"` // Optional per-job destination for the job-status webhook, delivered once the job reaches a terminal status. Independent of callback_url. Must be an absolute http/https URL with a host.
+	StatusCallback string            `json:"status_callback_url,omitempty" format:"uri"` // Optional per-job destination for the job-status webhook, sent when the job reaches a terminal status. Independent of callback_url. Delivery is at-least-once: a retry can repeat a notification, so receivers must deduplicate on job_id and handle it idempotently. Redirects are not followed. Must be an absolute http/https URL with a host.
 	TimeoutSeconds int64             `json:"timeout_seconds,omitempty"`                  // Whole-job timeout in seconds; the job is killed and marked failed once exceeded. 0 = no timeout.
 }
 

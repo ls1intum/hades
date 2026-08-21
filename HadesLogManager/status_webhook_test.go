@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -350,6 +351,29 @@ func TestHTTPWebhookSenderTreatsNon2xxAsFailure(t *testing.T) {
 	err := sender.Send(context.Background(), srv.URL, JobStatusEvent{JobID: "job-1"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "500")
+}
+
+func TestHTTPWebhookSenderDoesNotFollowRedirects(t *testing.T) {
+	var redirectTargetHits int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&redirectTargetHits, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusFound)
+	}))
+	defer srv.Close()
+
+	sender := newHTTPWebhookSender(5 * time.Second)
+	err := sender.Send(context.Background(), srv.URL, JobStatusEvent{JobID: "job-1"})
+
+	// Following the redirect would downgrade the POST to a bodyless GET and
+	// report success, so a 3xx must surface as a delivery failure instead.
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "302")
+	assert.Equal(t, int32(0), atomic.LoadInt32(&redirectTargetHits), "redirect target must not be contacted")
 }
 
 func TestLifecycleTrackerSweepsAndCaps(t *testing.T) {

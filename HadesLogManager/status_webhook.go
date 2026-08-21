@@ -153,7 +153,19 @@ type httpWebhookSender struct {
 }
 
 func newHTTPWebhookSender(timeout time.Duration) *httpWebhookSender {
-	return &httpWebhookSender{client: &http.Client{Timeout: timeout}}
+	return &httpWebhookSender{client: &http.Client{
+		Timeout: timeout,
+		// Do not follow redirects. Go's default policy turns a 301/302/303 into a
+		// GET and drops the body, so a receiver that redirects would answer 200
+		// while never seeing the event - a delivery reported as successful that
+		// silently delivered nothing. Returning the 3xx instead surfaces it as a
+		// non-2xx, which the dispatcher retries and eventually reports. It also
+		// keeps the payload from being sent to a host the operator never
+		// configured. status_callback_url must name the final destination.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}}
 }
 
 // Send POSTs event to url as JSON. A non-2xx response is an error so the caller
