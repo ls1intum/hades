@@ -32,7 +32,7 @@ Every component connects to NATS with the same `ConnectionConfig`.
 
 Plus the [NATS](#nats-connection-all-components) and [global](#global-all-components) variables.
 
-> **Reserved (not yet implemented):** `PROMETHEUS_ADDRESS`, `RETENTION_IN_MIN`, `MAX_RETRIES`, and `TIMEOUT_IN_MIN` appear in `.env.example` and some compose files but are **not read by any component today**. They are placeholders for planned features and currently have no effect. (Note: a per-job timeout *is* supported, but it is set on the job payload as `timeout_seconds`, not via this env var - see [API: `Step`/`QueuePayload`](./api.md#queuepayload).)
+> **Reserved (not yet implemented):** `PROMETHEUS_ADDRESS`, `RETENTION_IN_MIN`, `MAX_RETRIES`, and `TIMEOUT_IN_MIN` appear in `.env.example` and some compose files but are **not read by any component today**. They are placeholders for planned features and currently have no effect. (Note: a per-job timeout *is* supported, but it is set on the job payload as `timeout_seconds`, not via this env var - see [API: `Step`/`QueuePayload`](./api.md#queuepayload). How often a job is retried after its worker died is bounded by the scheduler's `NATS_MAX_DELIVER`, not by `MAX_RETRIES`.)
 >
 > **Per-job/per-step resource controls** are set on the job payload, not via environment variables: `timeout_seconds` (job), and per-step `cpu_limit`, `memory_limit`, `network`, `memory_swap`, `pids_limit`. Timeout, CPU, memory and environment variables are enforced on both executors; `network`, `memory_swap` and `pids_limit` are Docker-executor only (Kubernetes has no per-container swap/PID field, and a pod's containers share one network namespace). See [api.md](./api.md#step).
 
@@ -40,7 +40,9 @@ Plus the [NATS](#nats-connection-all-components) and [global](#global-all-compon
 
 | Variable | Default | Description | Source |
 | -------- | ------- | ----------- | ------ |
-| `CONCURRENCY` | `1` | Number of jobs processed concurrently. | `HadesScheduler/main.go` (`HadesSchedulerConfig`) |
+| `CONCURRENCY` | `1` | Number of jobs processed concurrently. | `shared/nats/consumer.go` (`ConsumerConfig`) |
+| `NATS_ACK_WAIT` | `1m` | How long JetStream waits for an ack before redelivering a job to another worker. This is a liveness backstop, **not** a job-duration budget: a worker signals progress every few seconds while a job runs, so jobs of any length (including ones running to their `timeout_seconds`) are never redelivered while the worker is alive. Lower it for faster recovery after a scheduler crash, raise it if the network is flaky. Minimum `300ms`: the heartbeat targets `AckWait/3` so three ticks fall inside each ack window, but it is clamped to a `100ms` floor. Below `300ms` that clamp leaves fewer than three ticks per window and erodes the margin that absorbs a delayed or dropped heartbeat; below `100ms` the first heartbeat arrives after `AckWait` has elapsed and a running job is redelivered. | `shared/nats/consumer.go` (`ConsumerConfig`) |
+| `NATS_MAX_DELIVER` | `3` | Maximum number of times a single job is delivered. The last delivery is not executed: it is used to publish a terminal `Failed` status and drop the job, so the default allows two execution attempts before Hades gives up on a job that keeps crashing or stalling its worker. Must be at least `2`; the scheduler refuses to start otherwise, because `1` would spend the only delivery on the failure report and never execute a job. | `shared/nats/consumer.go` (`ConsumerConfig`) |
 | `HADES_EXECUTOR` | `docker` | Execution platform: `docker` or `k8s`. | `shared/utils/config.go` (`ExecutorConfig`) |
 
 Plus the [NATS](#nats-connection-all-components) and [global](#global-all-components) variables, and - depending on `HADES_EXECUTOR` - the Docker or Kubernetes variables below.
@@ -73,6 +75,8 @@ Only deployed when the scheduler runs in `operator` mode.
 | `WATCH_NAMESPACE` | | Namespace the operator watches for `BuildJob` CRs. Empty means all namespaces (subject to RBAC). | `HadesScheduler/HadesOperator/cmd/main.go` (`NSConfig`) |
 | `DELETE_ON_COMPLETE` | `true` | Delete the `BuildJob` CR (and its `Job`) once it finishes. Set `false` to retain them for debugging. | `HadesScheduler/HadesOperator/cmd/main.go` (`OperatorConfig`) |
 | `MAX_PARALLELISM` | `100` | Maximum number of `Job`s the operator admits concurrently; excess jobs are suspended. | `HadesScheduler/HadesOperator/cmd/main.go` (`OperatorConfig`) |
+| `REQUEUE_DELAY` | `2s` | How often the operator re-reconciles a running `BuildJob` (Go duration). The operator does not watch Pods, so container transitions and job completion are only observed on these requeues; lower it for faster completion detection at the cost of more API traffic. A zero or negative duration falls back to the default; a value that is not a valid Go duration fails operator startup. | `HadesScheduler/HadesOperator/cmd/main.go` (`OperatorConfig`) |
+| `LOG_DRAIN_TIMEOUT` | `45s` | How long a completed `BuildJob` is kept while its container logs drain, before it is deleted anyway (Go duration). Only relevant with `DELETE_ON_COMPLETE=true`. A zero or negative duration falls back to the default; a value that is not a valid Go duration fails operator startup. | `HadesScheduler/HadesOperator/cmd/main.go` (`OperatorConfig`) |
 | `DEV_MODE` | `false` | Enable the controller-runtime development logger. | `HadesScheduler/HadesOperator/cmd/main.go` |
 
 Plus the [NATS](#nats-connection-all-components) variables (the operator publishes status/log events). The operator also accepts standard controller-runtime **flags**: `--health-probe-bind-address` (default `:8083`), `--leader-elect`, and the metrics flags bound via `opts.BindFlags`.
@@ -87,7 +91,17 @@ Deployed by the Helm chart (`hades-log-manager`); also run locally via `make run
 | `LOG_BATCH_SIZE` | `100` | Log entries buffered before a flush. | `HadesLogManager/processor.go` (`AggregatorConfig`) |
 | `LOG_RETENTION` | `1h` | How long completed-job logs are kept in memory (Go duration). | `HadesLogManager/processor.go` |
 | `MAX_JOB_LOGS` | `1000` | Max log entries retained per job. | `HadesLogManager/processor.go` |
+| `STATUS_WEBHOOK_ENABLED` | `true` | Deliver the job-status webhook. Inert for jobs without a `status_callback_url`. | `HadesLogManager/status_webhook.go` (`StatusWebhookConfig`) |
+| `STATUS_WEBHOOK_MAX_ATTEMPTS` | `6` | Delivery attempts per job before the status event is dropped. | `HadesLogManager/status_webhook.go` |
+| `STATUS_WEBHOOK_TIMEOUT` | `10s` | Bound on a single delivery, including the callback-URL lookup. | `HadesLogManager/status_webhook.go` |
+| `STATUS_WEBHOOK_INITIAL_BACKOFF` | `5s` | Delay before the second attempt; doubles per attempt. | `HadesLogManager/status_webhook.go` |
+| `STATUS_WEBHOOK_MAX_BACKOFF` | `5m` | Ceiling for the retry delay. | `HadesLogManager/status_webhook.go` |
+| `STATUS_WEBHOOK_CONCURRENCY` | `16` | Deliveries in flight at once; keeps a dead receiver from delaying other jobs. | `HadesLogManager/status_webhook.go` |
+| `STATUS_WEBHOOK_MAX_PENDING` | `1000` | Status events awaiting acknowledgement (in flight or backing off). | `HadesLogManager/status_webhook.go` |
 
-Log forwarding is configured per job, not globally: set an optional `callback_url` (an absolute `http`/`https` URL with a host) on the build request and the Log Manager forwards that job's aggregated logs there. If omitted, the job's logs are not forwarded.
+Both outbound pushes are configured per job, not globally:
+
+- `callback_url` - an absolute `http`/`https` URL with a host. The Log Manager forwards that job's aggregated **logs** there once the log stream has drained. If omitted, the job's logs are not forwarded.
+- `status_callback_url` - an absolute `http`/`https` URL with a host. Receives the **job-status webhook** on the terminal status, independently of log forwarding. See [`HadesLogManager/Readme.md`](../HadesLogManager/Readme.md#job-status-webhook).
 
 Plus the [NATS](#nats-connection-all-components) and [global](#global-all-components) variables.

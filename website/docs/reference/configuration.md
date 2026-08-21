@@ -42,6 +42,8 @@ Hades is configured entirely through environment variables (loaded via `caarlos0
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
 | `CONCURRENCY` | `1` | Number of jobs processed concurrently. |
+| `NATS_ACK_WAIT` | `1m` | How long JetStream waits for an ack before redelivering a job to another worker. A liveness backstop, not a job-duration budget: a worker signals progress while a job runs, so long jobs are never redelivered while the worker is alive. Minimum `300ms`: the heartbeat targets `AckWait/3` but is clamped to a `100ms` floor, so shorter values leave fewer than three ticks per ack window and lose the margin that absorbs a delayed or dropped heartbeat. |
+| `NATS_MAX_DELIVER` | `3` | Maximum number of deliveries per job. The last delivery is spent publishing a terminal `Failed` status and dropping the job, so the default allows two execution attempts. Must be at least `2` - the scheduler refuses to start otherwise. |
 | `HADES_EXECUTOR` | `docker` | Execution platform: `docker` or `k8s`. |
 
 Depending on `HADES_EXECUTOR`, the Docker or Kubernetes variables below also apply.
@@ -74,6 +76,8 @@ Only deployed when the scheduler runs in `operator` mode.
 | `WATCH_NAMESPACE` | | Namespace the operator watches (empty = all namespaces, subject to RBAC). |
 | `DELETE_ON_COMPLETE` | `true` | Delete the `BuildJob` CR (and its `Job`) once it finishes. |
 | `MAX_PARALLELISM` | `100` | Maximum concurrent Jobs the operator admits; excess are suspended. |
+| `REQUEUE_DELAY` | `2s` | How often the operator re-reconciles a running `BuildJob` (Go duration). Pods are not watched, so completion is detected on these requeues. A zero or negative duration falls back to the default; a value that is not a valid Go duration fails operator startup. |
+| `LOG_DRAIN_TIMEOUT` | `45s` | How long a completed `BuildJob` is kept while its container logs drain, before it is deleted anyway (Go duration). A zero or negative duration falls back to the default; a value that is not a valid Go duration fails operator startup. |
 | `DEV_MODE` | `false` | Enable the controller-runtime development logger. |
 
 The operator also accepts standard controller-runtime flags: `--health-probe-bind-address` (default `:8083`), `--leader-elect`, and the metrics flags.
@@ -88,5 +92,15 @@ Deployed by the Helm chart (`hades-log-manager`); also run locally via `make run
 | `LOG_BATCH_SIZE` | `100` | Log entries buffered before a flush. |
 | `LOG_RETENTION` | `1h` | How long completed-job logs are kept in memory (Go duration). |
 | `MAX_JOB_LOGS` | `1000` | Max log entries retained per job. |
+| `STATUS_WEBHOOK_ENABLED` | `true` | Deliver the [job-status webhook](../usage/submitting-jobs#job-status-webhook). Inert for jobs without a `status_callback_url`. |
+| `STATUS_WEBHOOK_MAX_ATTEMPTS` | `6` | Delivery attempts per job before the status event is dropped. |
+| `STATUS_WEBHOOK_TIMEOUT` | `10s` | Bound on a single delivery, including the callback-URL lookup. |
+| `STATUS_WEBHOOK_INITIAL_BACKOFF` | `5s` | Delay before the second attempt; doubles per attempt. |
+| `STATUS_WEBHOOK_MAX_BACKOFF` | `5m` | Ceiling for the retry delay. |
+| `STATUS_WEBHOOK_CONCURRENCY` | `16` | Deliveries in flight at once; keeps a dead receiver from delaying other jobs. |
+| `STATUS_WEBHOOK_MAX_PENDING` | `1000` | Status events awaiting acknowledgement (in flight or backing off). |
 
-Log forwarding is configured per job, not globally: set an optional `callback_url` (an absolute `http`/`https` URL with a host) on the build request and the Log Manager forwards that job's aggregated logs there. If omitted, the job's logs are not forwarded.
+Both outbound pushes are configured per job, not globally:
+
+- `callback_url` - an absolute `http`/`https` URL with a host. The Log Manager forwards that job's aggregated **logs** there once the log stream has drained. If omitted, the job's logs are not forwarded.
+- `status_callback_url` - an absolute `http`/`https` URL with a host. Receives the [job-status webhook](../usage/submitting-jobs#job-status-webhook) when the job reaches a terminal status, independently of log forwarding. If omitted, no webhook is sent.
