@@ -122,7 +122,7 @@ array to `callback_url`, and is not affected by the webhook in any way.
 | `job_id` | ✅ | The Hades job UUID. **This is the deduplication key.** |
 | `name` | ❌ | The submitted job name. Absent when the job payload has already left the `HADES_JOBS` KV bucket. |
 | `status` | ✅ | The terminal status: `Succeeded`, `Failed`, or `Stopped`. |
-| `reason` | ❌ | Why a job did not succeed, e.g. `ImagePullBackOff: ...` or `job timed out after 60 seconds`. It is the publisher's `X-Hades-Reason` status header verbatim: already secret-redacted and capped at 500 runes by the publisher. Absent on success and whenever no reason was published. |
+| `reason` | ❌ | Why a job did not succeed, e.g. `ImagePullBackOff: ...` or `job timed out after 60 seconds`. It is the publisher's `X-Hades-Reason` status header, truncated to 500 runes before sending. Redaction is best-effort and publisher-dependent: the Docker scheduler scrubs secret-looking tokens, while the operator forwards a Kubernetes Job condition message as-is. Treat it as human-readable diagnostic text, not as a sanitized or machine-parseable field. Absent on success and whenever no reason was published. |
 | `queued_at` | ❌ | NATS server timestamp of the job's `Queued` event. |
 | `started_at` | ❌ | NATS server timestamp of the job's `Running` event. |
 | `finished_at` | ✅ | NATS server timestamp of the terminal status event. |

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -216,6 +217,22 @@ func TestHandleTerminalFailureIsDistinguishableFromSuccess(t *testing.T) {
 	assert.Empty(t, events[1].Reason)
 	assert.Nil(t, events[0].StartedAt, "an unobserved Running event omits started_at")
 	assert.Nil(t, events[0].DurationMs)
+}
+
+// TestHandleTruncatesOversizedReason pins that the cap is enforced here rather
+// than assumed of the publisher: the operator forwards a Kubernetes Job
+// condition message verbatim, so an uncapped reason does reach this code.
+func TestHandleTruncatesOversizedReason(t *testing.T) {
+	sender := &recordingSender{}
+	d := testDispatcher(t, webhookResolver("http://example.test/hook"), sender)
+
+	msg := newFakeMsg(buildstatus.StatusFailed, "job-9", 1)
+	msg.headers = nats.Header{buildstatus.ReasonHeader: []string{strings.Repeat("x", buildstatus.MaxReasonLen*3)}}
+	d.handle(context.Background(), msg)
+
+	events := sender.sent()
+	require.Len(t, events, 1)
+	assert.Len(t, []rune(events[0].Reason), buildstatus.MaxReasonLen+1, "reason must be capped plus an ellipsis")
 }
 
 func TestHandleRetriesWithBackoffThenGivesUp(t *testing.T) {

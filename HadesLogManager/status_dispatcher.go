@@ -276,7 +276,11 @@ func (d *StatusWebhookDispatcher) deliver(ctx context.Context, msg statusMsg, jo
 	queuedAt, startedAt := d.lifecycle.peek(jobID)
 	reason := ""
 	if headers := msg.Headers(); headers != nil {
-		reason = headers.Get(buildstatus.ReasonHeader)
+		// Truncate here rather than trusting the publisher. The Docker scheduler
+		// caps its reason, but the operator forwards a Kubernetes Job condition
+		// message verbatim, so the cap only holds at the boundary that needs it -
+		// this one, where the reason leaves the cluster in a webhook body.
+		reason = buildstatus.TruncateReason(headers.Get(buildstatus.ReasonHeader))
 	}
 
 	event := buildEvent(jobID, info.Name, status, reason, queuedAt, startedAt, finishedAt, attempt)

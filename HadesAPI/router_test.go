@@ -323,11 +323,11 @@ func (suite *APISuite) TestValidStatusCallbackURL() {
 	restPayload := payload.RESTPayload{
 		Priority: 1,
 		QueuePayload: payload.QueuePayload{
-			Name:           "example",
-			Timestamp:      time.Now(),
-			CallbackURL:    "https://example.com/adapter/logs",
-			StatusCallback: "https://example.com/hades/status",
-			Steps:          []payload.Step{{ID: 1, Name: "step1", Image: "image1", Script: "script1"}},
+			Name:              "example",
+			Timestamp:         time.Now(),
+			CallbackURL:       "https://example.com/adapter/logs",
+			StatusCallbackURL: "https://example.com/hades/status",
+			Steps:             []payload.Step{{ID: 1, Name: "step1", Image: "image1", Script: "script1"}},
 		},
 	}
 	jsonValue, _ := json.Marshal(restPayload)
@@ -343,10 +343,10 @@ func (suite *APISuite) TestInvalidStatusCallbackURL() {
 	restPayload := payload.RESTPayload{
 		Priority: 1,
 		QueuePayload: payload.QueuePayload{
-			Name:           "example",
-			Timestamp:      time.Now(),
-			StatusCallback: "ftp://example.com/status",
-			Steps:          []payload.Step{{ID: 1, Name: "step1", Image: "image1", Script: "script1"}},
+			Name:              "example",
+			Timestamp:         time.Now(),
+			StatusCallbackURL: "ftp://example.com/status",
+			Steps:             []payload.Step{{ID: 1, Name: "step1", Image: "image1", Script: "script1"}},
 		},
 	}
 	jsonValue, _ := json.Marshal(restPayload)

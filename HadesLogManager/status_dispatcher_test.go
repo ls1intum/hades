@@ -173,9 +173,9 @@ func TestStatusWebhookDeliversTerminalStatus(t *testing.T) {
 	receiver := newWebhookRecorder(t)
 
 	jobID := harness.storeJob(t, payload.QueuePayload{
-		ID:             uuid.New(),
-		Name:           "Example Job",
-		StatusCallback: receiver.url(),
+		ID:                uuid.New(),
+		Name:              "Example Job",
+		StatusCallbackURL: receiver.url(),
 	})
 
 	harness.publishStatus(t, buildstatus.StatusQueued, jobID, "")
@@ -210,10 +210,10 @@ func TestStatusWebhookDistinguishesFailureFromSuccess(t *testing.T) {
 	receiver := newWebhookRecorder(t)
 
 	failedID := harness.storeJob(t, payload.QueuePayload{
-		ID: uuid.New(), Name: "Failing Job", StatusCallback: receiver.url(),
+		ID: uuid.New(), Name: "Failing Job", StatusCallbackURL: receiver.url(),
 	})
 	succeededID := harness.storeJob(t, payload.QueuePayload{
-		ID: uuid.New(), Name: "Passing Job", StatusCallback: receiver.url(),
+		ID: uuid.New(), Name: "Passing Job", StatusCallbackURL: receiver.url(),
 	})
 
 	harness.publishStatus(t, buildstatus.StatusFailed, failedID, "ImagePullBackOff: no such image")
@@ -249,7 +249,7 @@ func TestStatusWebhookRetriesThenGivesUp(t *testing.T) {
 	receiver.setStatus(http.StatusInternalServerError)
 
 	jobID := harness.storeJob(t, payload.QueuePayload{
-		ID: uuid.New(), Name: "Retried Job", StatusCallback: receiver.url(),
+		ID: uuid.New(), Name: "Retried Job", StatusCallbackURL: receiver.url(),
 	})
 	harness.publishStatus(t, buildstatus.StatusFailed, jobID, "boom")
 
@@ -286,10 +286,10 @@ func TestStatusWebhookDeadReceiverDoesNotBlockOtherJobs(t *testing.T) {
 	alive := newWebhookRecorder(t)
 
 	deadID := harness.storeJob(t, payload.QueuePayload{
-		ID: uuid.New(), Name: "Dead Receiver Job", StatusCallback: dead.url(),
+		ID: uuid.New(), Name: "Dead Receiver Job", StatusCallbackURL: dead.url(),
 	})
 	aliveID := harness.storeJob(t, payload.QueuePayload{
-		ID: uuid.New(), Name: "Healthy Receiver Job", StatusCallback: alive.url(),
+		ID: uuid.New(), Name: "Healthy Receiver Job", StatusCallbackURL: alive.url(),
 	})
 
 	// The dead receiver's job is published first, so a dispatcher that delivered
@@ -321,7 +321,7 @@ func TestStatusWebhookIgnoresJobsWithoutStatusCallback(t *testing.T) {
 		ID: uuid.New(), Name: "Legacy Job", CallbackURL: logReceiver.url(),
 	})
 	optedInID := harness.storeJob(t, payload.QueuePayload{
-		ID: uuid.New(), Name: "Opted In Job", StatusCallback: statusReceiver.url(),
+		ID: uuid.New(), Name: "Opted In Job", StatusCallbackURL: statusReceiver.url(),
 	})
 
 	harness.publishStatus(t, buildstatus.StatusSucceeded, legacyID, "")

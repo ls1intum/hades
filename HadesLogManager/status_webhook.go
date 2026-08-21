@@ -48,8 +48,12 @@ type JobStatusEvent struct {
 	Status string `json:"status"`
 	// Reason explains a non-success outcome (e.g. an image-pull error or a
 	// timeout). It is the publisher-supplied X-Hades-Reason status header,
-	// already redacted and capped at 500 runes by the publisher. Empty on
-	// success and whenever the publisher supplied no reason.
+	// truncated to buildstatus.MaxReasonLen before it is sent. Redaction is
+	// best-effort and publisher-dependent: the Docker scheduler runs the reason
+	// through redact.Default(), while the operator forwards a Kubernetes Job
+	// condition message as-is. Treat it as human-readable diagnostic text, not
+	// as a sanitized or machine-parseable field. Empty on success and whenever
+	// the publisher supplied no reason.
 	Reason string `json:"reason,omitempty"`
 	// QueuedAt, StartedAt are the NATS server timestamps of this job's Queued and
 	// Running status events. They are omitted when this process did not observe
@@ -91,9 +95,13 @@ type StatusWebhookConfig struct {
 	MaxPending int `env:"STATUS_WEBHOOK_MAX_PENDING" envDefault:"1000"`
 }
 
-// normalized returns the config with every non-positive value replaced by its
-// default, so a misconfiguration cannot produce a hot retry loop or a consumer
-// that never delivers.
+// normalized repairs a misconfigured config so it cannot produce a hot retry
+// loop or a consumer that never delivers. MaxAttempts, Timeout, InitialBackoff,
+// and Concurrency fall back to their envDefault values when non-positive.
+// MaxBackoff and MaxPending are instead raised to a relative floor -
+// InitialBackoff and Concurrency respectively - so an operator who lowers one
+// of a pair gets a coherent config rather than the shipped default. Enabled is
+// left alone so an explicit "false" survives.
 func (c StatusWebhookConfig) normalized() StatusWebhookConfig {
 	if c.MaxAttempts < 1 {
 		c.MaxAttempts = 6

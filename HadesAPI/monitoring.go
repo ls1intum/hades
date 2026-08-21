@@ -62,7 +62,7 @@ func sanitizeAndMarshal(job payload.QueuePayload) string {
 	// Strip any credentials/query/fragment from the callback URLs so tokens
 	// carried there don't leak into logs.
 	job.CallbackURL = stripURLSecrets(job.CallbackURL)
-	job.StatusCallback = stripURLSecrets(job.StatusCallback)
+	job.StatusCallbackURL = stripURLSecrets(job.StatusCallbackURL)
 	jsonTmp, err := json.Marshal(job)
 	if err != nil {
 		slog.Error("Failed to marshal sanitized payload", "error", err)

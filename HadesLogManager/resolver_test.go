@@ -103,10 +103,10 @@ func (s *ResolverSuite) TestMissingKeyIsNotAnError() {
 
 func (s *ResolverSuite) TestResolvesStatusCallbackURL() {
 	job := payload.QueuePayload{
-		ID:             uuid.New(),
-		Name:           "status job",
-		CallbackURL:    "https://example.com/adapter/logs",
-		StatusCallback: "https://example.com/hades/status",
+		ID:                uuid.New(),
+		Name:              "status job",
+		CallbackURL:       "https://example.com/adapter/logs",
+		StatusCallbackURL: "https://example.com/hades/status",
 	}
 	s.putJob(job)
 

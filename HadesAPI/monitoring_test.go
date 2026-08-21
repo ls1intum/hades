@@ -139,7 +139,7 @@ func TestSafePayloadFormat_CallbackURLCredentialsStripped(t *testing.T) {
 
 func TestSafePayloadFormat_StatusCallbackURLCredentialsStripped(t *testing.T) {
 	job := baseJob()
-	job.StatusCallback = "https://user:token@example.com/status?secret=abc#frag"
+	job.StatusCallbackURL = "https://user:token@example.com/status?secret=abc#frag"
 
 	result := SafePayloadFormat(job)
 
@@ -147,12 +147,12 @@ func TestSafePayloadFormat_StatusCallbackURLCredentialsStripped(t *testing.T) {
 	if err := json.Unmarshal([]byte(result), &out); err != nil {
 		t.Fatalf("result is not valid JSON: %v", err)
 	}
-	if out.StatusCallback != "https://example.com/status" {
-		t.Errorf("status callback URL not fully redacted: got %q", out.StatusCallback)
+	if out.StatusCallbackURL != "https://example.com/status" {
+		t.Errorf("status callback URL not fully redacted: got %q", out.StatusCallbackURL)
 	}
 	for _, leak := range []string{"user", "token", "secret", "abc", "frag"} {
-		if strings.Contains(out.StatusCallback, leak) {
-			t.Errorf("sanitized status callback URL leaked %q: %s", leak, out.StatusCallback)
+		if strings.Contains(out.StatusCallbackURL, leak) {
+			t.Errorf("sanitized status callback URL leaked %q: %s", leak, out.StatusCallbackURL)
 		}
 	}
 }
@@ -162,7 +162,7 @@ func TestSafePayloadFormat_UnparseableCallbackURLIsDropped(t *testing.T) {
 	// A control character makes url.Parse fail. A value that cannot be parsed
 	// cannot be sanitized either, so it must be dropped rather than logged.
 	job.CallbackURL = "https://user:token@example.com/\x7flogs?secret=abc"
-	job.StatusCallback = "https://user:token@example.com/\x7fstatus?secret=abc"
+	job.StatusCallbackURL = "https://user:token@example.com/\x7fstatus?secret=abc"
 
 	result := SafePayloadFormat(job)
 
@@ -173,8 +173,8 @@ func TestSafePayloadFormat_UnparseableCallbackURLIsDropped(t *testing.T) {
 	if out.CallbackURL != "" {
 		t.Errorf("unparseable callback URL was not dropped: got %q", out.CallbackURL)
 	}
-	if out.StatusCallback != "" {
-		t.Errorf("unparseable status callback URL was not dropped: got %q", out.StatusCallback)
+	if out.StatusCallbackURL != "" {
+		t.Errorf("unparseable status callback URL was not dropped: got %q", out.StatusCallbackURL)
 	}
 }
 

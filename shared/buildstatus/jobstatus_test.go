@@ -1,6 +1,10 @@
 package buildstatus
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"unicode/utf8"
+)
 
 func TestJobStatus_String(t *testing.T) {
 	tests := []struct {
@@ -133,5 +137,35 @@ func TestStatusFromSubject(t *testing.T) {
 				t.Errorf("StatusFromSubject(%q) = %q, want %q", tt.subject, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestTruncateReason(t *testing.T) {
+	short := "ImagePullBackOff: no such image"
+	if got := TruncateReason(short); got != short {
+		t.Errorf("TruncateReason(%q) = %q, want it unchanged", short, got)
+	}
+
+	if got := TruncateReason(""); got != "" {
+		t.Errorf("TruncateReason(\"\") = %q, want \"\"", got)
+	}
+
+	exact := strings.Repeat("a", MaxReasonLen)
+	if got := TruncateReason(exact); got != exact {
+		t.Error("a reason of exactly MaxReasonLen runes must not be truncated")
+	}
+
+	// Multi-byte runes: the cap counts runes, not bytes, and must not split one.
+	long := strings.Repeat("ü", MaxReasonLen+10)
+	got := TruncateReason(long)
+	runes := []rune(got)
+	if len(runes) != MaxReasonLen+1 {
+		t.Errorf("truncated reason has %d runes, want %d plus the ellipsis", len(runes), MaxReasonLen)
+	}
+	if runes[len(runes)-1] != '…' {
+		t.Error("a truncated reason must be marked with an ellipsis")
+	}
+	if !utf8.ValidString(got) {
+		t.Error("truncation split a multi-byte rune")
 	}
 }

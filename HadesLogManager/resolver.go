@@ -64,7 +64,7 @@ func (r *kvCallbackResolver) JobInfo(ctx context.Context, jobID string) (jobInfo
 	if err != nil || !found {
 		return jobInfo{}, err
 	}
-	return jobInfo{Found: true, Name: job.Name, StatusCallbackURL: job.StatusCallback}, nil
+	return jobInfo{Found: true, Name: job.Name, StatusCallbackURL: job.StatusCallbackURL}, nil
 }
 
 // load reads and decodes the job payload stored under jobID. A missing key or
