@@ -112,6 +112,12 @@ jobs:
               --namespace "$NAMESPACE" \
               --from-literal=auth="${DASHBOARD_USERNAME}:${DASHBOARD_PASSWORD_HASH}" \
               --dry-run=client -o yaml | kubectl apply -f -
+          else
+            # Fail closed: if dashboard credentials are removed, drop the stale
+            # basic-auth Secret so the Jaeger UI cannot keep accepting the old
+            # password.
+            kubectl delete secret hades-jaeger-ui-auth \
+              --namespace "$NAMESPACE" --ignore-not-found
           fi
 
       - name: Apply CRDs
