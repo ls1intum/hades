@@ -43,7 +43,7 @@ Hades measures how much overhead it adds around a job, per step and per phase, c
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | | OTLP gRPC endpoint (e.g. `http://jaeger:4317`). Unset disables tracing. |
 | `OTEL_SERVICE_NAME` | per service | Overrides the service name shown in traces. |
 
-`make run` / `make docker-run` ship a Jaeger backend (UI on `http://localhost:16686`); in Kubernetes use `--set tracing.enabled=true` with `tracing.endpoint` or `tracing.deployJaeger=true`. Docker phases are millisecond-precise; Kubernetes step phases are second-granular (Kubernetes truncates container timestamps to whole seconds).
+`make run` / `make docker-run` ship a Jaeger backend (UI on `http://localhost:16686`); in Kubernetes use `--set tracing.enabled=true` with `tracing.endpoint` or `tracing.deployJaeger=true`. The bundled Jaeger UI is ClusterIP by default (`kubectl port-forward svc/hades-jaeger 16686:16686`); to expose it, `tracing.jaeger.ui.ingress.enabled=true` renders an Ingress that is **always behind HTTP basic auth** (set `tracing.jaeger.ui.auth.password` or `...auth.existingSecret`; the chart refuses to render it unauthenticated). Docker phases are millisecond-precise; Kubernetes step phases are second-granular (Kubernetes truncates container timestamps to whole seconds).
 
 ## HadesAPI
 

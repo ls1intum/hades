@@ -64,6 +64,8 @@ Per-job rollups are logged and exported: `overhead_total`, `runtime_total`, `wal
 
 The local stacks ship a working backend: `make run` and `make docker-run` start a Jaeger all-in-one (UI on <http://localhost:16686>) and point the services at it. In Kubernetes, enable it with `--set tracing.enabled=true` and either `--set tracing.endpoint=<your-collector>:4317` or `--set tracing.deployJaeger=true` (bundled Jaeger, dev/test only).
 
+The bundled Jaeger UI Service is cluster-internal (ClusterIP) by default, so you reach it with `kubectl port-forward svc/hades-jaeger 16686:16686`. To expose it outside the cluster, enable its Ingress - which is **always protected by HTTP basic auth**: set `tracing.jaeger.ui.ingress.enabled=true`, a `host`, and either `tracing.jaeger.ui.auth.password` (the chart hashes it into an htpasswd Secret) or `tracing.jaeger.ui.auth.existingSecret`. The chart refuses to render the UI Ingress without credentials, so the UI can never be exposed unauthenticated. Basic auth is implemented with nginx-ingress annotations (`tracing.jaeger.ui.ingress.className` defaults to `nginx`).
+
 **Accuracy notes.** Docker phases use a single monotonic clock, so they are millisecond-precise and tile the timeline (`overhead + runtime = wall`). Kubernetes records container timestamps to whole-second precision, so K8s per-step phases are second-granular; `queue_wait` crosses hosts, so a skewed clock is clamped to zero.
 
 ## HadesAPI

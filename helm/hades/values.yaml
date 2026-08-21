@@ -215,6 +215,37 @@ tracing:
   jaeger:
     # -- Jaeger all-in-one image used when `deployJaeger` is true.
     image: jaegertracing/all-in-one:1.62.0
+    # -- Bundled-Jaeger UI exposure. The UI Service is ClusterIP (in-cluster /
+    # port-forward only) by default; enable this Ingress to reach it from
+    # outside. It is always protected by HTTP basic auth - rendering fails if
+    # enabled without a password or an existing secret, so the UI can never be
+    # exposed unauthenticated.
+    ui:
+      ingress:
+        # -- Expose the Jaeger UI via an Ingress (behind basic auth).
+        enabled: false
+        # -- Ingress class for the UI (basic auth is implemented with nginx
+        # ingress annotations).
+        className: "nginx"
+        # -- Hostname for the Jaeger UI. Required when `enabled`.
+        host: ""
+        # -- Extra annotations merged onto the UI Ingress.
+        annotations: {}
+        tls:
+          # -- Enable TLS on the UI Ingress.
+          enabled: false
+          # -- TLS secret for the UI host.
+          secretName: ""
+      auth:
+        # -- Use a pre-created basic-auth Secret (an `auth` key holding htpasswd
+        # lines). When set, `username`/`password` are ignored and no Secret is
+        # generated.
+        existingSecret: ""
+        # -- Basic-auth username for the generated htpasswd Secret.
+        username: "admin"
+        # -- Basic-auth password. Required when the UI Ingress is enabled and no
+        # `existingSecret` is given; the chart hashes it into an htpasswd Secret.
+        password: ""
 
 nats:
   config:
