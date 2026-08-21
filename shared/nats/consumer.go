@@ -76,6 +76,24 @@ func (c ConsumerConfig) withDefaults() ConsumerConfig {
 	return c
 }
 
+// minMaxDeliver is the smallest MaxDeliver that still lets a job run. The last
+// allowed delivery is spent reporting the terminal failure instead of executing
+// the job (see processJob), so MaxDeliver = 1 would mean the very first delivery
+// is already the last one and no job would ever be executed.
+const minMaxDeliver = 2
+
+// validate rejects a configuration that would silently stop all job execution.
+// It runs after withDefaults, so a zero or negative MaxDeliver has already been
+// replaced by DefaultMaxDeliver and only an explicit, unusable value is left.
+func (c ConsumerConfig) validate() error {
+	if c.MaxDeliver < minMaxDeliver {
+		return fmt.Errorf(
+			"NATS_MAX_DELIVER must be at least %d, got %d: the last allowed delivery reports the terminal failure instead of running the job, so a lower value would never execute any job",
+			minMaxDeliver, c.MaxDeliver)
+	}
+	return nil
+}
+
 // ackProgressInterval returns how often an in-flight job signals progress for
 // the given AckWait. It stays well below AckWait so several lost heartbeats do
 // not trigger a redelivery.
@@ -105,6 +123,10 @@ type HadesNATSConsumer struct {
 // JetStream redelivers jobs whose worker stops responding.
 func NewHadesConsumer(nc *nats.Conn, cfg ConsumerConfig) (*HadesNATSConsumer, error) {
 	cfg = cfg.withDefaults()
+	if err := cfg.validate(); err != nil {
+		slog.Error("Invalid consumer configuration", "error", err)
+		return nil, err
+	}
 
 	ctx := context.Background()
 	js, err := jetstream.New(nc)

@@ -161,7 +161,7 @@ func (s *ConsumerRedeliverySuite) TestPoisonJobIsTerminatedAndReportedFailed() {
 	job := newTestJob("poison-job")
 	s.Require().NoError(s.publisher.EnqueueHighJob(context.Background(), job))
 
-	// Delivery 1 panics and is naked with a 5s delay; delivery 2 is the last
+	// Delivery 1 panics and is NAKed with a 5s delay; delivery 2 is the last
 	// allowed one and is spent reporting the failure instead of running again.
 	var failure *nats.Msg
 	select {

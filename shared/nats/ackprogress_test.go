@@ -48,6 +48,23 @@ func TestConsumerConfigWithDefaults(t *testing.T) {
 	assert.Equal(t, ConsumerConfig{Concurrency: 4, AckWait: 5 * time.Second, MaxDeliver: 2}, custom)
 }
 
+// TestConsumerConfigValidate pins the MaxDeliver lower bound: because the last
+// allowed delivery reports the terminal failure instead of running the job,
+// MaxDeliver = 1 would silently stop the scheduler from ever executing a job.
+// That must fail loudly at startup instead.
+func TestConsumerConfigValidate(t *testing.T) {
+	err := ConsumerConfig{MaxDeliver: 1}.withDefaults().validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "NATS_MAX_DELIVER")
+
+	// Unset (zero/negative) means "use the default", not "one delivery".
+	assert.NoError(t, ConsumerConfig{}.withDefaults().validate())
+	assert.NoError(t, ConsumerConfig{MaxDeliver: -1}.withDefaults().validate())
+
+	// The smallest usable value still allows one execution attempt.
+	assert.NoError(t, ConsumerConfig{MaxDeliver: minMaxDeliver}.withDefaults().validate())
+}
+
 func TestStartAckProgressSignalsRepeatedly(t *testing.T) {
 	var calls atomic.Int64
 	stop := startAckProgress(func() error {
@@ -63,7 +80,7 @@ func TestStartAckProgressSignalsRepeatedly(t *testing.T) {
 
 // TestStartAckProgressStopIsFinalAndIdempotent guards the two failure modes of
 // the heartbeat goroutine: leaking past the job, and signalling in-progress on a
-// message that has already been acked or naked.
+// message that has already been ACKed or NAKed.
 func TestStartAckProgressStopIsFinalAndIdempotent(t *testing.T) {
 	var calls atomic.Int64
 	stop := startAckProgress(func() error {
