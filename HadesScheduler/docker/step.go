@@ -139,11 +139,13 @@ func (s Step) execute(ctx context.Context) error {
 		// remove with a fresh context so the container is stopped and the shared
 		// volume is released, regardless of the AutoRemove setting.
 		if ctx.Err() != nil {
+			removeStart := time.Now()
 			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 			defer cancel()
 			if err := removeContainer(cleanupCtx, s.cli, resp.ID); err != nil {
 				s.logger.Error("Failed to cleanup container after cancellation", slog.Any("error", err), slog.Any("container_id", resp.ID))
 			}
+			s.timer.Record(s.ID, timing.PhaseContainerRemove, removeStart, time.Now())
 			return
 		}
 		if s.Options.containerAutoremove {

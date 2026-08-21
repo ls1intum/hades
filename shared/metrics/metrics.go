@@ -12,7 +12,9 @@ package metrics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -25,11 +27,18 @@ import (
 // returned so callers can treat it as a fatal startup error; a clean shutdown
 // returns nil.
 func Serve(ctx context.Context, addr string) error {
+	// Bind synchronously so a bind failure (e.g. port in use) is returned to the
+	// caller, rather than racing the serve goroutine against ctx cancellation and
+	// being silently masked as a nil (clean-shutdown) result.
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("binding metrics server on %s: %w", addr, err)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 
 	server := &http.Server{
-		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -37,11 +46,11 @@ func Serve(ctx context.Context, addr string) error {
 	errChan := make(chan error, 1)
 	go func() {
 		slog.Info("Starting metrics server", "addr", addr)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errChan <- err
-			return
+		err := server.Serve(ln)
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
 		}
-		errChan <- nil
+		errChan <- err
 	}()
 
 	select {
@@ -52,6 +61,10 @@ func Serve(ctx context.Context, addr string) error {
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			slog.Error("Metrics server shutdown error", "error", err)
+			return err
+		}
+		// Surface any serve error observed while shutting down.
+		if err := <-errChan; err != nil {
 			return err
 		}
 		slog.Info("Metrics server shutdown complete")

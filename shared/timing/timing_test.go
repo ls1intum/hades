@@ -3,7 +3,6 @@ package timing
 import (
 	"context"
 	"errors"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -104,7 +103,6 @@ func TestInjectExtractRoundTrip(t *testing.T) {
 
 func TestInitTracingNoopWhenUnset(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
-	os.Unsetenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	shutdown, err := InitTracing(context.Background(), "test")
 	if err != nil {
 		t.Fatalf("InitTracing error: %v", err)
@@ -120,7 +118,7 @@ type recordingTracer struct {
 	got []Phase
 }
 
-func (r *recordingTracer) StartJob(ctx context.Context, _, _ string) (context.Context, func()) {
+func (r *recordingTracer) StartJob(ctx context.Context, _, _ string, _ time.Time) (context.Context, func()) {
 	return ctx, func() {}
 }
 
@@ -142,7 +140,7 @@ type endCountingTracer struct {
 	endCount int
 }
 
-func (e *endCountingTracer) StartJob(ctx context.Context, _, _ string) (context.Context, func()) {
+func (e *endCountingTracer) StartJob(ctx context.Context, _, _ string, _ time.Time) (context.Context, func()) {
 	return ctx, func() {
 		e.mu.Lock()
 		e.endCount++

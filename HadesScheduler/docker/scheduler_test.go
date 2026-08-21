@@ -23,7 +23,7 @@ type recordingTracer struct {
 	got map[timing.Phase]bool
 }
 
-func (r *recordingTracer) StartJob(ctx context.Context, _, _ string) (context.Context, func()) {
+func (r *recordingTracer) StartJob(ctx context.Context, _, _ string, _ time.Time) (context.Context, func()) {
 	return ctx, func() {}
 }
 
@@ -202,6 +202,10 @@ func TestScheduleJobTimesOut(t *testing.T) {
 	publisher := &capturingPublisher{}
 	scheduler := newTestScheduler(t, publisher)
 
+	rec := &recordingTracer{}
+	timing.SetTracer(rec)
+	t.Cleanup(func() { timing.SetTracer(nil) })
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -221,6 +225,10 @@ func TestScheduleJobTimesOut(t *testing.T) {
 	require.Error(t, err)
 	// The job must abort near the 2s deadline, not run the full 120s sleep.
 	require.Less(t, elapsed, 60*time.Second, "job did not abort at the timeout")
+
+	// The cancellation cleanup path must still record container_remove so a
+	// timed-out job's timing breakdown is complete.
+	require.True(t, rec.has(timing.PhaseContainerRemove), "container_remove not recorded on the timeout path")
 
 	// No container for this job may still be running: a cancelled ContainerWait
 	// does not stop the container, so the executor must force-remove it.

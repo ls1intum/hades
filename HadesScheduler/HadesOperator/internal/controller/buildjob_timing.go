@@ -29,16 +29,34 @@ const maxReconcileLag = 2 * time.Minute
 // precision, so sub-second steps read as 0-1s here; the Docker executor's
 // phases stay millisecond-precise.
 func (r *BuildJobReconciler) emitJobTiming(ctx context.Context, bj *buildv1.BuildJob) {
-	traceCtx := timing.Extract(ctx, map[string]string{"traceparent": bj.Annotations[k8s.AnnotationTraceParent]})
-	timer := timing.NewJobTimer(traceCtx, "k8s", bj.Name)
+	// Continue the trace propagated from the API, if any. Skip Extract for an
+	// absent annotation so an empty carrier does not touch the context.
+	traceCtx := ctx
+	if tp := bj.Annotations[k8s.AnnotationTraceParent]; tp != "" {
+		traceCtx = timing.Extract(ctx, map[string]string{"traceparent": tp})
+	}
+
+	// The job's phases are reconstructed from timestamps after completion, so the
+	// root span must begin at the job's start (submission, else CR creation);
+	// a now() root would start after its own backdated child spans.
+	start := bj.CreationTimestamp.Time
+	var submittedAt time.Time
+	if v := bj.Annotations[k8s.AnnotationSubmittedAt]; v != "" {
+		if s, err := time.Parse(time.RFC3339Nano, v); err == nil {
+			submittedAt = s
+			if s.Before(start) {
+				start = s
+			}
+		}
+	}
+
+	timer := timing.NewJobTimer(traceCtx, "k8s", bj.Name, start)
 	defer timer.Summary()
 
 	// queue_wait: API submission -> CR creation. Crosses hosts, so a skewed clock
 	// is clamped to zero by Record.
-	if v := bj.Annotations[k8s.AnnotationSubmittedAt]; v != "" {
-		if submitted, err := time.Parse(time.RFC3339Nano, v); err == nil {
-			timer.Record(0, timing.PhaseQueueWait, submitted, bj.CreationTimestamp.Time)
-		}
+	if !submittedAt.IsZero() {
+		timer.Record(0, timing.PhaseQueueWait, submittedAt, bj.CreationTimestamp.Time)
 	}
 
 	podName := bj.Status.PodName

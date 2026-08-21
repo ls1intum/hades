@@ -13,8 +13,9 @@ import (
 type Tracer interface {
 	// StartJob opens the per-job root span and returns a context carrying it
 	// plus a function that ends the span. executor and jobID are attached as
-	// attributes.
-	StartJob(ctx context.Context, executor, jobID string) (context.Context, func())
+	// attributes. start is the span's begin time - the operator passes the job's
+	// submission time so its backdated child spans do not precede the root.
+	StartJob(ctx context.Context, executor, jobID string, start time.Time) (context.Context, func())
 	// Phase records a completed phase as a child span between start and end.
 	// Passing the real start/end lets the operator emit backdated spans from
 	// Kubernetes pod timestamps.
@@ -49,7 +50,7 @@ func SetTracer(t Tracer) {
 // noopTracer is the zero-cost default used when tracing is disabled.
 type noopTracer struct{}
 
-func (noopTracer) StartJob(ctx context.Context, _, _ string) (context.Context, func()) {
+func (noopTracer) StartJob(ctx context.Context, _, _ string, _ time.Time) (context.Context, func()) {
 	return ctx, func() {}
 }
 

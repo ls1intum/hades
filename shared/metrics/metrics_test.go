@@ -3,19 +3,25 @@ package metrics
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 )
 
-// waitForServer polls addr until it accepts connections or the deadline passes.
+// waitForServer polls url until it accepts connections or the deadline passes.
+// Each request is bounded by a context so an unresponsive listener cannot block
+// the poll loop past the deadline.
 func waitForServer(t *testing.T, url string) *http.Response {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	var lastErr error
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(url)
+		reqCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		req, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
+		resp, err := http.DefaultClient.Do(req)
+		cancel()
 		if err == nil {
 			return resp
 		}
@@ -30,9 +36,15 @@ func TestServeExposesMetrics(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Port 0 lets the OS pick a free port; we discover it by binding first is
-	// not exposed by Serve, so use a fixed high port unlikely to clash.
-	const addr = "127.0.0.1:18082"
+	// Reserve an ephemeral port so parallel/other test runs cannot clash on a
+	// fixed one, then release it for Serve to bind.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve port: %v", err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+
 	done := make(chan error, 1)
 	go func() { done <- Serve(ctx, addr) }()
 

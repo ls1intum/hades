@@ -30,8 +30,16 @@ type JobTimer struct {
 // for phase spans; pass a context carrying an extracted upstream trace so the
 // job's spans nest under the API root. The returned timer's Summary must be
 // called (typically deferred) to end the root span and emit the rollup.
-func NewJobTimer(ctx context.Context, executor, jobID string) *JobTimer {
-	spanCtx, end := tracer().StartJob(ctx, executor, jobID)
+// The optional start sets the root span's begin time; the operator passes the
+// job's submission time (its phases are reconstructed after the fact and
+// backdated, so a now() root would start after its own children). Omitted or
+// zero means "now".
+func NewJobTimer(ctx context.Context, executor, jobID string, start ...time.Time) *JobTimer {
+	begin := time.Time{}
+	if len(start) > 0 {
+		begin = start[0]
+	}
+	spanCtx, end := tracer().StartJob(ctx, executor, jobID, begin)
 	return &JobTimer{
 		executor: executor,
 		jobID:    jobID,

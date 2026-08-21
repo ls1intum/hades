@@ -23,7 +23,7 @@ type phaseObservation struct {
 	dur   time.Duration
 }
 
-func (p *phaseTracer) StartJob(ctx context.Context, _, _ string) (context.Context, func()) {
+func (p *phaseTracer) StartJob(ctx context.Context, _, _ string, _ time.Time) (context.Context, func()) {
 	return ctx, func() {}
 }
 

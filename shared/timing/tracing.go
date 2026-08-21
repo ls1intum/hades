@@ -30,8 +30,15 @@ var propagator = propagation.TraceContext{}
 // configured. serviceName names the service in traces (overridable by
 // OTEL_SERVICE_NAME). The returned shutdown flushes and stops the exporter.
 func InitTracing(ctx context.Context, serviceName string) (func(context.Context) error, error) {
-	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
-		slog.Debug("OTEL_EXPORTER_OTLP_ENDPOINT unset; tracing disabled")
+	// The signal-specific endpoint takes precedence over the generic one and is
+	// honoured on its own, matching the OTel exporter's env resolution; if neither
+	// is set, tracing stays a noop.
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+	if endpoint == "" {
+		endpoint = os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	}
+	if endpoint == "" {
+		slog.Debug("OTEL_EXPORTER_OTLP_(TRACES_)ENDPOINT unset; tracing disabled")
 		return func(context.Context) error { return nil }, nil
 	}
 
@@ -63,7 +70,7 @@ func InitTracing(ctx context.Context, serviceName string) (func(context.Context)
 	otel.SetTextMapPropagator(propagator)
 	SetTracer(otelTracer{tracer: tp.Tracer(tracerName)})
 
-	slog.Info("Tracing enabled", "service", serviceName, "endpoint", os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	slog.Info("Tracing enabled", "service", serviceName, "endpoint", endpoint)
 	return tp.Shutdown, nil
 }
 
@@ -103,13 +110,15 @@ type otelTracer struct {
 	tracer trace.Tracer
 }
 
-func (o otelTracer) StartJob(ctx context.Context, executor, jobID string) (context.Context, func()) {
-	ctx, span := o.tracer.Start(ctx, "hades.job",
-		trace.WithAttributes(
-			attribute.String("hades.executor", executor),
-			attribute.String("hades.job_id", jobID),
-		),
-	)
+func (o otelTracer) StartJob(ctx context.Context, executor, jobID string, start time.Time) (context.Context, func()) {
+	opts := []trace.SpanStartOption{trace.WithAttributes(
+		attribute.String("hades.executor", executor),
+		attribute.String("hades.job_id", jobID),
+	)}
+	if !start.IsZero() {
+		opts = append(opts, trace.WithTimestamp(start))
+	}
+	ctx, span := o.tracer.Start(ctx, "hades.job", opts...)
 	return ctx, func() { span.End() }
 }
 

@@ -108,7 +108,10 @@ func (d *Scheduler) ScheduleJob(ctx context.Context, job payload.QueuePayload) e
 	// this job's phase spans nest under it. queue_wait spans the API submission
 	// (job.Timestamp) to now; it crosses hosts, so a skewed clock is clamped to
 	// zero by Record.
-	traceCtx := timing.Extract(ctx, map[string]string{"traceparent": job.TraceParent})
+	traceCtx := ctx
+	if job.TraceParent != "" {
+		traceCtx = timing.Extract(ctx, map[string]string{"traceparent": job.TraceParent})
+	}
 	timer := timing.NewJobTimer(traceCtx, "docker", job.ID.String())
 	if !job.Timestamp.IsZero() {
 		timer.Record(0, timing.PhaseQueueWait, job.Timestamp, time.Now())

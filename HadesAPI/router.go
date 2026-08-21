@@ -243,10 +243,11 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublishe
 
 	// Open the job's root span and propagate its context in the payload so the
 	// scheduler/operator spans nest under it. Noop unless tracing is enabled.
+	// Always assign server-side (never conditionally): TraceParent is bound from
+	// the request body, so a client-supplied value must not survive into NATS and
+	// the BuildJob annotation when tracing is disabled and Inject returns nil.
 	spanCtx, endSpan := timing.StartSpan(c.Request.Context(), "hades.enqueue")
-	if carrier := timing.Inject(spanCtx); carrier != nil {
-		p.QueuePayload.TraceParent = carrier["traceparent"]
-	}
+	p.QueuePayload.TraceParent = timing.Inject(spanCtx)["traceparent"]
 	defer endSpan()
 
 	err := producer.EnqueueJobWithPriority(spanCtx, p.QueuePayload, queuePrio)

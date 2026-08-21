@@ -140,9 +140,11 @@ func main() {
 	// Prometheus metrics on a dedicated, cluster-internal port. This is the
 	// scheduler's only HTTP listener; it stops when the context is cancelled.
 	go func() {
+		// Metrics are auxiliary: log and keep scheduling jobs rather than taking
+		// the scheduler down (and skipping the deferred tracing/NATS shutdown that
+		// os.Exit from a goroutine would bypass).
 		if err := metrics.Serve(ctx, fmt.Sprintf(":%d", cfg.MetricsPort)); err != nil {
-			slog.Error("Metrics server failed", "error", err)
-			os.Exit(1)
+			slog.Error("Metrics server failed; continuing without metrics", "error", err)
 		}
 	}()
 
