@@ -156,13 +156,17 @@ func (d *StatusWebhookDispatcher) Run(ctx context.Context) error {
 		"concurrency", d.cfg.Concurrency)
 
 	<-ctx.Done()
-	// Stop delivering new messages, close the gate so no further goroutine can
-	// start, then wait for in-flight sends. Anything still unacked at exit is
-	// redelivered after the next start.
-	cc.Stop()
+	// Close the gate first, then stop the consumer, then wait for in-flight
+	// sends. Ordering it this way leaves no window in which Consume can still
+	// hand a message to a goroutine that starts after the gate was meant to be
+	// shut - Stop() does not guarantee the handler will not be invoked again.
+	// The gate, not Stop(), is what makes "no Add after Wait" hold, so either
+	// order is safe; this one also makes the code say what it means. Anything
+	// dropped or still unacked at exit is redelivered after the next start.
 	mu.Lock()
 	stopped = true
 	mu.Unlock()
+	cc.Stop()
 	inFlight.Wait()
 	slog.Info("Status webhook dispatcher stopped")
 	return nil

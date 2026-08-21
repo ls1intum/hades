@@ -116,6 +116,11 @@ func run(cfg HadesLogManagerConfig) error {
 	if err := utils.LoadConfig(&webhookCfg); err != nil {
 		return fmt.Errorf("loading status webhook configuration: %w", err)
 	}
+	// Normalize before logging, not just inside the dispatcher: an operator
+	// reading this line during an incident must see the values actually in
+	// effect. An invalid env var would otherwise be echoed back verbatim while
+	// the dispatcher quietly ran on the repaired ones.
+	webhookCfg = webhookCfg.normalized()
 	slog.Info("Status webhook configuration",
 		"enabled", webhookCfg.Enabled,
 		"max_attempts", webhookCfg.MaxAttempts,
@@ -123,6 +128,7 @@ func run(cfg HadesLogManagerConfig) error {
 		"initial_backoff", webhookCfg.InitialBackoff,
 		"max_backoff", webhookCfg.MaxBackoff,
 		"concurrency", webhookCfg.Concurrency,
+		"max_pending", webhookCfg.MaxPending,
 	)
 
 	var dispatcher *StatusWebhookDispatcher
