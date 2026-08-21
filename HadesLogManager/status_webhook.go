@@ -46,14 +46,17 @@ type JobStatusEvent struct {
 	Name string `json:"name,omitempty"`
 	// Status is the terminal status: Succeeded, Failed, or Stopped.
 	Status string `json:"status"`
-	// Reason explains a non-success outcome (e.g. an image-pull error or a
-	// timeout). It is the publisher-supplied X-Hades-Reason status header,
-	// truncated to buildstatus.MaxReasonLen before it is sent. Redaction is
-	// best-effort and publisher-dependent: the Docker scheduler runs the reason
-	// through redact.Default(), while the operator forwards a Kubernetes Job
-	// condition message as-is. Treat it as human-readable diagnostic text, not
-	// as a sanitized or machine-parseable field. Empty on success and whenever
-	// the publisher supplied no reason.
+	// Reason explains an outcome, in practice a non-success one (e.g. an
+	// image-pull error or a timeout). It is the publisher-supplied
+	// X-Hades-Reason status header, bounded by buildstatus.MaxReasonLen runes
+	// before it is sent. Redaction is best-effort and publisher-dependent: the
+	// Docker scheduler runs the reason through redact.Default(), while the
+	// operator forwards a Kubernetes Job condition message as-is. Treat it as
+	// human-readable diagnostic text, not as a sanitized or machine-parseable
+	// field. It is whatever the publisher attached, forwarded for every terminal
+	// status - empty whenever none was attached, which today is every Succeeded
+	// event. Switch on Status rather than on Reason being empty to decide
+	// whether a job failed.
 	Reason string `json:"reason,omitempty"`
 	// QueuedAt, StartedAt are the NATS server timestamps of this job's Queued and
 	// Running status events. They are omitted when this process did not observe

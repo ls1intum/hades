@@ -159,13 +159,17 @@ func TestTruncateReason(t *testing.T) {
 	long := strings.Repeat("ü", MaxReasonLen+10)
 	got := TruncateReason(long)
 	runes := []rune(got)
-	if len(runes) != MaxReasonLen+1 {
-		t.Errorf("truncated reason has %d runes, want %d plus the ellipsis", len(runes), MaxReasonLen)
+	// MaxReasonLen is a hard bound: the ellipsis counts towards it.
+	if len(runes) != MaxReasonLen {
+		t.Errorf("truncated reason has %d runes, want exactly %d including the ellipsis", len(runes), MaxReasonLen)
 	}
 	if runes[len(runes)-1] != '…' {
 		t.Error("a truncated reason must be marked with an ellipsis")
 	}
 	if !utf8.ValidString(got) {
 		t.Error("truncation split a multi-byte rune")
+	}
+	if again := TruncateReason(got); again != got {
+		t.Error("TruncateReason must be idempotent on an already-truncated value")
 	}
 }

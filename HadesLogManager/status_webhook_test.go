@@ -232,7 +232,7 @@ func TestHandleTruncatesOversizedReason(t *testing.T) {
 
 	events := sender.sent()
 	require.Len(t, events, 1)
-	assert.Len(t, []rune(events[0].Reason), buildstatus.MaxReasonLen+1, "reason must be capped plus an ellipsis")
+	assert.Len(t, []rune(events[0].Reason), buildstatus.MaxReasonLen, "reason must be capped at the hard bound, ellipsis included")
 }
 
 func TestHandleRetriesWithBackoffThenGivesUp(t *testing.T) {

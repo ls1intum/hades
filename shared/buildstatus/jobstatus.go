@@ -97,20 +97,22 @@ func FirstReason(reason ...string) string {
 	return ""
 }
 
-// MaxReasonLen caps a status reason in runes so a verbose executor or
-// controller message stays within NATS header limits and cannot bloat anything
-// that forwards it onwards.
+// MaxReasonLen is the hard upper bound, in runes, on a status reason. It keeps
+// a verbose executor or controller message within NATS header limits and stops
+// it bloating anything that forwards it onwards. TruncateReason never returns
+// more than this, ellipsis included.
 const MaxReasonLen = 500
 
-// TruncateReason shortens reason to MaxReasonLen runes, marking a shortened
-// value with an ellipsis. Publishers should apply it before attaching a reason
-// to a status event, and consumers that forward a reason outside the cluster
-// should apply it again: not every publisher does, so the cap only holds if the
-// boundary that depends on it enforces it.
+// TruncateReason shortens reason so the result is at most MaxReasonLen runes,
+// with the final rune replaced by an ellipsis to mark that content was dropped.
+// Publishers should apply it before attaching a reason to a status event, and
+// consumers that forward a reason outside the cluster should apply it again:
+// not every publisher does, so the cap only holds where the boundary that
+// depends on it enforces it. It is idempotent on an already-truncated value.
 func TruncateReason(reason string) string {
 	runes := []rune(reason)
 	if len(runes) <= MaxReasonLen {
 		return reason
 	}
-	return string(runes[:MaxReasonLen]) + "…"
+	return string(runes[:MaxReasonLen-1]) + "…"
 }
