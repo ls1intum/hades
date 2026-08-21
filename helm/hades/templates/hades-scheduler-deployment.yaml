@@ -15,7 +15,7 @@ spec:
       serviceAccountName: {{ .Values.rbac.hadesScheduler.serviceAccountName }}
       containers:
         - name: "hades-scheduler"
-          image: "{{ .Values.hadesScheduler.image.repository }}:{{ .Values.hadesScheduler.image.tag }}"
+          image: "{{ .Values.hadesScheduler.image.repository }}:{{ .Values.hadesScheduler.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.hadesScheduler.image.pullPolicy }}
           resources:
             limits:

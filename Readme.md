@@ -67,8 +67,8 @@ To run Hades in Docker mode for local development:
 1. Clone the repository:
 
    ```fish
-   git clone https://github.com/yourusername/Hades.git
-   cd Hades
+   git clone https://github.com/Hades-Scheduler/hades.git
+   cd hades
    ```
 
 2. Copy the `.env.example` file to `.env` (the default configuration uses Docker as the executor, so no changes are necessary for local testing):
@@ -105,10 +105,13 @@ For production deployments, Hades is designed to run natively within a Kubernete
 
 2. **Deployment**: We provide a comprehensive Helm Chart that packages the API, Scheduler, Operator, and NATS broker. By default the scheduler runs in `operator` mode, delegating job lifecycle management to the HadesOperator via `BuildJob` custom resources.
    
+   Replace `<version>` in the commands below with the chart version you want to
+   install (for example `1.0.0`).
+
    ```fish
    # Install the published chart from GHCR (recommended)
    helm upgrade --install hades oci://ghcr.io/hades-scheduler/charts/hades \
-     --version 0.2.0 -n hades --create-namespace
+     --version <version> -n hades --create-namespace
    ```
 
    Or install from a local checkout of this repository:
@@ -122,7 +125,7 @@ For production deployments, Hades is designed to run natively within a Kubernete
    > **Note:** Helm does not upgrade CRDs after the first install. When a release
    > changes the `BuildJob` CRD, apply it manually from the same chart version you
    > installed (not from the mutable `main` branch):
-   > `helm show crds oci://ghcr.io/hades-scheduler/charts/hades --version 0.2.0 | kubectl apply -f -`
+   > `helm show crds oci://ghcr.io/hades-scheduler/charts/hades --version <version> | kubectl apply -f -`
 
 3. **Detailed Documentation**: For advanced configuration (Ingress, TLS, resource limits) and step-by-step setup, please refer to the: [Hades Helm Chart Guide](./helm/hades/Readme.md)
 

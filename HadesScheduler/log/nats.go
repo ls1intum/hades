@@ -40,7 +40,7 @@ func NewNATSPublisher(nc *nats.Conn) (*NATSPublisher, error) {
 
 // PublishJobStatus publishes a job status change to NATS.
 // The status is published to the subject "hades.status.{status}".
-func (np *NATSPublisher) PublishJobStatus(ctx context.Context, jobStatus status.JobStatus, jobID string) error {
+func (np *NATSPublisher) PublishJobStatus(ctx context.Context, jobStatus status.JobStatus, jobID string, reason ...string) error {
 	if jobID == "" {
 		return fmt.Errorf("empty job ID")
 	}
@@ -50,9 +50,14 @@ func (np *NATSPublisher) PublishJobStatus(ctx context.Context, jobStatus status.
 	}
 
 	subject := status.StatusSubject(jobStatus)
-	data := []byte(jobID)
+	// Payload stays the bare job ID; an optional reason rides in a header so
+	// payload-only subscribers (HadesLogManager) are unaffected.
+	msg := &nats.Msg{Subject: subject, Data: []byte(jobID)}
+	if r := status.FirstReason(reason...); r != "" {
+		msg.Header = nats.Header{status.ReasonHeader: []string{r}}
+	}
 
-	if err := np.nc.Publish(subject, data); err != nil {
+	if err := np.nc.PublishMsg(msg); err != nil {
 		return fmt.Errorf("publishing job status %s for job %s: %w", jobStatus, jobID, err)
 	}
 

@@ -156,3 +156,44 @@ func TestBuildK8sJob_NoDuplicateStepScriptEnv(t *testing.T) {
 		t.Errorf("HADES_STEP_SCRIPT = %q (present=%v), want %q (reserved value wins over metadata)", got, ok, script)
 	}
 }
+
+// The whole-job timeout must be enforced via the Job's ActiveDeadlineSeconds so
+// Kubernetes fails the Job (reason DeadlineExceeded) once it elapses.
+func TestBuildK8sJob_ActiveDeadlineSeconds(t *testing.T) {
+	timeout := int64(600)
+	bj := &buildv1.BuildJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "job-1"},
+		Spec: buildv1.BuildJobSpec{
+			Name:           "job-1",
+			TimeoutSeconds: &timeout,
+			Steps: []buildv1.BuildStep{
+				{ID: 1, Name: "run", Image: "alpine", Script: "echo hi"},
+			},
+		},
+	}
+
+	job := buildK8sJob(bj, "job-1", true, false)
+	if job.Spec.ActiveDeadlineSeconds == nil {
+		t.Fatalf("ActiveDeadlineSeconds not set, want %d", timeout)
+	}
+	if *job.Spec.ActiveDeadlineSeconds != timeout {
+		t.Errorf("ActiveDeadlineSeconds = %d, want %d", *job.Spec.ActiveDeadlineSeconds, timeout)
+	}
+}
+
+// When no timeout is configured, ActiveDeadlineSeconds must stay nil so the Job
+// has no deadline (current default behaviour).
+func TestBuildK8sJob_NoTimeoutLeavesDeadlineUnset(t *testing.T) {
+	bj := &buildv1.BuildJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "job-1"},
+		Spec: buildv1.BuildJobSpec{
+			Name:  "job-1",
+			Steps: []buildv1.BuildStep{{ID: 1, Name: "run", Image: "alpine", Script: "echo hi"}},
+		},
+	}
+
+	job := buildK8sJob(bj, "job-1", true, false)
+	if job.Spec.ActiveDeadlineSeconds != nil {
+		t.Errorf("ActiveDeadlineSeconds = %v, want nil", *job.Spec.ActiveDeadlineSeconds)
+	}
+}

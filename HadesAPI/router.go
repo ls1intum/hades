@@ -169,14 +169,58 @@ func addBuildToQueue(c *gin.Context, producer hades.JobPublisher, statusPublishe
 		return
 	}
 
+	if p.QueuePayload.TimeoutSeconds < 0 {
+		slog.Error("Invalid timeout_seconds", "value", p.QueuePayload.TimeoutSeconds)
+		c.String(http.StatusBadRequest, "timeout_seconds cannot be negative")
+		return
+	}
+	if p.QueuePayload.TimeoutSeconds > payload.MaxTimeoutSeconds {
+		slog.Error("timeout_seconds too large", "value", p.QueuePayload.TimeoutSeconds)
+		c.String(http.StatusBadRequest, fmt.Sprintf("timeout_seconds must not exceed %d", payload.MaxTimeoutSeconds))
+		return
+	}
+
 	for _, step := range p.QueuePayload.Steps {
+		var memLimitBytes int64
 		if step.MemoryLimit != "" {
-			if _, err := utils.ParseMemoryLimit(step.MemoryLimit); err != nil {
+			parsed, err := utils.ParseMemoryLimit(step.MemoryLimit)
+			if err != nil {
 				slog.Error("Failed to parse RAM limit", "error", err)
 				buildRequestsTotal.WithLabelValues("rejected").Inc()
 				c.String(http.StatusBadRequest, "Failed to parse RAM limit")
 				return
 			}
+			memLimitBytes = parsed
+		}
+
+		if step.MemorySwap != "" {
+			swapBytes, err := utils.ParseMemoryLimit(step.MemorySwap)
+			if err != nil {
+				slog.Error("Failed to parse memory_swap limit", "error", err)
+				c.String(http.StatusBadRequest, "Failed to parse memory_swap limit")
+				return
+			}
+			// Docker requires memory_swap (total memory+swap) to be set together
+			// with a memory limit and to be at least as large as it.
+			if step.MemoryLimit == "" {
+				c.String(http.StatusBadRequest, "memory_swap requires memory_limit to be set")
+				return
+			}
+			if swapBytes < memLimitBytes {
+				c.String(http.StatusBadRequest, "memory_swap must be greater than or equal to memory_limit")
+				return
+			}
+		}
+
+		if step.PidsLimit < 0 {
+			c.String(http.StatusBadRequest, "pids_limit cannot be negative")
+			return
+		}
+
+		if err := utils.ValidateNetworkMode(step.Network); err != nil {
+			slog.Error("Invalid network mode", "error", err)
+			c.String(http.StatusBadRequest, err.Error())
+			return
 		}
 	}
 

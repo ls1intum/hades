@@ -52,6 +52,9 @@ type Config struct {
 	SessionTTL    time.Duration `env:"DASHBOARD_SESSION_TTL" envDefault:"12h"`
 	JobRetention  time.Duration `env:"DASHBOARD_JOB_RETENTION" envDefault:"1h"`
 	LogManagerURL string        `env:"LOG_MANAGER_URL" envDefault:"http://hades-log-manager-service:8081"`
+	// Version is the deployed build identifier (the container image tag), shown
+	// in the dashboard header. Defaults to "dev" for local runs.
+	Version string `env:"HADES_VERSION" envDefault:"dev"`
 	// InsecureCookie drops the Secure flag on the session cookie. Only for local
 	// HTTP development; never enable behind anything other than localhost.
 	InsecureCookie bool `env:"DASHBOARD_COOKIE_INSECURE" envDefault:"false"`
@@ -140,7 +143,10 @@ func (s *Server) Start(ctx context.Context) error {
 		if jobID == "" || !status.IsValid() {
 			return
 		}
-		summary := s.tracker.observe(jobID, status)
+		// An optional reason (e.g. why the job Failed) rides in a header; Get is
+		// nil-safe when no header was set.
+		reason := msg.Header.Get(buildstatus.ReasonHeader)
+		summary := s.tracker.observe(jobID, status, reason)
 		s.hub.broadcast(event{Type: eventJob, Job: summary})
 	})
 	if err != nil {

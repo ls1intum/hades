@@ -134,6 +134,13 @@ spec:
                         If not specified, uses the value of memoryLimit.
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
+                    memorySwap:
+                      description: |-
+                        Total memory+swap limit (e.g. "512M", "2G"), matching the Docker semantics where
+                        this is memory + swap combined.
+                        Docker executor only: accepted for schema parity but NOT enforced on Kubernetes,
+                        which has no per-container swap field.
+                      type: string
                     metadata:
                       additionalProperties:
                         type: string
@@ -152,6 +159,19 @@ spec:
                         Should clearly indicate what the step does.
                         Examples: "Clone Repository", "Run Tests", "Build Docker Image"
                       type: string
+                    network:
+                      description: |-
+                        Docker network mode for this step (e.g. "none", "bridge", "host", or a named network).
+                        Docker executor only: accepted for schema parity but NOT enforced on Kubernetes,
+                        where all containers in a pod share a single network namespace.
+                      type: string
+                    pidsLimit:
+                      description: |-
+                        Maximum number of PIDs allowed in this step's container; 0 means unlimited.
+                        Docker executor only: accepted for schema parity but NOT enforced on Kubernetes,
+                        which has no per-container PID-limit field.
+                      format: int64
+                      type: integer
                     script:
                       description: |-
                         Optional bash script to execute inside the container.

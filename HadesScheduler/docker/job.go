@@ -59,6 +59,12 @@ func (d Job) execute(ctx context.Context) error {
 		err := dockerStep.execute(stepCtx)
 		if err != nil {
 			d.logger.Error("Failed to execute step", slog.Any("error", err))
+			// A cancelled/expired job context (e.g. the whole-job timeout) must
+			// abort the job immediately, even for ContinueOnError steps - otherwise
+			// a timeout would be swallowed and later steps would keep running.
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			if step.ContinueOnError {
 				d.logger.Info("Next step should be executed despite error due to ContinueOnError setting", slog.Any("step", step))
 				stepErr = errors.Join(stepErr, fmt.Errorf("step %v failed with ContinueOnError set: %w", step.ID, err))

@@ -19,9 +19,13 @@ Both are `workflow_dispatch` only - nothing deploys automatically. They call the
 
 ## How a deploy runs
 
-1. **Checkout** the chart source. Prod checks out the **release tag** (when the version is
-   not `latest`) so the chart templates and CRDs match the released images; test uses the
-   ref the workflow was run from.
+1. **Checkout** the chart source. The chart templates and CRDs come from this ref, so it
+   must match the deployed image - especially for CRDs, which Helm never upgrades (see
+   step 5). Prod checks out the **release tag** (when the version is not `latest`). Test
+   resolves the ref automatically: an explicit `chart-ref` input wins; otherwise a `pr-N`
+   version sources the chart/CRDs from that PR's head (`refs/pull/N/head`); otherwise it
+   uses the ref the workflow was run from. This means deploying a `pr-N` image also
+   deploys that PR's CRDs, even when the run is dispatched from `main`.
 2. **Configure kubeconfig** from the environment's `KUBE_CONFIG` secret.
 3. **Ensure the namespace** exists.
 4. **Create/update the app Secrets** (`hades-auth`, `hades-dashboard`) from the
@@ -32,10 +36,12 @@ Both are `workflow_dispatch` only - nothing deploys automatically. They call the
 6. **`helm upgrade --install --atomic`** with the base `values.yaml` plus the
    environment values file, pinning all four component image tags to the chosen version.
    `--atomic` rolls the release back on failure.
-7. **Restart `hades-api`** and wait for the rollout. The API reads `AUTH_KEY` and the
-   dashboard credentials as environment variables (resolved only at pod start), so a
-   redeploy that rotates those Secrets without changing the image tag would otherwise
-   leave the running pods on the old values.
+7. **Roll all four Hades deployments** and wait for each rollout. This covers the two
+   cases Helm does not roll on its own: a **mutable image tag** (`latest`, `pr-N`) whose
+   digest changed but whose tag string did not (Helm sees an unchanged spec, so the
+   restart re-pulls the new digest via `pullPolicy: Always`), and **rotated Secrets**
+   (`AUTH_KEY`, dashboard credentials) that pods read as environment variables only at
+   start. For an immutable release tag Helm already rolls, so the restart is a no-op.
 
 The `version` input maps directly to the container image tag (this repo tags images with
 the release tag verbatim, with no `v` prefix).
@@ -43,7 +49,10 @@ the release tag verbatim, with no `v` prefix).
 ## Selecting the version
 
 - **Test**: type any image tag. Handy tags: `latest` (current `main`), `pr-123` (a PR
-  build), or a release tag.
+  build), or a release tag. For a `pr-N` tag the chart and CRDs are taken from that PR's
+  head automatically, so you can dispatch from any branch and still get the PR's CRDs. To
+  source the chart from a specific branch or sha instead, set the optional `chart-ref`
+  input.
 - **Prod**: type `latest` or an existing release tag (for example `1.0.0`). A bogus value
   fails the `validate` job before the cluster is touched. The prod deploy pins the chart
   source automatically - `main` for `latest`, or the release tag otherwise - so the chart

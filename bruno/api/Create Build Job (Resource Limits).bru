@@ -1,0 +1,57 @@
+meta {
+  name: Create Build Job (Resource Limits)
+  type: http
+  seq: 20
+}
+
+post {
+  url: http://{{hostname}}/build
+  body: json
+  auth: basic
+}
+
+auth:basic {
+  username: hades
+  password: {{auth_key}}
+}
+
+body:json {
+  {
+    "name": "Resource-Limited Job",
+    "metadata": {
+      "GLOBAL": "test"
+    },
+    "timestamp": "2021-01-01T00:00:00.000Z",
+    "priority": 3,
+    "timeout_seconds": 600, // whole-job timeout; job is killed + failed once exceeded (both executors)
+    "steps": [
+      {
+        "id": 1,
+        "name": "Clone",
+        "image": "ghcr.io/hades-scheduler/git-container:1.0.0",
+        "metadata": {
+          "REPOSITORY_DIR": "/shared"
+        }
+      },
+      {
+        "id": 2,
+        "name": "Execute",
+        "image": "ls1tum/artemis-maven-template:java17-18",
+        "script": "set -e && cd /shared/example && ./gradlew clean test",
+        "cpu_limit": 2,            // whole cores (both executors)
+        "memory_limit": "2G",      // both executors
+        "metadata": {              // env vars for the step (both executors)
+          "BUILD_ENV": "ci"
+        },
+        "network": "none",         // Docker executor only (K8s: accepted, not enforced)
+        "memory_swap": "2G",       // Docker executor only; must be >= memory_limit
+        "pids_limit": 512          // Docker executor only
+      }
+    ]
+  }
+}
+
+vars:pre-request {
+  user:
+  password:
+}

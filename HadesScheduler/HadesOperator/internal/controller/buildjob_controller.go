@@ -148,13 +148,75 @@ func (r *BuildJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err == nil {
 		// Job already exists check the status of the containers. draining is true
 		// while a terminated container's live log stream is still publishing.
-		draining, err := r.updateContainerStatuses(ctx, &bj)
+		draining, pod, err := r.updateContainerStatuses(ctx, &bj)
 		if err != nil {
+			// When a Job hits its activeDeadlineSeconds (whole-job timeout),
+			// Kubernetes marks the Job Failed (reason DeadlineExceeded) and deletes
+			// its pod. The pod is then unresolvable and the status update fails - but
+			// the Job condition already tells us the outcome, so finalize from it
+			// instead of requeueing this error forever. The pod (and thus its logs)
+			// is already gone, so there is nothing left to drain.
+			if done, succeeded, msg := jobFinished(&existingJob); done {
+				slog.Warn("Container status update failed but Job already finished; finalizing", "buildJob", bj.Name, "reason", msg)
+				if serr := r.setStatusCompleted(ctx, req.NamespacedName, bj.Name, succeeded, msg); serr != nil {
+					if apierrors.IsConflict(serr) {
+						return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+					}
+					return ctrl.Result{}, serr
+				}
+				r.logStreams().stopJob(bj.Namespace, bj.Name)
+				if r.DeleteOnComplete {
+					policy := metav1.DeletePropagationForeground
+					if derr := r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy}); derr != nil && !apierrors.IsNotFound(derr) {
+						return ctrl.Result{}, derr
+					}
+				}
+				if aerr := r.admitOneSuspendedJob(ctx, bj.Namespace); aerr != nil {
+					slog.Error("Failed to admit suspended job after timeout finalization", "error", aerr)
+				}
+				return ctrl.Result{}, nil
+			}
+
 			// draining is unreliable when the status update failed, so requeue
 			// instead of proceeding: finalizing here could delete the pod while a
 			// container's log stream is still draining and lose its tail logs.
 			slog.Error("Failed to update container statuses", "error", err)
 			return ctrl.Result{}, fmt.Errorf("updating container statuses: %w", err)
+		}
+
+		// A pod wedged in a terminal waiting state (e.g. ImagePullBackOff) never
+		// runs, so its Job never gets a Complete/Failed condition and jobFinished
+		// would keep the BuildJob "Running" forever. Fail it with the reason and
+		// delete the Job (removing the runaway pod and stopping the endless pull
+		// retries, which TTLSecondsAfterFinished would never reap on an unfinished
+		// Job). No log-drain gate: the containers never started, so there are no
+		// logs to wait for.
+		if reason, stuck := podStuckReason(pod); stuck {
+			slog.Warn("BuildJob pod is stuck; failing", "buildJob", bj.Name, "reason", reason)
+			if err := r.setStatusCompleted(ctx, req.NamespacedName, bj.Name, false, reason); err != nil {
+				if apierrors.IsConflict(err) {
+					return ctrl.Result{RequeueAfter: conflictRequeueDelay}, nil
+				}
+				return ctrl.Result{}, err
+			}
+			r.logStreams().stopJob(bj.Namespace, bj.Name)
+
+			policy := metav1.DeletePropagationForeground
+			if err := r.Delete(ctx, &existingJob, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil && !apierrors.IsNotFound(err) {
+				return ctrl.Result{}, err
+			}
+			// Remove the CR too only when configured to clean up on completion;
+			// otherwise keep it as the failure record (phase Failed, reason in
+			// Status.Message).
+			if r.DeleteOnComplete {
+				if err := r.Delete(ctx, &bj, &client.DeleteOptions{PropagationPolicy: &policy}); err != nil && !apierrors.IsNotFound(err) {
+					return ctrl.Result{}, err
+				}
+			}
+			if err := r.admitOneSuspendedJob(ctx, bj.Namespace); err != nil {
+				slog.Error("Failed to admit suspended job after stuck-pod failure", "error", err)
+			}
+			return ctrl.Result{}, nil
 		}
 
 		// Job already exists, check the status of the job
@@ -390,7 +452,7 @@ func (r *BuildJobReconciler) setStatusCompleted(ctx context.Context, nn types.Na
 		slog.Info("Published job succeeded status", "job_id", jobID)
 		return nil
 	} else {
-		if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusFailed, jobID); err != nil {
+		if err := r.Publisher.PublishJobStatus(ctx, buildstatus.StatusFailed, jobID, msg); err != nil {
 			slog.Error("Failed to publish job failed status", "job_id", jobID, "error", err)
 			return err
 		}
@@ -504,6 +566,13 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 			}
 		}
 
+		// NOTE: s.Network, s.MemorySwap and s.PidsLimit are intentionally NOT applied
+		// here. They are Docker-executor-only: Kubernetes has no per-container swap or
+		// PID-limit field, and all containers in a pod share one network namespace, so
+		// per-step network isolation is not expressible. These fields are accepted for
+		// schema parity with the Docker executor only. The whole-job timeout is enforced
+		// via Job.spec.activeDeadlineSeconds (see below).
+
 		initCtrs = append(initCtrs, c)
 	}
 
@@ -554,6 +623,10 @@ func buildK8sJob(bj *buildv1.BuildJob, jobName string, deleteOnComplete bool, su
 			Suspend:                 &suspend,
 			TTLSecondsAfterFinished: ttl,
 			BackoffLimit:            &backoff,
+			// Whole-job timeout: Kubernetes fails the Job (reason DeadlineExceeded)
+			// and deletes its pod once this elapses, covering time spent in init
+			// containers (the build steps). nil when no timeout is configured.
+			ActiveDeadlineSeconds: bj.Spec.TimeoutSeconds,
 			Template: corev1.PodTemplateSpec{
 				Spec: podSpec,
 			},

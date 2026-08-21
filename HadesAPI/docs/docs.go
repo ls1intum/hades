@@ -131,6 +131,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/payload.Step"
                     }
                 },
+                "timeout_seconds": {
+                    "description": "Whole-job timeout in seconds; the job is killed and marked failed once exceeded. 0 = no timeout.",
+                    "type": "integer"
+                },
                 "timestamp": {
                     "description": "Job creation timestamp",
                     "type": "string"
@@ -149,7 +153,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "cpu_limit": {
-                    "description": "CPU limit in millicores (e.g., 1000 = 1 CPU core)",
+                    "description": "CPU limit in whole cores (e.g., 1 = 1 CPU core, 2 = 2 cores)",
                     "type": "integer"
                 },
                 "id": {
@@ -164,6 +168,10 @@ const docTemplate = `{
                     "description": "Memory limit (e.g., \"512M\", \"2G\")",
                     "type": "string"
                 },
+                "memory_swap": {
+                    "description": "Total memory+swap limit, same format as memory_limit (e.g., \"512M\", \"2G\"); requires memory_limit to be set and must be \u003e= memory_limit. Docker executor only.",
+                    "type": "string"
+                },
                 "metadata": {
                     "description": "Step-specific environment variables and metadata",
                     "type": "object",
@@ -174,6 +182,14 @@ const docTemplate = `{
                 "name": {
                     "description": "Human-readable step name",
                     "type": "string"
+                },
+                "network": {
+                    "description": "Docker network mode: \"none\", \"bridge\", \"host\", \"default\", or a named network. Empty = executor default. Docker executor only; accepted but not enforced on Kubernetes.",
+                    "type": "string"
+                },
+                "pids_limit": {
+                    "description": "Maximum number of PIDs in the container; 0 = unlimited. Docker executor only.",
+                    "type": "integer"
                 },
                 "script": {
                     "description": "Shell script to execute in the container",

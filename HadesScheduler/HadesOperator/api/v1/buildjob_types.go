@@ -126,6 +126,22 @@ type BuildStep struct {
 	// Prevents out-of-memory issues and resource exhaustion.
 	// If not specified, uses cluster defaults.
 	MemoryLimit *resource.Quantity `json:"memoryLimit,omitempty"`
+
+	// Docker network mode for this step (e.g. "none", "bridge", "host", or a named network).
+	// Docker executor only: accepted for schema parity but NOT enforced on Kubernetes,
+	// where all containers in a pod share a single network namespace.
+	Network string `json:"network,omitempty"`
+
+	// Total memory+swap limit (e.g. "512M", "2G"), matching the Docker semantics where
+	// this is memory + swap combined.
+	// Docker executor only: accepted for schema parity but NOT enforced on Kubernetes,
+	// which has no per-container swap field.
+	MemorySwap string `json:"memorySwap,omitempty"`
+
+	// Maximum number of PIDs allowed in this step's container; 0 means unlimited.
+	// Docker executor only: accepted for schema parity but NOT enforced on Kubernetes,
+	// which has no per-container PID-limit field.
+	PidsLimit int64 `json:"pidsLimit,omitempty"`
 }
 
 type BuildJobStatus struct {

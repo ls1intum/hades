@@ -41,14 +41,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   login: (username: string, password: string) =>
-    request<{ username: string }>("/api/login", {
+    request<{ username: string; version?: string }>("/api/login", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
 
   logout: () => request<void>("/api/logout", { method: "POST" }),
 
-  session: () => request<{ username: string }>("/api/session"),
+  session: () => request<{ username: string; version?: string }>("/api/session"),
 
   jobs: (status?: string) =>
     request<{ jobs: JobSummary[] }>(

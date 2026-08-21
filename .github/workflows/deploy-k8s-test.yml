@@ -1,7 +1,17 @@
 name: Deploy to Kubernetes (test)
 
 # Manual test deploy. Any image tag is allowed: `latest`, a release tag, a branch/sha
-# tag, or `pr-N`. The chart and CRDs come from the ref this workflow is run from.
+# tag, or `pr-N`.
+#
+# The chart and CRDs must match the deployed image - CRDs especially, since Helm never
+# upgrades them and the reusable workflow applies them from the chart source. To keep
+# them in sync with the image, the chart ref is resolved as follows:
+#   1. an explicit `chart-ref` input always wins;
+#   2. otherwise a `pr-N` version sources the chart/CRDs from that PR's head
+#      (refs/pull/N/head), so deploying a PR image also deploys that PR's CRDs;
+#   3. otherwise it falls back to the ref this workflow was dispatched from.
+# This avoids the trap of dispatching a `pr-N` image from `main`, which would deploy the
+# PR binaries against main's (stale) CRDs.
 
 on:
   workflow_dispatch:
@@ -11,12 +21,45 @@ on:
         required: true
         type: string
         default: latest
+      chart-ref:
+        description: "Git ref for the chart and CRDs. Empty = auto (PR head for pr-N, else the dispatched ref)."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
+  # Resolve which git ref the chart and CRDs should come from, so a `pr-N` image is
+  # always paired with that PR's chart/CRDs rather than the dispatched branch.
+  resolve-chart-ref:
+    runs-on: ubuntu-latest
+    outputs:
+      chart-ref: ${{ steps.resolve.outputs.chart_ref }}
+    steps:
+      - id: resolve
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          CHART_REF_INPUT: ${{ inputs.chart-ref }}
+        run: |
+          set -euo pipefail
+          if [ -n "$CHART_REF_INPUT" ]; then
+            # Explicit override always wins.
+            ref="$CHART_REF_INPUT"
+          elif [[ "$VERSION" =~ ^pr-([0-9]+)$ ]]; then
+            # Deploying a PR image: take the chart/CRDs from that PR's head commit.
+            ref="refs/pull/${BASH_REMATCH[1]}/head"
+          else
+            # Empty tells the reusable workflow to use the dispatched ref.
+            ref=""
+          fi
+          echo "chart_ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "Resolved chart-ref for version '$VERSION': '${ref:-<dispatched ref>}'"
+
   deploy:
+    needs: resolve-chart-ref
     # `secrets: inherit` is REQUIRED: the reusable job reads environment secrets
     # (KUBE_CONFIG, AUTH_KEY, DASHBOARD_*) from the k8s-test environment it selects,
     # and a reusable workflow only receives those when the caller inherits secrets -
@@ -29,3 +72,4 @@ jobs:
       namespace: hades-test
       values-file: values-test.yaml
       image-tag: ${{ inputs.version }}
+      chart-ref: ${{ needs.resolve-chart-ref.outputs.chart-ref }}

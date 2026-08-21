@@ -203,7 +203,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 	s.setSessionCookie(c, token, exp)
-	c.JSON(http.StatusOK, gin.H{"username": req.Username})
+	c.JSON(http.StatusOK, gin.H{"username": req.Username, "version": s.cfg.Version})
 }
 
 func (s *Server) handleLogout(c *gin.Context) {
@@ -213,7 +213,7 @@ func (s *Server) handleLogout(c *gin.Context) {
 
 func (s *Server) handleSession(c *gin.Context) {
 	user, _ := c.Get("dashboardUser")
-	c.JSON(http.StatusOK, gin.H{"username": user})
+	c.JSON(http.StatusOK, gin.H{"username": user, "version": s.cfg.Version})
 }
 
 // authMiddleware rejects requests without a valid session cookie.

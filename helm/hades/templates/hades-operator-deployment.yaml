@@ -15,7 +15,7 @@ spec:
       serviceAccountName: {{ .Values.rbac.hadesOperator.serviceAccountName }}
       containers:
         - name: "hades-operator"
-          image: "{{ .Values.hadesOperator.image.repository }}:{{ .Values.hadesOperator.image.tag }}"
+          image: "{{ .Values.hadesOperator.image.repository }}:{{ .Values.hadesOperator.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.hadesOperator.image.pullPolicy }}
 
           {{- if .Values.hadesOperator.leaderElection.enabled }}

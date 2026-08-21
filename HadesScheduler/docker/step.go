@@ -91,6 +91,29 @@ func (s Step) execute(ctx context.Context) error {
 		hostConfig.Resources.Memory = ramLimit
 	}
 
+	// Total memory+swap limit. Validated at submission time to be >= the memory
+	// limit and to require a memory limit, so it is safe to set directly here.
+	if s.MemorySwap != "" {
+		swapLimit, err := utils.ParseMemoryLimit(s.MemorySwap)
+		if err != nil {
+			return fmt.Errorf("parsing memory_swap: %w", err)
+		}
+		s.logger.Debug("Setting memory+swap limit to ", "limit", swapLimit)
+		hostConfig.Resources.MemorySwap = swapLimit
+	}
+
+	if s.PidsLimit > 0 {
+		s.logger.Debug("Setting PIDs limit to ", "limit", s.PidsLimit)
+		hostConfig.Resources.PidsLimit = &s.PidsLimit
+	}
+
+	// Network mode (e.g. "none" to fully disable networking). Empty means the
+	// Docker default. Validated at submission time.
+	if s.Network != "" {
+		s.logger.Debug("Setting network mode to ", "network", s.Network)
+		hostConfig.NetworkMode = container.NetworkMode(s.Network)
+	}
+
 	// Create the bash script if there is one
 	if s.Script != "" {
 		// Overwrite the default entrypoint
@@ -110,6 +133,19 @@ func (s Step) execute(ctx context.Context) error {
 	}
 
 	defer func() {
+		// If the job context was cancelled (e.g. a timeout) the container may
+		// still be running: AutoRemove only reaps containers that have already
+		// exited, and the cancelled job ctx can no longer drive cleanup. Force
+		// remove with a fresh context so the container is stopped and the shared
+		// volume is released, regardless of the AutoRemove setting.
+		if ctx.Err() != nil {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			defer cancel()
+			if err := removeContainer(cleanupCtx, s.cli, resp.ID); err != nil {
+				s.logger.Error("Failed to cleanup container after cancellation", slog.Any("error", err), slog.Any("container_id", resp.ID))
+			}
+			return
+		}
 		if s.Options.containerAutoremove {
 			return
 		}

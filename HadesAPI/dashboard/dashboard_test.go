@@ -127,6 +127,52 @@ func TestLoginThenSessionAndLogout(t *testing.T) {
 	}
 }
 
+func TestLoginAndSessionReturnVersion(t *testing.T) {
+	s := testServer(t, true)
+	s.cfg.Version = "1.2.3"
+	r := newRouter(s)
+
+	// Login response carries the deployed version.
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"username":"admin","password":"`+testPassword+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("login failed: %d %s", w.Code, w.Body.String())
+	}
+	var loginResp struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &loginResp); err != nil {
+		t.Fatal(err)
+	}
+	if loginResp.Version != "1.2.3" {
+		t.Fatalf("login version = %q, want 1.2.3", loginResp.Version)
+	}
+
+	var cookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == sessionCookieName {
+			cookie = c
+		}
+	}
+
+	// Session response carries it too.
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/session", nil)
+	req.AddCookie(cookie)
+	r.ServeHTTP(w, req)
+	var sessionResp struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &sessionResp); err != nil {
+		t.Fatal(err)
+	}
+	if sessionResp.Version != "1.2.3" {
+		t.Fatalf("session version = %q, want 1.2.3", sessionResp.Version)
+	}
+}
+
 func TestExpiredSessionRejected(t *testing.T) {
 	s := testServer(t, true)
 	s.auth.ttl = -time.Minute // issue already-expired tokens
@@ -170,7 +216,7 @@ func TestListJobsReflectsTracker(t *testing.T) {
 	s := testServer(t, true)
 	r := newRouter(s)
 	s.tracker.enqueue("job-1", "build", 3, hades.HighPriority)
-	s.tracker.observe("job-1", buildstatus.StatusRunning)
+	s.tracker.observe("job-1", buildstatus.StatusRunning, "")
 
 	cookie := login(t, r)
 	w := httptest.NewRecorder()
@@ -348,9 +394,26 @@ func TestJobLogsRejectsNonUUID(t *testing.T) {
 	}
 }
 
+func TestTrackerObserveReason(t *testing.T) {
+	tr := newTracker(time.Hour)
+	// A reason attached to a Failed transition is surfaced on the summary.
+	sum := tr.observe("j", buildstatus.StatusFailed, "ImagePullBackOff: back-off")
+	if sum.Status != "Failed" {
+		t.Fatalf("status = %q, want Failed", sum.Status)
+	}
+	if sum.Reason != "ImagePullBackOff: back-off" {
+		t.Fatalf("reason = %q, want the ImagePullBackOff message", sum.Reason)
+	}
+	// A later empty-reason update must not wipe the stored reason.
+	sum = tr.observe("j", buildstatus.StatusFailed, "")
+	if sum.Reason != "ImagePullBackOff: back-off" {
+		t.Fatalf("reason was cleared by an empty update: %q", sum.Reason)
+	}
+}
+
 func TestTrackerSweep(t *testing.T) {
 	tr := newTracker(time.Millisecond)
-	tr.observe("j", buildstatus.StatusSucceeded)
+	tr.observe("j", buildstatus.StatusSucceeded, "")
 	// Force updatedAt into the past.
 	tr.mu.Lock()
 	tr.jobs["j"].updatedAt = time.Now().Add(-time.Hour)

@@ -4,6 +4,7 @@ import { onUnauthorized } from "@/lib/auth-events";
 
 interface AuthContextValue {
   username: string | null;
+  version: string | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -13,12 +14,16 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [username, setUsername] = useState<string | null>(null);
+  const [version, setVersion] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
       .session()
-      .then((s) => setUsername(s.username))
+      .then((s) => {
+        setUsername(s.username);
+        setVersion(s.version ?? null);
+      })
       .catch(() => {
         // Any failure (401 not-logged-in, or 503 dashboard disabled) leaves us
         // logged out; the router sends the user to the login page.
@@ -34,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (u: string, p: string) => {
     const res = await api.login(u, p);
     setUsername(res.username);
+    setVersion(res.version ?? null);
   }, []);
 
   const logout = useCallback(async () => {
@@ -45,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ username, loading, login, logout }}>
+    <AuthContext.Provider value={{ username, version, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
