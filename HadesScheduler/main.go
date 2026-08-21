@@ -19,8 +19,8 @@ import (
 // HadesSchedulerConfig holds the scheduler's runtime configuration. The
 // executor is selected separately via utils.ExecutorConfig (HADES_EXECUTOR).
 type HadesSchedulerConfig struct {
-	Concurrency uint `env:"CONCURRENCY" envDefault:"1"`
-	NatsConfig  hadesnats.ConnectionConfig
+	ConsumerConfig hadesnats.ConsumerConfig
+	NatsConfig     hadesnats.ConnectionConfig
 }
 
 func main() {
@@ -40,9 +40,11 @@ func main() {
 
 	slog.Info("HadesScheduler configuration",
 		"executor", executorCfg.Executor,
-		"concurrency", cfg.Concurrency,
+		"concurrency", cfg.ConsumerConfig.Concurrency,
 		"nats_url", cfg.NatsConfig.URL,
 		"nats_tls", cfg.NatsConfig.TLS,
+		"nats_ack_wait", cfg.ConsumerConfig.AckWait,
+		"nats_max_deliver", cfg.ConsumerConfig.MaxDeliver,
 	)
 
 	natsConn, err := hadesnats.SetupDefaultNatsConnection(cfg.NatsConfig)
@@ -52,7 +54,7 @@ func main() {
 	}
 	defer natsConn.Close()
 
-	consumer, err := hadesnats.NewHadesConsumer(natsConn, cfg.Concurrency)
+	consumer, err := hadesnats.NewHadesConsumer(natsConn, cfg.ConsumerConfig)
 	if err != nil {
 		slog.Error("Failed to create Hades consumer", "error", err)
 		os.Exit(1)
