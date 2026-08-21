@@ -53,8 +53,8 @@ spec:
               value: {{ .Values.hadesOperator.DeleteOnComplete | quote }}
             - name: MAX_PARALLELISM
               value: {{ .Values.hadesOperator.maxParallelism | quote }}
-            {{- include "hades.tracingEnv" . | nindent 12 }}
             {{- end }}
+            {{- include "hades.tracingEnv" . | nindent 12 }}
 
           livenessProbe:
             httpGet:

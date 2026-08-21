@@ -217,15 +217,22 @@ tracing:
     image: jaegertracing/all-in-one:1.62.0
     # -- Bundled-Jaeger UI exposure. The UI Service is ClusterIP (in-cluster /
     # port-forward only) by default; enable this Ingress to reach it from
-    # outside. It is always protected by HTTP basic auth - rendering fails if
-    # enabled without a password or an existing secret, so the UI can never be
-    # exposed unauthenticated.
+    # outside. It is protected by HTTP basic auth - rendering fails if enabled
+    # without a password or an existing secret.
+    #
+    # IMPORTANT: the basic auth is enforced with ingress-nginx annotations
+    # (`nginx.ingress.kubernetes.io/auth-*`), so the login only takes effect when
+    # `className` routes to an ingress-nginx controller. If you point it at a
+    # different controller (Traefik, HAProxy, ...), those annotations are ignored
+    # and the UI would be exposed WITHOUT auth - provide equivalent auth for that
+    # controller instead, or keep it ClusterIP + port-forward.
     ui:
       ingress:
-        # -- Expose the Jaeger UI via an Ingress (behind basic auth).
+        # -- Expose the Jaeger UI via an Ingress (behind ingress-nginx basic auth).
         enabled: false
-        # -- Ingress class for the UI (basic auth is implemented with nginx
-        # ingress annotations).
+        # -- Ingress class for the UI. Basic auth requires an ingress-nginx
+        # controller (see the note above); other controllers ignore the auth
+        # annotations.
         className: "nginx"
         # -- Hostname for the Jaeger UI. Required when `enabled`.
         host: ""

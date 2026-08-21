@@ -6,8 +6,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: "hades-jaeger"
-  labels:
-    app.kubernetes.io/part-of: hades
 spec:
   replicas: 1
   selector:
@@ -34,8 +32,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: "hades-jaeger"
-  labels:
-    app.kubernetes.io/part-of: hades
 spec:
   selector:
     app: hades-jaeger-selector
