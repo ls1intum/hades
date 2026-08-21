@@ -66,10 +66,11 @@ func TestConsumerConfigValidate(t *testing.T) {
 }
 
 // TestConsumerConfigValidateAckWait pins the AckWait lower bound. The heartbeat
-// interval is AckWait/3 but clamped up to minAckProgressInterval, so below
-// 3*minAckProgressInterval the clamp wins and the first heartbeat lands after
-// AckWait has already elapsed. JetStream would then redeliver a job that is
-// still running, which is the duplicate execution this consumer prevents.
+// targets AckWait/3, giving three ticks per ack window so a delayed or dropped
+// one is harmless. Below 3*minAckProgressInterval the clamp wins and that
+// margin collapses towards a single tick; under minAckProgressInterval it is
+// gone altogether and the first heartbeat lands after AckWait has elapsed,
+// redelivering a job that is still running.
 func TestConsumerConfigValidateAckWait(t *testing.T) {
 	err := ConsumerConfig{AckWait: 10 * time.Millisecond}.withDefaults().validate()
 	require.Error(t, err)
@@ -84,7 +85,8 @@ func TestConsumerConfigValidateAckWait(t *testing.T) {
 	assert.NoError(t, ConsumerConfig{AckWait: minAckWait}.withDefaults().validate())
 	assert.Equal(t, minAckProgressInterval, ackProgressInterval(minAckWait))
 
-	// Just below it, the clamp would push the heartbeat past AckWait/3.
+	// Just below it, the clamp holds the interval above AckWait/3 and the
+	// three-ticks-per-window margin starts to erode.
 	assert.Error(t, ConsumerConfig{AckWait: minAckWait - time.Millisecond}.withDefaults().validate())
 }
 

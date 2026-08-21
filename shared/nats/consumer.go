@@ -82,12 +82,13 @@ func (c ConsumerConfig) withDefaults() ConsumerConfig {
 // is already the last one and no job would ever be executed.
 const minMaxDeliver = 2
 
-// minAckWait is the smallest AckWait for which the heartbeat can still keep a
-// job alive. ackProgressInterval derives the heartbeat from AckWait/3 but clamps
-// it up to minAckProgressInterval, so below this bound the clamp wins and the
-// first InProgress call would land after AckWait had already elapsed. JetStream
-// would redeliver a job that is still running - exactly the duplicate execution
-// this consumer exists to prevent.
+// minAckWait is the smallest AckWait that preserves the heartbeat's safety
+// margin. ackProgressInterval targets AckWait/3 so at least three heartbeats
+// fall inside every ack window and a couple of delayed or lost ticks still
+// cannot trigger a redelivery. Below this bound the minAckProgressInterval
+// clamp wins, that margin shrinks towards a single tick, and under 100ms it
+// disappears entirely: the first InProgress call would land after AckWait had
+// already elapsed and JetStream would redeliver a job that is still running.
 const minAckWait = 3 * minAckProgressInterval
 
 // validate rejects a configuration that would silently break job execution.
@@ -96,7 +97,7 @@ const minAckWait = 3 * minAckProgressInterval
 func (c ConsumerConfig) validate() error {
 	if c.AckWait < minAckWait {
 		return fmt.Errorf(
-			"NATS_ACK_WAIT must be at least %s, got %s: the in-progress heartbeat is clamped to %s, so a shorter AckWait would expire before the first heartbeat and redeliver a job that is still running",
+			"NATS_ACK_WAIT must be at least %s, got %s: the in-progress heartbeat is clamped to a %s floor, so a shorter AckWait leaves fewer than three heartbeats per ack window and loses the margin that keeps a delayed or dropped tick from redelivering a job that is still running",
 			minAckWait, c.AckWait, minAckProgressInterval)
 	}
 	if c.MaxDeliver < minMaxDeliver {
