@@ -82,10 +82,23 @@ func (c ConsumerConfig) withDefaults() ConsumerConfig {
 // is already the last one and no job would ever be executed.
 const minMaxDeliver = 2
 
-// validate rejects a configuration that would silently stop all job execution.
-// It runs after withDefaults, so a zero or negative MaxDeliver has already been
-// replaced by DefaultMaxDeliver and only an explicit, unusable value is left.
+// minAckWait is the smallest AckWait for which the heartbeat can still keep a
+// job alive. ackProgressInterval derives the heartbeat from AckWait/3 but clamps
+// it up to minAckProgressInterval, so below this bound the clamp wins and the
+// first InProgress call would land after AckWait had already elapsed. JetStream
+// would redeliver a job that is still running - exactly the duplicate execution
+// this consumer exists to prevent.
+const minAckWait = 3 * minAckProgressInterval
+
+// validate rejects a configuration that would silently break job execution.
+// It runs after withDefaults, so a zero or negative value has already been
+// replaced by its default and only an explicit, unusable one is left.
 func (c ConsumerConfig) validate() error {
+	if c.AckWait < minAckWait {
+		return fmt.Errorf(
+			"NATS_ACK_WAIT must be at least %s, got %s: the in-progress heartbeat is clamped to %s, so a shorter AckWait would expire before the first heartbeat and redeliver a job that is still running",
+			minAckWait, c.AckWait, minAckProgressInterval)
+	}
 	if c.MaxDeliver < minMaxDeliver {
 		return fmt.Errorf(
 			"NATS_MAX_DELIVER must be at least %d, got %d: the last allowed delivery reports the terminal failure instead of running the job, so a lower value would never execute any job",

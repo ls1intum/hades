@@ -65,6 +65,29 @@ func TestConsumerConfigValidate(t *testing.T) {
 	assert.NoError(t, ConsumerConfig{MaxDeliver: minMaxDeliver}.withDefaults().validate())
 }
 
+// TestConsumerConfigValidateAckWait pins the AckWait lower bound. The heartbeat
+// interval is AckWait/3 but clamped up to minAckProgressInterval, so below
+// 3*minAckProgressInterval the clamp wins and the first heartbeat lands after
+// AckWait has already elapsed. JetStream would then redeliver a job that is
+// still running, which is the duplicate execution this consumer prevents.
+func TestConsumerConfigValidateAckWait(t *testing.T) {
+	err := ConsumerConfig{AckWait: 10 * time.Millisecond}.withDefaults().validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "NATS_ACK_WAIT")
+
+	// Unset (zero/negative) means "use the default", not "expire immediately".
+	assert.NoError(t, ConsumerConfig{}.withDefaults().validate())
+	assert.NoError(t, ConsumerConfig{AckWait: -1}.withDefaults().validate())
+
+	// At the bound the heartbeat is exactly minAckProgressInterval, which still
+	// leaves two further heartbeats before AckWait elapses.
+	assert.NoError(t, ConsumerConfig{AckWait: minAckWait}.withDefaults().validate())
+	assert.Equal(t, minAckProgressInterval, ackProgressInterval(minAckWait))
+
+	// Just below it, the clamp would push the heartbeat past AckWait/3.
+	assert.Error(t, ConsumerConfig{AckWait: minAckWait - time.Millisecond}.withDefaults().validate())
+}
+
 func TestStartAckProgressSignalsRepeatedly(t *testing.T) {
 	var calls atomic.Int64
 	stop := startAckProgress(func() error {
